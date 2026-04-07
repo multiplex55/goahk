@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -26,7 +27,15 @@ func TestValidate_ConfigErrorsGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read golden: %v", err)
 	}
-	if string(want) != got {
+	if normalizeGolden(string(want)) != normalizeGolden(got) {
 		t.Fatalf("golden mismatch\nwant:\n%s\ngot:\n%s", string(want), got)
 	}
+}
+
+func normalizeGolden(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	if !strings.HasSuffix(s, "\n") {
+		s += "\n"
+	}
+	return s
 }
