@@ -36,10 +36,36 @@ func Validate(cfg Config) error {
 		if len(hk.Steps) == 0 {
 			errs = append(errs, fmt.Sprintf("hotkeys[%d].steps is required", i))
 		}
+		for j, step := range hk.Steps {
+			if strings.HasPrefix(step.Action, "uia.") {
+				if ref := strings.TrimSpace(step.Params["selector"]); ref != "" {
+					if _, ok := cfg.UIASelectors[ref]; !ok {
+						errs = append(errs, fmt.Sprintf("hotkeys[%d].steps[%d].selector references unknown uia selector %q", i, j, ref))
+					}
+				}
+			}
+		}
+	}
+	for name, sel := range cfg.UIASelectors {
+		if err := validateUIASelector(sel); err != nil {
+			errs = append(errs, fmt.Sprintf("uiaSelectors.%s %s", name, err))
+		}
 	}
 
 	if len(errs) > 0 {
 		return fmt.Errorf("invalid config: %s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+func validateUIASelector(sel UIASelector) error {
+	if strings.TrimSpace(sel.AutomationID) == "" && strings.TrimSpace(sel.Name) == "" && strings.TrimSpace(sel.ControlType) == "" {
+		return fmt.Errorf("must specify at least one of automationId, name, controlType")
+	}
+	for i, anc := range sel.Ancestors {
+		if err := validateUIASelector(anc); err != nil {
+			return fmt.Errorf("ancestors[%d] %w", i, err)
+		}
 	}
 	return nil
 }
