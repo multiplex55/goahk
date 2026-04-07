@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if command -v cmd.exe >/dev/null 2>&1; then
+  echo "warning: build/build.sh is deprecated; delegating to build/build.bat" >&2
+  exec cmd.exe /c build\\build.bat
+fi
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${ROOT}/dist"
 mkdir -p "${OUT_DIR}"
