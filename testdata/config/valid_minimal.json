@@ -4,7 +4,7 @@
       "id": "open-terminal",
       "hotkey": "Ctrl+Alt+T",
       "steps": [
-        { "action": "sendKeys", "params": { "keys": "Win+R" } }
+        { "action": "input.send_keys", "params": { "sequence": "Win+R" } }
       ]
     }
   ]

@@ -170,8 +170,13 @@ func TestBootstrap_ShutdownCancellationStopsCleanly(t *testing.T) {
 func TestBootstrap_FailsFastOnUnknownAction(t *testing.T) {
 	cfg := config.Config{Hotkeys: []config.HotkeyBinding{{ID: "one", Hotkey: "ctrl+1", Steps: []config.Step{{Action: "does.not.exist"}}}}}
 	calledListener := false
+	calledBuildRegistry := false
 	b := NewBootstrap()
 	b.LoadConfig = func(context.Context, string) (config.Config, error) { return cfg, nil }
+	b.BuildRegistry = func(context.Context, config.Config) (*actions.Registry, error) {
+		calledBuildRegistry = true
+		return actions.NewRegistry(), nil
+	}
 	b.NewListener = func(context.Context) (Listener, error) {
 		calledListener = true
 		return newFakeListener(), nil
@@ -184,7 +189,13 @@ func TestBootstrap_FailsFastOnUnknownAction(t *testing.T) {
 	if calledListener {
 		t.Fatal("listener should not be created when compile fails")
 	}
-	if !strings.Contains(err.Error(), "unknown action") {
-		t.Fatalf("Run() error = %v, want unknown action", err)
+	if !calledBuildRegistry {
+		t.Fatal("registry should be built before compile-time validation")
+	}
+	msg := err.Error()
+	for _, token := range []string{"compile runtime bindings", `binding "one"`, `binding/actions[0]/name`, `"does.not.exist"`} {
+		if !strings.Contains(msg, token) {
+			t.Fatalf("Run() error = %q, missing %q", msg, token)
+		}
 	}
 }

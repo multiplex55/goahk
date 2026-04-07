@@ -72,13 +72,11 @@ func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]Ru
 			compiled = append(compiled, rb)
 			continue
 		}
+		if err := validateBindingActions(b, registry); err != nil {
+			return nil, err
+		}
 		plan := make(actions.Plan, 0, len(b.Steps))
 		for _, step := range b.Steps {
-			if registry != nil {
-				if _, ok := registry.Lookup(step.Action); !ok {
-					return nil, fmt.Errorf("binding %q references unknown action %q", b.ID, step.Action)
-				}
-			}
 			params := mapsClone(step.Params)
 			if strings.HasPrefix(step.Action, "uia.") {
 				sel, err := config.ParseUIASelector(params, cfg.UIASelectors)
@@ -97,6 +95,19 @@ func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]Ru
 		compiled = append(compiled, rb)
 	}
 	return compiled, nil
+}
+
+func validateBindingActions(binding config.HotkeyBinding, registry *actions.Registry) error {
+	if registry == nil {
+		return nil
+	}
+	for idx, step := range binding.Steps {
+		if _, ok := registry.Lookup(step.Action); ok {
+			continue
+		}
+		return fmt.Errorf("binding %q binding/actions[%d]/name: unknown action %q", binding.ID, idx, step.Action)
+	}
+	return nil
 }
 
 func DispatchHotkeyEvents(ctx context.Context, events <-chan hotkey.TriggerEvent, plans map[string]actions.Plan, executor *actions.Executor, base actions.ActionContext) <-chan actions.ExecutionResult {
