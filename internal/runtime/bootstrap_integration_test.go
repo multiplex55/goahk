@@ -1,4 +1,5 @@
 //go:build windows && integration
+// +build windows,integration
 
 package runtime
 

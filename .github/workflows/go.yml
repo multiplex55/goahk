@@ -8,7 +8,6 @@ on:
 
 jobs:
   build-and-test:
-    # Uses the latest stable Windows Server image
     runs-on: windows-latest
 
     steps:
@@ -18,11 +17,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          # 'stable' automatically resolves to the latest major/minor version
           go-version: 'stable'
-          # Ensures it pulls the latest patch release if not already cached
           check-latest: true
-          # Enables automatic caching for faster subsequent runs
           cache: true
 
       - name: Verify Go version
@@ -31,10 +27,12 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Verify no tracked binary artifacts
+        shell: bash
+        run: ./build/check-no-source-binaries.sh
+
       - name: Build application
-        # Build all packages in the module
         run: go build -v ./...
 
       - name: Run tests
-        # Run all tests with verbose output
         run: go test -v ./...
