@@ -81,7 +81,8 @@ func (b Bootstrap) Run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("build action registry: %w", err)
 	}
 
-	compiled, err := app.CompileRuntimeBindings(cfg, registry)
+	p := app.ConfigToProgram(cfg)
+	compiled, err := app.CompileRuntimeBindingsFromProgram(p, registry)
 	if err != nil {
 		return fmt.Errorf("compile runtime bindings: %w", err)
 	}

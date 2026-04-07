@@ -10,6 +10,7 @@ import (
 	"goahk/internal/config"
 	"goahk/internal/flow"
 	"goahk/internal/hotkey"
+	"goahk/internal/program"
 )
 
 type RuntimeDeps struct {
@@ -39,8 +40,16 @@ type RuntimeBinding struct {
 }
 
 func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]RuntimeBinding, error) {
-	parsed := make([]hotkey.Binding, 0, len(cfg.Hotkeys))
-	for _, b := range cfg.Hotkeys {
+	return CompileRuntimeBindingsFromProgram(ConfigToProgram(cfg), registry)
+}
+
+func CompileRuntimeBindingsFromProgram(p program.Program, registry *actions.Registry) ([]RuntimeBinding, error) {
+	if err := program.Validate(p); err != nil {
+		return nil, err
+	}
+
+	parsed := make([]hotkey.Binding, 0, len(p.Bindings))
+	for _, b := range p.Bindings {
 		binding, err := hotkey.ParseBinding(b.ID, b.Hotkey)
 		if err != nil {
 			return nil, err
@@ -51,8 +60,9 @@ func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]Ru
 		return nil, err
 	}
 
+	selectors := convertUIASelectors(p.Options.UIASelectors)
 	flowsByID := map[string]flow.Definition{}
-	for _, f := range cfg.Flows {
+	for _, f := range p.Options.Flows {
 		compiled, err := compileFlowDefinition(f, registry)
 		if err != nil {
 			return nil, err
@@ -60,8 +70,8 @@ func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]Ru
 		flowsByID[strings.ToLower(strings.TrimSpace(f.ID))] = compiled
 	}
 
-	compiled := make([]RuntimeBinding, 0, len(cfg.Hotkeys))
-	for i, b := range cfg.Hotkeys {
+	compiled := make([]RuntimeBinding, 0, len(p.Bindings))
+	for i, b := range p.Bindings {
 		rb := RuntimeBinding{ID: b.ID, Chord: parsed[i].Chord}
 		if ref := strings.ToLower(strings.TrimSpace(b.Flow)); ref != "" {
 			f, ok := flowsByID[ref]
@@ -76,10 +86,13 @@ func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]Ru
 			return nil, err
 		}
 		plan := make(actions.Plan, 0, len(b.Steps))
-		for _, step := range b.Steps {
-			params := mapsClone(step.Params)
+		for stepIdx, step := range b.Steps {
+			params, err := stringifyParams(b.ID, stepIdx, step.Params)
+			if err != nil {
+				return nil, err
+			}
 			if strings.HasPrefix(step.Action, "uia.") {
-				sel, err := config.ParseUIASelector(params, cfg.UIASelectors)
+				sel, err := config.ParseUIASelector(params, selectors)
 				if err != nil {
 					return nil, fmt.Errorf("binding %q action %q selector: %w", b.ID, step.Action, err)
 				}
@@ -97,7 +110,7 @@ func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]Ru
 	return compiled, nil
 }
 
-func validateBindingActions(binding config.HotkeyBinding, registry *actions.Registry) error {
+func validateBindingActions(binding program.BindingSpec, registry *actions.Registry) error {
 	if registry == nil {
 		return nil
 	}
@@ -142,8 +155,8 @@ func DispatchHotkeyEvents(ctx context.Context, events <-chan hotkey.TriggerEvent
 	return results
 }
 
-func compileFlowDefinition(in config.Flow, registry *actions.Registry) (flow.Definition, error) {
-	out := flow.Definition{ID: in.ID, Timeout: in.Timeout.ToStd(), Steps: make([]flow.Step, 0, len(in.Steps))}
+func compileFlowDefinition(in program.FlowSpec, registry *actions.Registry) (flow.Definition, error) {
+	out := flow.Definition{ID: in.ID, Timeout: in.Timeout, Steps: make([]flow.Step, 0, len(in.Steps))}
 	for _, s := range in.Steps {
 		step, err := compileFlowStep(s, registry)
 		if err != nil {
@@ -154,8 +167,12 @@ func compileFlowDefinition(in config.Flow, registry *actions.Registry) (flow.Def
 	return out, nil
 }
 
-func compileFlowStep(in config.FlowStep, registry *actions.Registry) (flow.Step, error) {
-	step := flow.Step{Name: in.Name, Action: in.Action, Params: mapsClone(in.Params), Timeout: in.Timeout.ToStd()}
+func compileFlowStep(in program.FlowStepSpec, registry *actions.Registry) (flow.Step, error) {
+	params, err := stringifyArbitraryParams(in.Params)
+	if err != nil {
+		return flow.Step{}, err
+	}
+	step := flow.Step{Name: in.Name, Action: in.Action, Params: params, Timeout: in.Timeout}
 	if step.Action != "" && registry != nil {
 		if _, ok := registry.Lookup(step.Action); !ok {
 			return flow.Step{}, fmt.Errorf("flow step references unknown action %q", step.Action)
@@ -194,7 +211,7 @@ func compileFlowStep(in config.FlowStep, registry *actions.Registry) (flow.Step,
 		if in.WaitUntil.ElementExists != nil {
 			cond.ElementExists = &flow.ElementCondition{Selector: *in.WaitUntil.ElementExists}
 		}
-		step.WaitUntil = &flow.WaitUntilBlock{Condition: cond, Timeout: in.WaitUntil.Timeout.ToStd(), Interval: in.WaitUntil.Interval.ToStd()}
+		step.WaitUntil = &flow.WaitUntilBlock{Condition: cond, Timeout: in.WaitUntil.Timeout, Interval: in.WaitUntil.Interval}
 	}
 	if in.Repeat != nil {
 		r := &flow.RepeatBlock{Times: in.Repeat.Times}
@@ -210,13 +227,41 @@ func compileFlowStep(in config.FlowStep, registry *actions.Registry) (flow.Step,
 	return step, nil
 }
 
-func mapsClone(in map[string]string) map[string]string {
+func stringifyParams(bindingID string, stepIdx int, in map[string]any) (map[string]string, error) {
+	params, err := stringifyArbitraryParams(in)
+	if err != nil {
+		return nil, fmt.Errorf("binding %q binding/actions[%d]/params: %w", bindingID, stepIdx, err)
+	}
+	return params, nil
+}
+
+func stringifyArbitraryParams(in map[string]any) (map[string]string, error) {
 	if len(in) == 0 {
-		return map[string]string{}
+		return map[string]string{}, nil
 	}
 	out := make(map[string]string, len(in))
 	for k, v := range in {
-		out[k] = v
+		s, ok := v.(string)
+		if !ok {
+			return nil, fmt.Errorf("param %q must be a string", k)
+		}
+		out[k] = s
+	}
+	return out, nil
+}
+
+func convertUIASelectors(in map[string]program.UIASelectorSpec) map[string]config.UIASelector {
+	out := make(map[string]config.UIASelector, len(in))
+	for name, sel := range in {
+		out[name] = convertUIASelector(sel)
+	}
+	return out
+}
+
+func convertUIASelector(in program.UIASelectorSpec) config.UIASelector {
+	out := config.UIASelector{AutomationID: in.AutomationID, Name: in.Name, ControlType: in.ControlType}
+	for _, anc := range in.Ancestors {
+		out.Ancestors = append(out.Ancestors, convertUIASelector(anc))
 	}
 	return out
 }
