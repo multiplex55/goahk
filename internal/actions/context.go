@@ -16,11 +16,12 @@ func (NoopLogger) Info(string, map[string]any)  {}
 func (NoopLogger) Error(string, map[string]any) {}
 
 type Services struct {
-	MessageBox     func(context.Context, string, string) error
-	ClipboardWrite func(context.Context, string) error
-	ProcessLaunch  func(context.Context, string, []string) error
-	WindowActivate func(context.Context, string) error
-	InputSendText  func(context.Context, string) error
+	MessageBox        func(context.Context, string, string) error
+	ClipboardWrite    func(context.Context, string) error
+	ProcessLaunch     func(context.Context, string, []string) error
+	WindowActivate    func(context.Context, string) error
+	ActiveWindowTitle func(context.Context) (string, error)
+	InputSendText     func(context.Context, string) error
 }
 
 type ActionContext struct {
