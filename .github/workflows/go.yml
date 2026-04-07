@@ -1,4 +1,4 @@
-name: Go Windows CI
+name: Go CI
 
 on:
   push:
@@ -7,8 +7,27 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build-and-test:
-    # Uses the latest stable Windows Server image
+  platform-sanity:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          check-latest: true
+          cache: true
+
+      - name: Verify no tracked binary artifacts
+        run: ./build/check-no-source-binaries.sh
+
+      - name: Build-tag sanity check (non-Windows)
+        run: go test -v ./internal/runtime -run TestNewWindowsListenerOnNonWindowsReturnsExplicitError
+
+  build-and-test-windows:
     runs-on: windows-latest
 
     steps:
@@ -18,11 +37,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          # 'stable' automatically resolves to the latest major/minor version
           go-version: 'stable'
-          # Ensures it pulls the latest patch release if not already cached
           check-latest: true
-          # Enables automatic caching for faster subsequent runs
           cache: true
 
       - name: Verify Go version
@@ -32,9 +48,7 @@ jobs:
         run: go mod download
 
       - name: Build application
-        # Build all packages in the module
         run: go build -v ./...
 
       - name: Run tests
-        # Run all tests with verbose output
         run: go test -v ./...
