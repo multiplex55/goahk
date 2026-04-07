@@ -91,6 +91,17 @@ func (r *Registry) registerBuiltins() {
 		return ctx.Services.WindowActivate(ctx.Context, step.Params["matcher"])
 	})
 
+	r.MustRegister("window.copy_active_title_to_clipboard", func(ctx ActionContext, step Step) error {
+		if ctx.Services.ActiveWindowTitle == nil || ctx.Services.ClipboardWrite == nil {
+			return nil
+		}
+		title, err := ctx.Services.ActiveWindowTitle(ctx.Context)
+		if err != nil {
+			return err
+		}
+		return ctx.Services.ClipboardWrite(ctx.Context, title)
+	})
+
 	r.MustRegister("input.send_text", func(ctx ActionContext, step Step) error {
 		if ctx.Services.InputSendText == nil {
 			return nil
