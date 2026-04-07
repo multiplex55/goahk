@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,5 +70,41 @@ func TestCompileRuntimeBindings_FlowReference(t *testing.T) {
 	}
 	if len(bindings) != 1 || bindings[0].Flow == nil || len(bindings[0].Flow.Steps) != 1 {
 		t.Fatalf("compiled flow binding unexpected: %#v", bindings)
+	}
+}
+
+func TestCompileRuntimeBindings_ValidSampleConfig(t *testing.T) {
+	cfg, err := config.LoadFile(filepath.Join("..", "..", "testdata", "config", "valid_minimal.json"))
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+	bindings, err := CompileRuntimeBindings(cfg, actions.NewRegistry())
+	if err != nil {
+		t.Fatalf("CompileRuntimeBindings() error = %v", err)
+	}
+	if len(bindings) != 1 {
+		t.Fatalf("len(bindings) = %d, want 1", len(bindings))
+	}
+}
+
+func TestCompileRuntimeBindings_UnknownActionIncludesPathAndDiagnostics(t *testing.T) {
+	cfg := config.Config{Hotkeys: []config.HotkeyBinding{{
+		ID:     "open-terminal",
+		Hotkey: "ctrl+alt+t",
+		Steps:  []config.Step{{Action: "sendKeys"}},
+	}}}
+	_, err := CompileRuntimeBindings(cfg, actions.NewRegistry())
+	if err == nil {
+		t.Fatal("CompileRuntimeBindings() error = nil, want failure")
+	}
+	msg := err.Error()
+	for _, token := range []string{
+		`binding "open-terminal"`,
+		`binding/actions[0]/name`,
+		`"sendKeys"`,
+	} {
+		if !strings.Contains(msg, token) {
+			t.Fatalf("CompileRuntimeBindings() error = %q, missing %q", msg, token)
+		}
 	}
 }
