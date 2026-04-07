@@ -22,6 +22,13 @@ type Manager struct {
 	byBindingID  map[string]int
 	byRegID      map[int]registration
 	triggerEvent chan TriggerEvent
+
+	runWG       sync.WaitGroup
+	closeOnce   sync.Once
+	closeDone   chan struct{}
+	closeErr    error
+	triggerOnce sync.Once
+	shutdown    chan struct{}
 }
 
 type registration struct {
@@ -36,6 +43,8 @@ func NewManager(listener Listener) *Manager {
 		byBindingID:  map[string]int{},
 		byRegID:      map[int]registration{},
 		triggerEvent: make(chan TriggerEvent, 32),
+		closeDone:    make(chan struct{}),
+		shutdown:     make(chan struct{}),
 	}
 }
 
@@ -75,10 +84,18 @@ func (m *Manager) Events() <-chan TriggerEvent {
 }
 
 func (m *Manager) Run(ctx context.Context) error {
+	m.runWG.Add(1)
+	defer m.runWG.Done()
+	defer m.triggerOnce.Do(func() {
+		close(m.triggerEvent)
+	})
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-m.shutdown:
+			return nil
 		case ev, ok := <-m.listener.Events():
 			if !ok {
 				return nil
@@ -97,12 +114,20 @@ func (m *Manager) Run(ctx context.Context) error {
 			case m.triggerEvent <- TriggerEvent{BindingID: reg.bindingID, Chord: reg.chord, TriggeredAt: at}:
 			case <-ctx.Done():
 				return ctx.Err()
+			case <-m.shutdown:
+				return nil
 			}
 		}
 	}
 }
 
 func (m *Manager) Close() error {
-	close(m.triggerEvent)
-	return m.listener.Close()
+	m.closeOnce.Do(func() {
+		close(m.shutdown)
+		m.closeErr = m.listener.Close()
+		m.runWG.Wait()
+		close(m.closeDone)
+	})
+	<-m.closeDone
+	return m.closeErr
 }
