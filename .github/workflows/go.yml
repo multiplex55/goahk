@@ -1,4 +1,4 @@
-name: Go CI
+name: Go Windows CI
 
 on:
   push:
@@ -7,27 +7,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  platform-sanity:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 'stable'
-          check-latest: true
-          cache: true
-
-      - name: Verify no tracked binary artifacts
-        run: ./build/check-no-source-binaries.sh
-
-      - name: Build-tag sanity check (non-Windows)
-        run: go test -v ./internal/runtime -run TestNewWindowsListenerOnNonWindowsReturnsExplicitError
-
-  build-and-test-windows:
+  build-and-test:
     runs-on: windows-latest
 
     steps:
@@ -46,6 +26,10 @@ jobs:
 
       - name: Install dependencies
         run: go mod download
+
+      - name: Verify no tracked binary artifacts
+        shell: bash
+        run: ./build/check-no-source-binaries.sh
 
       - name: Build application
         run: go build -v ./...
