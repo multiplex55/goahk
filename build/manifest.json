@@ -1,0 +1,10 @@
+{
+  "name": "goahk",
+  "description": "Windows hotkey automation runtime",
+  "entrypoint": "goahk.exe",
+  "startup": "per-user",
+  "assets": {
+    "icon": "icon.svg",
+    "version": "version.json"
+  }
+}
