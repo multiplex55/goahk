@@ -2,7 +2,10 @@ package actions
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+
+	"goahk/internal/clipboard"
 )
 
 type Registry struct {
@@ -66,11 +69,54 @@ func (r *Registry) registerBuiltins() {
 		return ctx.Services.MessageBox(ctx.Context, title, text)
 	})
 
-	r.MustRegister("clipboard.write", func(ctx ActionContext, step Step) error {
-		if ctx.Services.ClipboardWrite == nil {
+	r.MustRegister("clipboard.read", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Clipboard == nil {
 			return nil
 		}
-		return ctx.Services.ClipboardWrite(ctx.Context, step.Params["text"])
+		text, err := ctx.Services.Clipboard.ReadText(ctx.Context)
+		if err != nil {
+			return err
+		}
+		if key := strings.TrimSpace(step.Params["save_as"]); key != "" {
+			if ctx.Metadata == nil {
+				ctx.Metadata = map[string]string{}
+			}
+			ctx.Metadata[key] = text
+		}
+		return nil
+	})
+
+	r.MustRegister("clipboard.write", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Clipboard == nil {
+			return nil
+		}
+		writer := func() error { return ctx.Services.Clipboard.WriteText(ctx.Context, step.Params["text"]) }
+		if withRestore(step) {
+			return runWithClipboardRestore(ctx, writer)
+		}
+		return writer()
+	})
+
+	r.MustRegister("clipboard.append", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Clipboard == nil {
+			return nil
+		}
+		runner := func() error { return ctx.Services.Clipboard.AppendText(ctx.Context, step.Params["text"]) }
+		if withRestore(step) {
+			return runWithClipboardRestore(ctx, runner)
+		}
+		return runner()
+	})
+
+	r.MustRegister("clipboard.prepend", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Clipboard == nil {
+			return nil
+		}
+		runner := func() error { return ctx.Services.Clipboard.PrependText(ctx.Context, step.Params["text"]) }
+		if withRestore(step) {
+			return runWithClipboardRestore(ctx, runner)
+		}
+		return runner()
 	})
 
 	r.MustRegister("process.launch", func(ctx ActionContext, step Step) error {
@@ -92,14 +138,14 @@ func (r *Registry) registerBuiltins() {
 	})
 
 	r.MustRegister("window.copy_active_title_to_clipboard", func(ctx ActionContext, step Step) error {
-		if ctx.Services.ActiveWindowTitle == nil || ctx.Services.ClipboardWrite == nil {
+		if ctx.Services.ActiveWindowTitle == nil || ctx.Services.Clipboard == nil {
 			return nil
 		}
 		title, err := ctx.Services.ActiveWindowTitle(ctx.Context)
 		if err != nil {
 			return err
 		}
-		return ctx.Services.ClipboardWrite(ctx.Context, title)
+		return ctx.Services.Clipboard.WriteText(ctx.Context, title)
 	})
 
 	r.MustRegister("input.send_text", func(ctx ActionContext, step Step) error {
@@ -108,4 +154,24 @@ func (r *Registry) registerBuiltins() {
 		}
 		return ctx.Services.InputSendText(ctx.Context, step.Params["text"])
 	})
+}
+
+func withRestore(step Step) bool {
+	raw := strings.TrimSpace(step.Params["with_restore"])
+	if raw == "" {
+		return false
+	}
+	v, err := strconv.ParseBool(raw)
+	return err == nil && v
+}
+
+func runWithClipboardRestore(ctx ActionContext, run func() error) error {
+	prior, err := ctx.Services.Clipboard.ReadText(ctx.Context)
+	if err != nil {
+		return err
+	}
+	if err := run(); err != nil {
+		return err
+	}
+	return ctx.Services.Clipboard.WriteText(ctx.Context, clipboard.NormalizeWriteText(prior))
 }
