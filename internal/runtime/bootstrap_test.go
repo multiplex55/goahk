@@ -10,6 +10,7 @@ import (
 	"goahk/internal/actions"
 	"goahk/internal/config"
 	"goahk/internal/hotkey"
+	"goahk/internal/program"
 )
 
 type fakeListener struct {
@@ -100,7 +101,7 @@ func TestBootstrap_DispatchExecutesCorrectBindingPlan(t *testing.T) {
 
 	b := NewBootstrap()
 	b.LoadConfig = func(context.Context, string) (config.Config, error) { return cfg, nil }
-	b.BuildRegistry = func(context.Context, config.Config) (*actions.Registry, error) {
+	b.BuildRegistry = func(context.Context, program.Program) (*actions.Registry, error) {
 		reg := actions.NewRegistry()
 		_ = reg.Register("test.one", func(actions.ActionContext, actions.Step) error { return nil })
 		_ = reg.Register("test.two", func(_ actions.ActionContext, _ actions.Step) error { return nil })
@@ -173,7 +174,7 @@ func TestBootstrap_FailsFastOnUnknownAction(t *testing.T) {
 	calledBuildRegistry := false
 	b := NewBootstrap()
 	b.LoadConfig = func(context.Context, string) (config.Config, error) { return cfg, nil }
-	b.BuildRegistry = func(context.Context, config.Config) (*actions.Registry, error) {
+	b.BuildRegistry = func(context.Context, program.Program) (*actions.Registry, error) {
 		calledBuildRegistry = true
 		return actions.NewRegistry(), nil
 	}
