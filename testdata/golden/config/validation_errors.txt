@@ -1,0 +1,1 @@
+invalid config: hotkeys[0].id is required; hotkeys[0].hotkey is required; hotkeys[0] requires steps or flow
