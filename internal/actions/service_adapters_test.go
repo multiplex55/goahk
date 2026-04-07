@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"goahk/internal/process"
@@ -96,5 +97,38 @@ func TestProcessLaunchAction_NormalizesParams(t *testing.T) {
 	}
 	if proc.lastReq.Executable != "notepad.exe" || len(proc.lastReq.Args) != 2 || proc.lastReq.WorkingDir != `C:\\Temp` || proc.lastReq.Env["A"] != "1" {
 		t.Fatalf("request = %#v", proc.lastReq)
+	}
+}
+
+func TestServiceAdapters_MissingServiceErrors(t *testing.T) {
+	r := NewRegistry()
+	cases := []struct {
+		step        Step
+		ctx         ActionContext
+		serviceText string
+	}{
+		{
+			step:        Step{Name: "system.message_box", Params: map[string]string{"body": "hello"}},
+			ctx:         ActionContext{Context: context.Background()},
+			serviceText: "message box service unavailable",
+		},
+		{
+			step:        Step{Name: "process.launch", Params: map[string]string{"executable": "notepad.exe"}},
+			ctx:         ActionContext{Context: context.Background()},
+			serviceText: "process service unavailable",
+		},
+	}
+	for _, tc := range cases {
+		h, _ := r.Lookup(tc.step.Name)
+		err := h(tc.ctx, tc.step)
+		if err == nil {
+			t.Fatalf("expected error for %s", tc.step.Name)
+		}
+		if !strings.Contains(err.Error(), tc.serviceText) {
+			t.Fatalf("%s err=%q missing %q", tc.step.Name, err.Error(), tc.serviceText)
+		}
+		if !strings.Contains(err.Error(), tc.step.Name) {
+			t.Fatalf("%s err=%q missing action identity", tc.step.Name, err.Error())
+		}
 	}
 }

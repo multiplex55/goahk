@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -61,5 +62,48 @@ func TestWindowCopyActiveTitleToClipboard_PropagatesError(t *testing.T) {
 	}, Step{Name: "window.copy_active_title_to_clipboard"})
 	if !errors.Is(err, boom) {
 		t.Fatalf("error=%v want %v", err, boom)
+	}
+}
+
+func TestWindowActions_MissingServiceErrors(t *testing.T) {
+	r := NewRegistry()
+	cases := []struct {
+		step Step
+		ctx  ActionContext
+		want string
+	}{
+		{
+			step: Step{Name: "window.activate"},
+			ctx:  ActionContext{Context: context.Background()},
+			want: "window service unavailable",
+		},
+		{
+			step: Step{Name: "window.copy_active_title_to_clipboard"},
+			ctx:  ActionContext{Context: context.Background(), Services: Services{Clipboard: &fakeClipboard{}}},
+			want: "window service unavailable",
+		},
+		{
+			step: Step{Name: "window.copy_active_title_to_clipboard"},
+			ctx: ActionContext{
+				Context: context.Background(),
+				Services: Services{
+					ActiveWindowTitle: func(context.Context) (string, error) { return "x", nil },
+				},
+			},
+			want: "clipboard service unavailable",
+		},
+	}
+	for _, tc := range cases {
+		h, _ := r.Lookup(tc.step.Name)
+		err := h(tc.ctx, tc.step)
+		if err == nil {
+			t.Fatalf("expected error for %s", tc.step.Name)
+		}
+		if !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("%s err=%q missing %q", tc.step.Name, err.Error(), tc.want)
+		}
+		if !strings.Contains(err.Error(), tc.step.Name) {
+			t.Fatalf("%s err=%q missing action identity", tc.step.Name, err.Error())
+		}
 	}
 }
