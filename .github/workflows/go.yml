@@ -28,8 +28,11 @@ jobs:
         run: go mod download
 
       - name: Verify no tracked binary artifacts
-        shell: bash
-        run: ./build/check-no-source-binaries.sh
+        run: cmd /c build\check-no-source-binaries.bat
+
+      - name: Run build script tests (Pester)
+        shell: pwsh
+        run: Invoke-Pester -Path build/tests -CI
 
       - name: Build application
         run: go build -v ./...
