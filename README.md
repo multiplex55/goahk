@@ -27,7 +27,8 @@ The following are intentionally **out of scope** for v1:
 - `internal/tray`: tray/status command routing.
 - `internal/startup`: startup-on-login install/uninstall command helpers.
 - `internal/config`: configuration schema, defaults, loading, and validation.
-- `build`: packaging manifest, icon/version metadata, and reproducible build script.
+- `build`: packaging manifest, icon/version metadata, and reproducible build script (`build/README.md`).
 - `testdata/config`: sample configuration files used by tests.
 - `docs/architecture.md`: architectural decisions and constraints.
 - `docs/startup-on-login.md`: startup install/uninstall behavior.
+- `docs/USAGE.md`: practical setup, hello-hotkey flow, embedding, and troubleshooting.
