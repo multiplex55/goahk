@@ -52,7 +52,7 @@ At a high level, `goahk` runs as a per-user background process and turns key cho
 Keep onboarding short and jump to focused docs:
 
 - **Usage guide:** [`docs/USAGE.md`](docs/USAGE.md)
-- **Build/test guide:** [`docs/BUILD.md`](docs/BUILD.md)
+- **Build/test guide (single source of truth for local + CI workflows):** [`docs/BUILD.md`](docs/BUILD.md)
 - **See also:** architecture and constraints in [`docs/architecture.md`](docs/architecture.md)
 
 ## API and examples index

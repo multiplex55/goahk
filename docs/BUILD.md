@@ -1,30 +1,197 @@
-# Build and test guide
+# Build and development workflow guide
 
-This page is the quick navigation point for building and validating `goahk`.
+This document is the **single source of truth** for local development, test, and build workflows for `goahk`.
 
-## Build
+Use these commands exactly (copy/paste ready) so local runs and CI behavior stay aligned.
 
-- Packaging/build script and version metadata live under [`build/`](../build).
-- Primary build command:
+## 1) Environment prerequisites
+
+### Required toolchain/runtime
+
+- Go `1.22` or newer (`go.mod` currently declares `go 1.22`).
+- Git (required for clone/setup and optional version metadata in build script).
+- Bash-compatible shell for `./build/build.sh` and `./build/check-no-source-binaries.sh`.
+
+Verify toolchain:
+
+```bash
+go version
+git --version
+```
+
+### Supported OS and platform notes
+
+- **Runtime hotkey behavior is Windows-first** (global hotkey registration/listener path).
+- Linux/macOS are valid for unit tests and general development loops.
+- Windows integration/hotkey validation requires an interactive desktop user session.
+
+### Windows-specific dependencies/permissions for hotkey behavior
+
+For real hotkey verification on Windows, the process must have:
+
+- Permission to register/unregister global hotkeys in the active user session.
+- Access to an interactive desktop (not a headless service session).
+- No conflicting application currently owning the same key chord.
+
+### Environment variables used by build tooling
+
+`./build/build.sh` supports optional overrides:
+
+- `VERSION` (default: `v0.1.0`)
+- `COMMIT` (default: short git SHA or `unknown`)
+- `SOURCE_DATE_EPOCH` (default: current Unix epoch)
+
+Example reproducible build metadata override:
+
+```bash
+VERSION=v0.1.0 COMMIT=$(git rev-parse --short=7 HEAD) SOURCE_DATE_EPOCH=1700000000 ./build/build.sh
+```
+
+## 2) Setup workflow
+
+### Clean clone/setup sequence
+
+```bash
+git clone <REPO_URL> goahk
+cd goahk
+go mod download
+```
+
+If you want an extra dependency integrity check:
+
+```bash
+go mod verify
+```
+
+### Offline/locked environment note
+
+In restricted environments, pre-populate the Go module cache from an allowed mirror/artifact source, then run:
+
+```bash
+go mod download
+```
+
+If network access is unavailable and cache is incomplete, module resolution will fail with messages like `dial tcp`, `TLS handshake timeout`, or `module lookup disabled`.
+
+## 3) Test commands
+
+### Unit tests (default, all platforms)
+
+```bash
+go test -v ./...
+```
+
+Expected outcome:
+
+- `ok` lines for packages.
+- Exit code `0`.
+
+Common failure signatures:
+
+- `FAIL` with package path and failing test name.
+- `build failed` for compile/type errors.
+
+### Optional race detector (slower)
+
+```bash
+go test -race ./...
+```
+
+Expected outcome:
+
+- No `WARNING: DATA RACE` output.
+- Exit code `0`.
+
+Common failure signature:
+
+- `WARNING: DATA RACE` followed by stack traces.
+
+### Integration/manual hotkey verification (Windows interactive session)
+
+Automated integration-tagged suites:
+
+```bash
+go test -tags=integration ./internal/runtime ./internal/hotkey
+```
+
+Manual runtime hotkey check:
+
+1. Start app with a known config:
+   ```bash
+   go run ./cmd/goahk -config <path-to-config.json>
+   ```
+2. Press configured hotkey once.
+3. Confirm callback/effect occurs exactly once.
+4. Stop app cleanly (`Ctrl+C`).
+5. Restart and verify hotkey can be registered again (no stale registration).
+
+Common hotkey-specific failure signatures:
+
+- Registration conflict/duplicate hotkey errors.
+- No callback when pressed (often non-interactive session or chord conflict).
+
+## 4) Build commands
+
+### Debug/development build (matches current CI intent)
+
+```bash
+go build -v ./...
+```
+
+This validates that all packages compile.
+
+### Production/release build (project packaging script)
 
 ```bash
 ./build/build.sh
 ```
 
-For packaging details and emitted artifacts, see [`build/README.md`](../build/README.md).
+### Output artifact locations
 
-## Test
+- Main packaged binary output: `dist/goahk`
+- Additional packaging metadata/assets are maintained in `build/`.
 
-Common commands:
+## 5) Validation checklist
+
+After building, run this smoke checklist:
+
+- [ ] Binary/app starts successfully.
+- [ ] Hotkey can be registered.
+- [ ] Hotkey callback fires when chord is pressed.
+- [ ] App exits cleanly.
+- [ ] Hotkey can be registered again after restart (unregister worked).
+
+Platform-specific notes:
+
+- **Windows:** full checklist is applicable, including real hotkey registration/callback.
+- **Linux/macOS:** compile/unit-test validation is expected; real Windows global hotkey behavior is not authoritative.
+
+## 6) CI alignment
+
+This guide is the **single source of truth** for the command set used locally and in CI.
+
+Current CI workflow (`.github/workflows/go.yml`) runs:
 
 ```bash
-go test ./...
-go test -race ./...
+go mod download
+./build/check-no-source-binaries.sh
+go build -v ./...
+go test -v ./...
 ```
 
-For full strategy (including Windows integration tags), see [`docs/testing.md`](./testing.md).
+Recommended local pre-PR command sequence (aligned to CI):
 
-## See also
+```bash
+go mod download
+./build/check-no-source-binaries.sh
+go build -v ./...
+go test -v ./...
+```
 
-- Runtime usage and configuration examples: [`docs/USAGE.md`](./USAGE.md)
-- Project overview: [`README.md`](../README.md)
+If CI evolves, update this document first (or in the same PR) so contributors and automation remain synchronized.
+
+## Related docs
+
+- Testing strategy and staged suites: [`docs/testing.md`](./testing.md)
+- Build metadata and packaging context: [`build/README.md`](../build/README.md)
+- Runtime usage/configuration: [`docs/USAGE.md`](./USAGE.md)
