@@ -10,7 +10,8 @@ Use these commands exactly (copy/paste ready) so local runs and CI behavior stay
 
 - Go `1.22` or newer (`go.mod` currently declares `go 1.22`).
 - Git (required for clone/setup and optional version metadata in build script).
-- Bash-compatible shell for `./build/build.sh` and `./build/check-no-source-binaries.sh`.
+- Windows command shell for `build\build.bat` and `build\check-no-source-binaries.bat` (PowerShell is used internally for UTC timestamp normalization).
+- Bash-compatible shell remains supported via temporary shim scripts (`./build/build.sh`, `./build/check-no-source-binaries.sh`).
 
 Verify toolchain:
 
@@ -35,7 +36,7 @@ For real hotkey verification on Windows, the process must have:
 
 ### Environment variables used by build tooling
 
-`./build/build.sh` supports optional overrides:
+`build\build.bat` supports optional overrides (and `./build/build.sh` forwards these through in shim mode):
 
 - `VERSION` (default: `v0.1.0`)
 - `COMMIT` (default: short git SHA or `unknown`)
@@ -44,7 +45,7 @@ For real hotkey verification on Windows, the process must have:
 Example reproducible build metadata override:
 
 ```bash
-VERSION=v0.1.0 COMMIT=$(git rev-parse --short=7 HEAD) SOURCE_DATE_EPOCH=1700000000 ./build/build.sh
+set VERSION=v0.1.0 && set COMMIT=abcdef0 && set SOURCE_DATE_EPOCH=1700000000 && build\build.bat
 ```
 
 ## 2) Setup workflow
@@ -149,7 +150,7 @@ This validates that all packages compile.
 ### Production/release build (project packaging script)
 
 ```bash
-./build/build.sh
+build\build.bat
 ```
 
 ### Output artifact locations
@@ -180,7 +181,7 @@ Current CI workflow (`.github/workflows/go.yml`) runs:
 
 ```bash
 go mod download
-./build/check-no-source-binaries.sh
+build\check-no-source-binaries.bat
 go build -v ./...
 go test -v ./...
 ```
@@ -189,7 +190,7 @@ Recommended local pre-PR command sequence (aligned to CI):
 
 ```bash
 go mod download
-./build/check-no-source-binaries.sh
+build\check-no-source-binaries.bat
 go build -v ./...
 go test -v ./...
 ```
