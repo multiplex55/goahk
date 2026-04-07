@@ -1,0 +1,6 @@
+HWND: 0x2
+Title: Term
+Class: ConsoleWindowClass
+PID: 42
+Exe: WindowsTerminal.exe
+Active: true

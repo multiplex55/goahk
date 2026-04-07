@@ -1,0 +1,39 @@
+{
+  "Success": true,
+  "Started": "1970-01-01T00:00:00Z",
+  "Ended": "1970-01-01T00:00:00Z",
+  "Duration": 0,
+  "Traces": [
+    {
+      "Name": "one",
+      "Kind": "action",
+      "Status": "success",
+      "Error": "",
+      "Started": "1970-01-01T00:00:00Z",
+      "Ended": "1970-01-01T00:00:00Z",
+      "Duration": 0,
+      "Nested": null
+    },
+    {
+      "Name": "if",
+      "Kind": "if",
+      "Status": "success",
+      "Error": "",
+      "Started": "1970-01-01T00:00:00Z",
+      "Ended": "1970-01-01T00:00:00Z",
+      "Duration": 0,
+      "Nested": [
+        {
+          "Name": "then",
+          "Kind": "action",
+          "Status": "success",
+          "Error": "",
+          "Started": "1970-01-01T00:00:00Z",
+          "Ended": "1970-01-01T00:00:00Z",
+          "Duration": 0,
+          "Nested": null
+        }
+      ]
+    }
+  ]
+}

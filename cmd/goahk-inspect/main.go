@@ -22,22 +22,48 @@ func main() {
 }
 
 type deps struct {
-	windowActive func(context.Context) (window.Info, error)
-	windowList   func(context.Context) ([]window.Info, error)
-	uiaFocused   func(context.Context) (uia.Element, error)
-	uiaUnder     func(context.Context) (uia.Element, error)
-	uiaTree      func(context.Context, int) (*uia.Node, error)
+	window windowProvider
+	uia    uiaProvider
+}
+
+type windowProvider interface {
+	Active(context.Context) (window.Info, error)
+	List(context.Context) ([]window.Info, error)
+}
+
+type uiaProvider interface {
+	Focused(context.Context) (uia.Element, error)
+	UnderCursor(context.Context) (uia.Element, error)
+	ActiveWindowTree(context.Context, int) (*uia.Node, error)
 }
 
 func defaultDeps() deps {
 	ny := func(name string) error { return fmt.Errorf("%s not wired", name) }
 	return deps{
-		windowActive: func(context.Context) (window.Info, error) { return window.Info{}, ny("window active") },
-		windowList:   func(context.Context) ([]window.Info, error) { return nil, ny("window list") },
-		uiaFocused:   func(context.Context) (uia.Element, error) { return uia.Element{}, ny("uia focused") },
-		uiaUnder:     func(context.Context) (uia.Element, error) { return uia.Element{}, ny("uia under-cursor") },
-		uiaTree:      func(context.Context, int) (*uia.Node, error) { return nil, ny("uia tree") },
+		window: stubWindowProvider{errf: ny},
+		uia:    stubUIAProvider{errf: ny},
 	}
+}
+
+type stubWindowProvider struct{ errf func(string) error }
+
+func (s stubWindowProvider) Active(context.Context) (window.Info, error) {
+	return window.Info{}, s.errf("window active")
+}
+func (s stubWindowProvider) List(context.Context) ([]window.Info, error) {
+	return nil, s.errf("window list")
+}
+
+type stubUIAProvider struct{ errf func(string) error }
+
+func (s stubUIAProvider) Focused(context.Context) (uia.Element, error) {
+	return uia.Element{}, s.errf("uia focused")
+}
+func (s stubUIAProvider) UnderCursor(context.Context) (uia.Element, error) {
+	return uia.Element{}, s.errf("uia under-cursor")
+}
+func (s stubUIAProvider) ActiveWindowTree(context.Context, int) (*uia.Node, error) {
+	return nil, s.errf("uia tree")
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer, d deps) error {
@@ -89,7 +115,7 @@ func parseGlobal(args []string, format *string) ([]string, error) {
 func runWindow(ctx context.Context, action, format string, out io.Writer, d deps) error {
 	switch action {
 	case "active":
-		w, err := d.windowActive(ctx)
+		w, err := d.window.Active(ctx)
 		if err != nil {
 			return err
 		}
@@ -97,7 +123,7 @@ func runWindow(ctx context.Context, action, format string, out io.Writer, d deps
 			return fmt.Sprintf("HWND: %s\nTitle: %s\nClass: %s\nPID: %d\nExe: %s\nActive: %t", w.HWND, w.Title, w.Class, w.PID, w.Exe, w.Active)
 		})
 	case "list":
-		ws, err := d.windowList(ctx)
+		ws, err := d.window.List(ctx)
 		if err != nil {
 			return err
 		}
@@ -116,13 +142,13 @@ func runWindow(ctx context.Context, action, format string, out io.Writer, d deps
 func runUIA(ctx context.Context, action, format string, out io.Writer, args []string, d deps) error {
 	switch action {
 	case "focused":
-		el, err := d.uiaFocused(ctx)
+		el, err := d.uia.Focused(ctx)
 		if err != nil {
 			return err
 		}
 		return emit(out, format, el, func() string { return uia.FormatElementText(el) })
 	case "under-cursor":
-		el, err := d.uiaUnder(ctx)
+		el, err := d.uia.UnderCursor(ctx)
 		if err != nil {
 			return err
 		}
@@ -138,7 +164,7 @@ func runUIA(ctx context.Context, action, format string, out io.Writer, args []st
 		if !*activeWindow {
 			return errors.New("uia tree currently requires --active-window")
 		}
-		node, err := d.uiaTree(ctx, *depth)
+		node, err := d.uia.ActiveWindowTree(ctx, *depth)
 		if err != nil {
 			return err
 		}
