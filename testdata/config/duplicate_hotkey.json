@@ -1,0 +1,14 @@
+{
+  "hotkeys": [
+    {
+      "id": "one",
+      "hotkey": "Ctrl+Alt+T",
+      "steps": [{ "action": "noop" }]
+    },
+    {
+      "id": "two",
+      "hotkey": "ctrl + alt + t",
+      "steps": [{ "action": "noop" }]
+    }
+  ]
+}

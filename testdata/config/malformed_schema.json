@@ -1,0 +1,11 @@
+{
+  "hotkeys": [
+    {
+      "id": "bad",
+      "hotkey": "Ctrl+1",
+      "steps": [{ "action": "noop" }],
+      "extra": true
+    }
+  ],
+  "unknownRoot": {}
+}

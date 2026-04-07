@@ -1,0 +1,11 @@
+{
+  "hotkeys": [
+    {
+      "id": "open-terminal",
+      "hotkey": "Ctrl+Alt+T",
+      "steps": [
+        { "action": "sendKeys", "params": { "keys": "Win+R" } }
+      ]
+    }
+  ]
+}
