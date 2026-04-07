@@ -14,7 +14,7 @@ func TestValidate_RequiredFields(t *testing.T) {
 	if err == nil {
 		t.Fatal("Validate() error = nil, want required field errors")
 	}
-	for _, token := range []string{"id is required", "hotkey is required", "steps is required"} {
+	for _, token := range []string{"id is required", "hotkey is required", "requires steps or flow"} {
 		if !strings.Contains(err.Error(), token) {
 			t.Fatalf("Validate() error = %q, missing %q", err, token)
 		}
@@ -51,5 +51,15 @@ func TestApplyDefaults(t *testing.T) {
 
 	if cfg.App.Name == "" || cfg.Logging.Level == "" || cfg.Clipboard.HistorySize == 0 {
 		t.Fatalf("defaults were not injected: %+v", cfg)
+	}
+}
+
+func TestValidate_FlowReference(t *testing.T) {
+	cfg := Config{
+		Flows:   []Flow{{ID: "f1", Steps: []FlowStep{{Action: "system.log"}}}},
+		Hotkeys: []HotkeyBinding{{ID: "a", Hotkey: "Ctrl+1", Flow: "f1"}},
+	}
+	if err := Validate(cfg); err != nil {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }

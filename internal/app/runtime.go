@@ -8,6 +8,7 @@ import (
 
 	"goahk/internal/actions"
 	"goahk/internal/config"
+	"goahk/internal/flow"
 	"goahk/internal/hotkey"
 )
 
@@ -34,6 +35,7 @@ type RuntimeBinding struct {
 	ID    string
 	Chord hotkey.Chord
 	Plan  actions.Plan
+	Flow  *flow.Definition
 }
 
 func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]RuntimeBinding, error) {
@@ -49,8 +51,27 @@ func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]Ru
 		return nil, err
 	}
 
+	flowsByID := map[string]flow.Definition{}
+	for _, f := range cfg.Flows {
+		compiled, err := compileFlowDefinition(f, registry)
+		if err != nil {
+			return nil, err
+		}
+		flowsByID[strings.ToLower(strings.TrimSpace(f.ID))] = compiled
+	}
+
 	compiled := make([]RuntimeBinding, 0, len(cfg.Hotkeys))
 	for i, b := range cfg.Hotkeys {
+		rb := RuntimeBinding{ID: b.ID, Chord: parsed[i].Chord}
+		if ref := strings.ToLower(strings.TrimSpace(b.Flow)); ref != "" {
+			f, ok := flowsByID[ref]
+			if !ok {
+				return nil, fmt.Errorf("binding %q references unknown flow %q", b.ID, b.Flow)
+			}
+			rb.Flow = &f
+			compiled = append(compiled, rb)
+			continue
+		}
 		plan := make(actions.Plan, 0, len(b.Steps))
 		for _, step := range b.Steps {
 			if registry != nil {
@@ -72,7 +93,8 @@ func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]Ru
 			}
 			plan = append(plan, actions.Step{Name: step.Action, Params: params})
 		}
-		compiled = append(compiled, RuntimeBinding{ID: b.ID, Chord: parsed[i].Chord, Plan: plan})
+		rb.Plan = plan
+		compiled = append(compiled, rb)
 	}
 	return compiled, nil
 }
@@ -107,6 +129,74 @@ func DispatchHotkeyEvents(ctx context.Context, events <-chan hotkey.TriggerEvent
 		}
 	}()
 	return results
+}
+
+func compileFlowDefinition(in config.Flow, registry *actions.Registry) (flow.Definition, error) {
+	out := flow.Definition{ID: in.ID, Timeout: in.Timeout.ToStd(), Steps: make([]flow.Step, 0, len(in.Steps))}
+	for _, s := range in.Steps {
+		step, err := compileFlowStep(s, registry)
+		if err != nil {
+			return flow.Definition{}, err
+		}
+		out.Steps = append(out.Steps, step)
+	}
+	return out, nil
+}
+
+func compileFlowStep(in config.FlowStep, registry *actions.Registry) (flow.Step, error) {
+	step := flow.Step{Name: in.Name, Action: in.Action, Params: mapsClone(in.Params), Timeout: in.Timeout.ToStd()}
+	if step.Action != "" && registry != nil {
+		if _, ok := registry.Lookup(step.Action); !ok {
+			return flow.Step{}, fmt.Errorf("flow step references unknown action %q", step.Action)
+		}
+	}
+	if in.If != nil {
+		cond := flow.Condition{WindowMatches: nil, ElementExists: nil}
+		if in.If.WindowMatches != nil {
+			cond.WindowMatches = &flow.WindowCondition{Matcher: *in.If.WindowMatches}
+		}
+		if in.If.ElementExists != nil {
+			cond.ElementExists = &flow.ElementCondition{Selector: *in.If.ElementExists}
+		}
+		ifBlock := &flow.IfBlock{Condition: cond}
+		for _, nested := range in.If.Then {
+			n, err := compileFlowStep(nested, registry)
+			if err != nil {
+				return flow.Step{}, err
+			}
+			ifBlock.Then = append(ifBlock.Then, n)
+		}
+		for _, nested := range in.If.Else {
+			n, err := compileFlowStep(nested, registry)
+			if err != nil {
+				return flow.Step{}, err
+			}
+			ifBlock.Else = append(ifBlock.Else, n)
+		}
+		step.If = ifBlock
+	}
+	if in.WaitUntil != nil {
+		cond := flow.Condition{WindowMatches: nil, ElementExists: nil}
+		if in.WaitUntil.WindowMatches != nil {
+			cond.WindowMatches = &flow.WindowCondition{Matcher: *in.WaitUntil.WindowMatches}
+		}
+		if in.WaitUntil.ElementExists != nil {
+			cond.ElementExists = &flow.ElementCondition{Selector: *in.WaitUntil.ElementExists}
+		}
+		step.WaitUntil = &flow.WaitUntilBlock{Condition: cond, Timeout: in.WaitUntil.Timeout.ToStd(), Interval: in.WaitUntil.Interval.ToStd()}
+	}
+	if in.Repeat != nil {
+		r := &flow.RepeatBlock{Times: in.Repeat.Times}
+		for _, nested := range in.Repeat.Steps {
+			n, err := compileFlowStep(nested, registry)
+			if err != nil {
+				return flow.Step{}, err
+			}
+			r.Steps = append(r.Steps, n)
+		}
+		step.Repeat = r
+	}
+	return step, nil
 }
 
 func mapsClone(in map[string]string) map[string]string {

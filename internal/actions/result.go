@@ -12,12 +12,14 @@ const (
 
 type StepResult struct {
 	Action     string
+	Kind       string
 	Status     StepStatus
 	StartedAt  time.Time
 	EndedAt    time.Time
 	Duration   time.Duration
 	Error      string
 	ErrorChain []string
+	Nested     []StepResult
 }
 
 type ExecutionResult struct {

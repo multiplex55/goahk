@@ -55,3 +55,18 @@ func TestCompileRuntimeBindingsAndDispatch(t *testing.T) {
 		t.Fatal("expected handler to receive mapped binding context")
 	}
 }
+
+func TestCompileRuntimeBindings_FlowReference(t *testing.T) {
+	registry := actions.NewRegistry()
+	cfg := config.Config{
+		Flows:   []config.Flow{{ID: "f1", Steps: []config.FlowStep{{Action: "system.log"}}}},
+		Hotkeys: []config.HotkeyBinding{{ID: "paste", Hotkey: "shift+ctrl+v", Flow: "f1"}},
+	}
+	bindings, err := CompileRuntimeBindings(cfg, registry)
+	if err != nil {
+		t.Fatalf("CompileRuntimeBindings() error = %v", err)
+	}
+	if len(bindings) != 1 || bindings[0].Flow == nil || len(bindings[0].Flow.Steps) != 1 {
+		t.Fatalf("compiled flow binding unexpected: %#v", bindings)
+	}
+}
