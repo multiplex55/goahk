@@ -7,7 +7,6 @@ import (
 	"goahk/internal/actions"
 	"goahk/internal/app"
 	"goahk/internal/config"
-	"goahk/internal/flow"
 	"goahk/internal/hotkey"
 )
 
@@ -29,6 +28,7 @@ type Bootstrap struct {
 	BuildRegistry RegistryBuilder
 	NewListener   ListenerFactory
 	RecordResult  ResultRecorder
+	LogDispatch   DispatchLogSink
 	BaseActionCtx actions.ActionContext
 }
 
@@ -42,6 +42,7 @@ func NewBootstrap() Bootstrap {
 		},
 		NewListener:  NewWindowsListener,
 		RecordResult: func(context.Context, string, actions.ExecutionResult) {},
+		LogDispatch:  func(context.Context, DispatchLogEntry) {},
 	}
 }
 
@@ -57,6 +58,9 @@ func (b Bootstrap) Run(ctx context.Context, configPath string) error {
 	}
 	if b.RecordResult == nil {
 		b.RecordResult = func(context.Context, string, actions.ExecutionResult) {}
+	}
+	if b.LogDispatch == nil {
+		b.LogDispatch = func(context.Context, DispatchLogEntry) {}
 	}
 
 	cfg, err := b.LoadConfig(ctx, configPath)
@@ -103,11 +107,21 @@ func (b Bootstrap) Run(ctx context.Context, configPath string) error {
 		managerErr <- nil
 	}()
 
+	plansByBindingID := make(map[string]actions.Plan, len(compiled))
+	for _, binding := range compiled {
+		if binding.Flow == nil {
+			plansByBindingID[binding.ID] = binding.Plan
+		}
+	}
+
 	executor := actions.NewExecutor(registry)
+	results := DispatchHotkeyEvents(runCtx, runCtx.Done(), manager.Events(), plansByBindingID, executor, b.BaseActionCtx, b.LogDispatch)
 	dispatchDone := make(chan struct{})
 	go func() {
 		defer close(dispatchDone)
-		b.dispatch(runCtx, manager.Events(), compiled, executor)
+		for result := range results {
+			b.RecordResult(runCtx, result.BindingID, result.Execution)
+		}
 	}()
 
 	loopErr := b.runLoop(runCtx, listener, managerErr)
@@ -126,38 +140,6 @@ func (b Bootstrap) Run(ctx context.Context, configPath string) error {
 		return loopErr
 	}
 	return nil
-}
-
-func (b Bootstrap) dispatch(ctx context.Context, events <-chan hotkey.TriggerEvent, bindings []app.RuntimeBinding, executor *actions.Executor) {
-	bindingByID := make(map[string]app.RuntimeBinding, len(bindings))
-	for _, binding := range bindings {
-		bindingByID[binding.ID] = binding
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case ev, ok := <-events:
-			if !ok {
-				return
-			}
-			binding, ok := bindingByID[ev.BindingID]
-			if !ok {
-				continue
-			}
-			actionCtx := b.BaseActionCtx
-			actionCtx.Context = ctx
-			actionCtx.BindingID = ev.BindingID
-			actionCtx.TriggerText = ev.Chord.String()
-			var res actions.ExecutionResult
-			if binding.Flow != nil {
-				res = executor.ExecuteFlow(actionCtx, *binding.Flow, flow.ConditionEvaluator{})
-			} else {
-				res = executor.Execute(actionCtx, binding.Plan)
-			}
-			b.RecordResult(ctx, binding.ID, res)
-		}
-	}
 }
 
 func (b Bootstrap) runLoop(ctx context.Context, listener Listener, managerErr <-chan error) error {
