@@ -81,6 +81,12 @@ If network access is unavailable and cache is incomplete, module resolution will
 go test -v ./...
 ```
 
+Focused deterministic hotkey unit suite (registration/dispatch/unregistration paths without OS hooks):
+
+```bash
+go test -v ./internal/hotkey ./internal/runtime -run 'TestManager|TestDispatchHotkeyEvents|TestParse'
+```
+
 Expected outcome:
 
 - `ok` lines for packages.

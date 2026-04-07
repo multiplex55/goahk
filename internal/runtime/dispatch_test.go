@@ -3,12 +3,14 @@ package runtime
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
 
 	"goahk/internal/actions"
 	"goahk/internal/hotkey"
+	"goahk/internal/services/messagebox"
 )
 
 func TestDispatchHotkeyEvents_KnownBindingExecutesExpectedPlan(t *testing.T) {
@@ -177,5 +179,126 @@ func TestDispatchHotkeyEvents_StopsImmediatelyAfterShutdownSignal(t *testing.T) 
 
 	if got := len(executions); got != 1 {
 		t.Fatalf("execution count = %d, want 1", got)
+	}
+}
+
+func TestDispatchHotkeyEvents_CallbackOrderingAndArguments(t *testing.T) {
+	reg := actions.NewRegistry()
+	var mu sync.Mutex
+	var calls []string
+	mark := func(name string) func(actions.ActionContext, actions.Step) error {
+		return func(ctx actions.ActionContext, step actions.Step) error {
+			mu.Lock()
+			defer mu.Unlock()
+			calls = append(calls, name+":"+ctx.BindingID+":"+ctx.TriggerText+":"+step.Params["tag"])
+			return nil
+		}
+	}
+	if err := reg.Register("test.first", mark("first")); err != nil {
+		t.Fatalf("register first action: %v", err)
+	}
+	if err := reg.Register("test.second", mark("second")); err != nil {
+		t.Fatalf("register second action: %v", err)
+	}
+	executor := actions.NewExecutor(reg)
+	events := make(chan hotkey.TriggerEvent, 1)
+	shutdown := make(chan struct{})
+
+	results := DispatchHotkeyEvents(context.Background(), shutdown, events, map[string]actions.Plan{
+		"binding.sequence": {
+			{Name: "test.first", Params: map[string]string{"tag": "one"}},
+			{Name: "test.second", Params: map[string]string{"tag": "two"}},
+		},
+	}, executor, actions.ActionContext{}, nil)
+
+	events <- hotkey.TriggerEvent{
+		BindingID: "binding.sequence",
+		Chord:     hotkey.Chord{Modifiers: hotkey.ModCtrl | hotkey.ModShift, Key: "S"},
+	}
+
+	select {
+	case res := <-results:
+		if !res.Execution.Success {
+			t.Fatalf("dispatch should succeed, got %#v", res)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for dispatch result")
+	}
+	close(shutdown)
+	for range results {
+	}
+
+	mu.Lock()
+	gotCalls := append([]string(nil), calls...)
+	mu.Unlock()
+	wantCalls := []string{
+		"first:binding.sequence:Ctrl+Shift+S:one",
+		"second:binding.sequence:Ctrl+Shift+S:two",
+	}
+	if !reflect.DeepEqual(gotCalls, wantCalls) {
+		t.Fatalf("calls = %v, want %v", gotCalls, wantCalls)
+	}
+}
+
+type dispatchRecordingMessageBox struct {
+	mu    sync.Mutex
+	calls []messagebox.Request
+}
+
+func (d *dispatchRecordingMessageBox) Show(_ context.Context, req messagebox.Request) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.calls = append(d.calls, req)
+	return nil
+}
+
+func (d *dispatchRecordingMessageBox) requests() []messagebox.Request {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := make([]messagebox.Request, len(d.calls))
+	copy(out, d.calls)
+	return out
+}
+
+func TestDispatchHotkeyEvents_MessageBoxActionReceivesExpectedDialogPayload(t *testing.T) {
+	reg := actions.NewRegistry()
+	executor := actions.NewExecutor(reg)
+	events := make(chan hotkey.TriggerEvent, 1)
+	shutdown := make(chan struct{})
+	box := &dispatchRecordingMessageBox{}
+
+	results := DispatchHotkeyEvents(
+		context.Background(),
+		shutdown,
+		events,
+		map[string]actions.Plan{
+			"hk.dialog": {
+				{Name: "system.message_box", Params: map[string]string{"title": "Hotkey Test", "body": "Pressed Ctrl+Alt+D", "icon": "info", "options": "ok"}},
+			},
+		},
+		executor,
+		actions.ActionContext{Services: actions.Services{MessageBox: box}},
+		nil,
+	)
+
+	events <- hotkey.TriggerEvent{BindingID: "hk.dialog", Chord: hotkey.Chord{Modifiers: hotkey.ModCtrl | hotkey.ModAlt, Key: "D"}}
+	select {
+	case res := <-results:
+		if !res.Execution.Success {
+			t.Fatalf("dialog dispatch should succeed, got %#v", res)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for dialog dispatch result")
+	}
+	close(shutdown)
+	for range results {
+	}
+
+	requests := box.requests()
+	if len(requests) != 1 {
+		t.Fatalf("message box call count = %d, want 1", len(requests))
+	}
+	if requests[0].Title != "Hotkey Test" || requests[0].Body != "Pressed Ctrl+Alt+D" {
+		t.Fatalf("message box request = %#v", requests[0])
 	}
 }
