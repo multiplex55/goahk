@@ -3,6 +3,8 @@ package actions
 import (
 	"context"
 	"time"
+
+	"goahk/internal/clipboard"
 )
 
 type Logger interface {
@@ -17,7 +19,7 @@ func (NoopLogger) Error(string, map[string]any) {}
 
 type Services struct {
 	MessageBox        func(context.Context, string, string) error
-	ClipboardWrite    func(context.Context, string) error
+	Clipboard         clipboard.Service
 	ProcessLaunch     func(context.Context, string, []string) error
 	WindowActivate    func(context.Context, string) error
 	ActiveWindowTitle func(context.Context) (string, error)
