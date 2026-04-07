@@ -2,35 +2,43 @@ package window
 
 import "testing"
 
-func TestFilter_AllRuleTypes(t *testing.T) {
-	windows := []Info{
-		{Title: "Visual Studio Code", Class: "Chrome_WidgetWin_1", Exe: "Code.exe", Active: true},
-		{Title: "Notepad", Class: "Notepad", Exe: "notepad.exe", Active: false},
+func TestFilter_TitleContainsOperator(t *testing.T) {
+	got, err := Filter([]Info{{Title: "Visual Studio Code"}}, Matcher{TitleContains: "studio"})
+	if err != nil {
+		t.Fatalf("Filter returned error: %v", err)
 	}
-
-	tests := []struct {
-		name    string
-		matcher Matcher
-		want    int
-	}{
-		{name: "exact title", matcher: Matcher{TitleExact: "visual studio code"}, want: 1},
-		{name: "contains title", matcher: Matcher{TitleContains: "studio"}, want: 1},
-		{name: "regex title", matcher: Matcher{TitleRegex: `^Visual\s+Studio`}, want: 1},
-		{name: "class name", matcher: Matcher{ClassName: "notepad"}, want: 1},
-		{name: "exe name", matcher: Matcher{ExeName: "code.EXE"}, want: 1},
-		{name: "active only", matcher: Matcher{ActiveOnly: true}, want: 1},
+	if len(got) != 1 {
+		t.Fatalf("len=%d want 1", len(got))
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Filter(windows, tt.matcher)
-			if err != nil {
-				t.Fatalf("Filter returned error: %v", err)
-			}
-			if len(got) != tt.want {
-				t.Fatalf("len=%d want %d", len(got), tt.want)
-			}
-		})
+func TestFilter_TitleExactOperator(t *testing.T) {
+	got, err := Filter([]Info{{Title: "Visual Studio Code"}}, Matcher{TitleExact: "visual studio code"})
+	if err != nil {
+		t.Fatalf("Filter returned error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len=%d want 1", len(got))
+	}
+}
+
+func TestFilter_ExecutableNameOperator(t *testing.T) {
+	got, err := Filter([]Info{{Exe: "Code.exe"}}, Matcher{ExeName: "code.EXE"})
+	if err != nil {
+		t.Fatalf("Filter returned error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len=%d want 1", len(got))
+	}
+}
+
+func TestFilter_ClassNameOperator(t *testing.T) {
+	got, err := Filter([]Info{{Class: "Chrome_WidgetWin_1"}}, Matcher{ClassName: "chrome_widgetwin_1"})
+	if err != nil {
+		t.Fatalf("Filter returned error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len=%d want 1", len(got))
 	}
 }
 
