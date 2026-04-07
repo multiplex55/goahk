@@ -11,11 +11,10 @@ Use these commands exactly (copy/paste ready) so local runs and CI behavior stay
 - Go `1.22` or newer (`go.mod` currently declares `go 1.22`).
 - Git (required for clone/setup and optional version metadata in build script).
 - Windows command shell for `build\build.bat` and `build\check-no-source-binaries.bat` (PowerShell is used internally for UTC timestamp normalization).
-- Bash-compatible shell remains supported via temporary shim scripts (`./build/build.sh`, `./build/check-no-source-binaries.sh`).
 
 Verify toolchain:
 
-```bash
+```powershell
 go version
 git --version
 ```
@@ -36,7 +35,7 @@ For real hotkey verification on Windows, the process must have:
 
 ### Environment variables used by build tooling
 
-`build\build.bat` supports optional overrides (and `./build/build.sh` forwards these through in shim mode):
+`build\build.bat` supports optional overrides:
 
 - `VERSION` (default: `v0.1.0`)
 - `COMMIT` (default: short git SHA or `unknown`)
@@ -44,15 +43,15 @@ For real hotkey verification on Windows, the process must have:
 
 Example reproducible build metadata override:
 
-```bash
-set VERSION=v0.1.0 && set COMMIT=abcdef0 && set SOURCE_DATE_EPOCH=1700000000 && build\build.bat
+```powershell
+cmd /c "set VERSION=v0.1.0 && set COMMIT=abcdef0 && set SOURCE_DATE_EPOCH=1700000000 && build\build.bat"
 ```
 
 ## 2) Setup workflow
 
 ### Clean clone/setup sequence
 
-```bash
+```powershell
 git clone <REPO_URL> goahk
 cd goahk
 go mod download
@@ -60,7 +59,7 @@ go mod download
 
 If you want an extra dependency integrity check:
 
-```bash
+```powershell
 go mod verify
 ```
 
@@ -68,7 +67,7 @@ go mod verify
 
 In restricted environments, pre-populate the Go module cache from an allowed mirror/artifact source, then run:
 
-```bash
+```powershell
 go mod download
 ```
 
@@ -78,13 +77,13 @@ If network access is unavailable and cache is incomplete, module resolution will
 
 ### Unit tests (default, all platforms)
 
-```bash
+```powershell
 go test -v ./...
 ```
 
 Focused deterministic hotkey unit suite (registration/dispatch/unregistration paths without OS hooks):
 
-```bash
+```powershell
 go test -v ./internal/hotkey ./internal/runtime -run 'TestManager|TestDispatchHotkeyEvents|TestParse'
 ```
 
@@ -100,7 +99,7 @@ Common failure signatures:
 
 ### Optional race detector (slower)
 
-```bash
+```powershell
 go test -race ./...
 ```
 
@@ -117,14 +116,14 @@ Common failure signature:
 
 Automated integration-tagged suites:
 
-```bash
+```powershell
 go test -tags=integration ./internal/runtime ./internal/hotkey
 ```
 
 Manual runtime hotkey check:
 
 1. Start app with a known config:
-   ```bash
+   ```powershell
    go run ./cmd/goahk -config <path-to-config.json>
    ```
 2. Press configured hotkey once.
@@ -141,7 +140,7 @@ Common hotkey-specific failure signatures:
 
 ### Debug/development build (matches current CI intent)
 
-```bash
+```powershell
 go build -v ./...
 ```
 
@@ -149,7 +148,7 @@ This validates that all packages compile.
 
 ### Production/release build (project packaging script)
 
-```bash
+```powershell
 build\build.bat
 ```
 
@@ -179,7 +178,7 @@ This guide is the **single source of truth** for the command set used locally an
 
 Current CI workflow (`.github/workflows/go.yml`) runs:
 
-```bash
+```powershell
 go mod download
 build\check-no-source-binaries.bat
 go build -v ./...
@@ -188,7 +187,7 @@ go test -v ./...
 
 Recommended local pre-PR command sequence (aligned to CI):
 
-```bash
+```powershell
 go mod download
 build\check-no-source-binaries.bat
 go build -v ./...

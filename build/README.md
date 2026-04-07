@@ -4,8 +4,8 @@ Build script and metadata for reproducible packaging live in this folder.
 
 ## Build command
 
-```bash
-build\build.bat
+```powershell
+cmd /c build\build.bat
 ```
 
 This produces `dist/goahk` from `cmd/goahk` with version metadata injected via linker flags.
@@ -15,5 +15,3 @@ This produces `dist/goahk` from `cmd/goahk` with version metadata injected via l
 - Practical runtime usage and hotkey examples: [`docs/USAGE.md`](../docs/USAGE.md)
 - Project overview: [`README.md`](../README.md)
 
-
-> Note: `build/build.sh` is a temporary compatibility shim and delegates to `build\build.bat` when `cmd.exe` is available.
