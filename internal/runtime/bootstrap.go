@@ -5,17 +5,18 @@ import (
 	"fmt"
 
 	"goahk/internal/actions"
-	"goahk/internal/app"
 	"goahk/internal/clipboard"
 	"goahk/internal/config"
 	"goahk/internal/hotkey"
 	"goahk/internal/process"
+	"goahk/internal/program"
+	appinternal "goahk/internal/app"
 	"goahk/internal/services/messagebox"
 )
 
 type ConfigLoader func(context.Context, string) (config.Config, error)
 
-type RegistryBuilder func(context.Context, config.Config) (*actions.Registry, error)
+type RegistryBuilder func(context.Context, program.Program) (*actions.Registry, error)
 
 type Listener interface {
 	hotkey.Listener
@@ -40,7 +41,7 @@ func NewBootstrap() Bootstrap {
 		LoadConfig: func(_ context.Context, path string) (config.Config, error) {
 			return config.LoadFile(path)
 		},
-		BuildRegistry: func(_ context.Context, _ config.Config) (*actions.Registry, error) {
+		BuildRegistry: func(_ context.Context, _ program.Program) (*actions.Registry, error) {
 			return actions.NewRegistry(), nil
 		},
 		NewListener:  NewWindowsListener,
@@ -76,13 +77,20 @@ func (b Bootstrap) Run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	registry, err := b.BuildRegistry(ctx, cfg)
+	p, err := config.ToProgram(cfg)
+	if err != nil {
+		return fmt.Errorf("adapt config to program: %w", err)
+	}
+	if err := program.Validate(p); err != nil {
+		return fmt.Errorf("validate program: %w", err)
+	}
+
+	registry, err := b.BuildRegistry(ctx, p)
 	if err != nil {
 		return fmt.Errorf("build action registry: %w", err)
 	}
 
-	p := app.ConfigToProgram(cfg)
-	compiled, err := app.CompileRuntimeBindingsFromProgram(p, registry)
+	compiled, err := appinternal.CompileRuntimeBindingsFromProgram(p, registry)
 	if err != nil {
 		return fmt.Errorf("compile runtime bindings: %w", err)
 	}

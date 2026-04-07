@@ -40,7 +40,11 @@ type RuntimeBinding struct {
 }
 
 func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]RuntimeBinding, error) {
-	return CompileRuntimeBindingsFromProgram(ConfigToProgram(cfg), registry)
+	p, err := config.ToProgram(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return CompileRuntimeBindingsFromProgram(p, registry)
 }
 
 func CompileRuntimeBindingsFromProgram(p program.Program, registry *actions.Registry) ([]RuntimeBinding, error) {
