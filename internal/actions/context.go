@@ -6,6 +6,8 @@ import (
 
 	"goahk/internal/clipboard"
 	"goahk/internal/input"
+	"goahk/internal/process"
+	"goahk/internal/services/messagebox"
 	"goahk/internal/uia"
 )
 
@@ -20,9 +22,9 @@ func (NoopLogger) Info(string, map[string]any)  {}
 func (NoopLogger) Error(string, map[string]any) {}
 
 type Services struct {
-	MessageBox        func(context.Context, string, string) error
+	MessageBox        messagebox.Service
 	Clipboard         clipboard.Service
-	ProcessLaunch     func(context.Context, string, []string) error
+	Process           process.Service
 	WindowActivate    func(context.Context, string) error
 	ActiveWindowTitle func(context.Context) (string, error)
 	Input             input.Service

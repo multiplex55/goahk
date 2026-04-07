@@ -6,8 +6,11 @@ import (
 
 	"goahk/internal/actions"
 	"goahk/internal/app"
+	"goahk/internal/clipboard"
 	"goahk/internal/config"
 	"goahk/internal/hotkey"
+	"goahk/internal/process"
+	"goahk/internal/services/messagebox"
 )
 
 type ConfigLoader func(context.Context, string) (config.Config, error)
@@ -43,6 +46,11 @@ func NewBootstrap() Bootstrap {
 		NewListener:  NewWindowsListener,
 		RecordResult: func(context.Context, string, actions.ExecutionResult) {},
 		LogDispatch:  func(context.Context, DispatchLogEntry) {},
+		BaseActionCtx: actions.ActionContext{Services: actions.Services{
+			MessageBox: messagebox.NewService(),
+			Clipboard:  clipboard.NewService(nil),
+			Process:    process.NewService(),
+		}},
 	}
 }
 
