@@ -30,3 +30,18 @@ func TestParse_Invalid(t *testing.T) {
 		}
 	}
 }
+
+func TestParse_InvalidModifierOnlyAndMalformedCombinations(t *testing.T) {
+	tests := []string{
+		"Ctrl+Alt",
+		"Shift+Win",
+		"Ctrl++A",
+		"Ctrl+Shift+",
+		"Ctrl+Ctrl+K",
+	}
+	for _, in := range tests {
+		if _, err := Parse(in); err == nil {
+			t.Fatalf("Parse(%q) expected invalid combination error", in)
+		}
+	}
+}
