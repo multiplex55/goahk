@@ -58,3 +58,25 @@ func TestActivateForeground_EnumerateError(t *testing.T) {
 		t.Fatalf("expected wrapped enumerate error, got %v", err)
 	}
 }
+
+func TestResolveTargetWindow_StrictPolicyAmbiguous(t *testing.T) {
+	fp := &fakeProvider{windows: []Info{{HWND: 10, Title: "A"}, {HWND: 20, Title: "A"}}}
+	_, err := ResolveTargetWindow(context.Background(), fp, Matcher{TitleExact: "A"}, ActivationPolicy{RequireSingleMatch: true})
+	if !errors.Is(err, ErrAmbiguousWindow) {
+		t.Fatalf("expected ErrAmbiguousWindow, got %v", err)
+	}
+}
+
+func TestActivateForegroundWithPolicy_StrictSingleMatch(t *testing.T) {
+	fp := &fakeProvider{windows: []Info{{HWND: 10, Title: "A"}, {HWND: 20, Title: "B"}}}
+	win, err := ActivateForegroundWithPolicy(context.Background(), fp, Matcher{TitleExact: "A"}, ActivationPolicy{RequireSingleMatch: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if win.HWND != 10 {
+		t.Fatalf("selected=%v want 10", win.HWND)
+	}
+	if fp.activated != 10 {
+		t.Fatalf("activated=%v want 10", fp.activated)
+	}
+}
