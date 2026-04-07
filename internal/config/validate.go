@@ -11,6 +11,23 @@ func Validate(cfg Config) error {
 
 	ids := map[string]struct{}{}
 	hotkeys := map[string]struct{}{}
+	flows := map[string]Flow{}
+
+	for i, f := range cfg.Flows {
+		id := strings.ToLower(strings.TrimSpace(f.ID))
+		if id == "" {
+			errs = append(errs, fmt.Sprintf("flows[%d].id is required", i))
+			continue
+		}
+		if _, ok := flows[id]; ok {
+			errs = append(errs, fmt.Sprintf("flows[%d].id duplicates %q", i, f.ID))
+		} else {
+			flows[id] = f
+		}
+		if len(f.Steps) == 0 {
+			errs = append(errs, fmt.Sprintf("flows[%d].steps is required", i))
+		}
+	}
 
 	for i, hk := range cfg.Hotkeys {
 		if strings.TrimSpace(hk.ID) == "" {
@@ -33,9 +50,20 @@ func Validate(cfg Config) error {
 			hotkeys[chord] = struct{}{}
 		}
 
-		if len(hk.Steps) == 0 {
-			errs = append(errs, fmt.Sprintf("hotkeys[%d].steps is required", i))
+		hasSteps := len(hk.Steps) > 0
+		hasFlow := strings.TrimSpace(hk.Flow) != ""
+		if !hasSteps && !hasFlow {
+			errs = append(errs, fmt.Sprintf("hotkeys[%d] requires steps or flow", i))
 		}
+		if hasSteps && hasFlow {
+			errs = append(errs, fmt.Sprintf("hotkeys[%d] cannot set both steps and flow", i))
+		}
+		if hasFlow {
+			if _, ok := flows[strings.ToLower(strings.TrimSpace(hk.Flow))]; !ok {
+				errs = append(errs, fmt.Sprintf("hotkeys[%d].flow references unknown flow %q", i, hk.Flow))
+			}
+		}
+
 		for j, step := range hk.Steps {
 			if strings.HasPrefix(step.Action, "uia.") {
 				if ref := strings.TrimSpace(step.Params["selector"]); ref != "" {
