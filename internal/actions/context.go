@@ -6,6 +6,7 @@ import (
 
 	"goahk/internal/clipboard"
 	"goahk/internal/input"
+	"goahk/internal/uia"
 )
 
 type Logger interface {
@@ -25,6 +26,7 @@ type Services struct {
 	WindowActivate    func(context.Context, string) error
 	ActiveWindowTitle func(context.Context) (string, error)
 	Input             input.Service
+	UIA               uia.ActionService
 }
 
 type ActionContext struct {

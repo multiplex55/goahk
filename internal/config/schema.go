@@ -2,12 +2,13 @@ package config
 
 // Config is the root runtime configuration.
 type Config struct {
-	App            AppConfig       `json:"app"`
-	Logging        LoggingConfig   `json:"logging"`
-	Hotkeys        []HotkeyBinding `json:"hotkeys"`
-	WindowMatchers []WindowMatcher `json:"windowMatchers"`
-	Clipboard      ClipboardConfig `json:"clipboard"`
-	Startup        StartupConfig   `json:"startup"`
+	App            AppConfig              `json:"app"`
+	Logging        LoggingConfig          `json:"logging"`
+	Hotkeys        []HotkeyBinding        `json:"hotkeys"`
+	WindowMatchers []WindowMatcher        `json:"windowMatchers"`
+	UIASelectors   map[string]UIASelector `json:"uiaSelectors,omitempty"`
+	Clipboard      ClipboardConfig        `json:"clipboard"`
+	Startup        StartupConfig          `json:"startup"`
 }
 
 type AppConfig struct {
@@ -43,4 +44,11 @@ type ClipboardConfig struct {
 
 type StartupConfig struct {
 	RunAtLogin bool `json:"runAtLogin"`
+}
+
+type UIASelector struct {
+	AutomationID string        `json:"automationId,omitempty"`
+	Name         string        `json:"name,omitempty"`
+	ControlType  string        `json:"controlType,omitempty"`
+	Ancestors    []UIASelector `json:"ancestors,omitempty"`
 }

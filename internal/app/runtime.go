@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"goahk/internal/actions"
 	"goahk/internal/config"
@@ -57,7 +58,19 @@ func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]Ru
 					return nil, fmt.Errorf("binding %q references unknown action %q", b.ID, step.Action)
 				}
 			}
-			plan = append(plan, actions.Step{Name: step.Action, Params: step.Params})
+			params := mapsClone(step.Params)
+			if strings.HasPrefix(step.Action, "uia.") {
+				sel, err := config.ParseUIASelector(params, cfg.UIASelectors)
+				if err != nil {
+					return nil, fmt.Errorf("binding %q action %q selector: %w", b.ID, step.Action, err)
+				}
+				raw, err := config.EncodeSelectorJSON(sel)
+				if err != nil {
+					return nil, fmt.Errorf("binding %q action %q selector encode: %w", b.ID, step.Action, err)
+				}
+				params["selector_json"] = raw
+			}
+			plan = append(plan, actions.Step{Name: step.Action, Params: params})
 		}
 		compiled = append(compiled, RuntimeBinding{ID: b.ID, Chord: parsed[i].Chord, Plan: plan})
 	}
@@ -94,4 +107,15 @@ func DispatchHotkeyEvents(ctx context.Context, events <-chan hotkey.TriggerEvent
 		}
 	}()
 	return results
+}
+
+func mapsClone(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }

@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"goahk/internal/clipboard"
 	"goahk/internal/input"
+	"goahk/internal/uia"
 )
 
 type Registry struct {
@@ -214,6 +216,77 @@ func (r *Registry) registerBuiltins() {
 		}
 		return ctx.Services.Input.SendChord(ctx.Context, input.Chord{Keys: tokens[0].Keys}, opts)
 	})
+
+	r.MustRegister("uia.find", func(ctx ActionContext, step Step) error {
+		if ctx.Services.UIA == nil {
+			return nil
+		}
+		sel, timeout, retry, err := parseUIAActionInputs(step)
+		if err != nil {
+			return err
+		}
+		el, diag, err := ctx.Services.UIA.Find(ctx.Context, sel, timeout, retry)
+		logUIADiagnostics(ctx, step, sel, timeout, diag)
+		if err != nil {
+			return err
+		}
+		if key := strings.TrimSpace(step.Params["save_as"]); key != "" {
+			if ctx.Metadata == nil {
+				ctx.Metadata = map[string]string{}
+			}
+			raw, _ := json.Marshal(el)
+			ctx.Metadata[key] = string(raw)
+		}
+		return nil
+	})
+
+	r.MustRegister("uia.invoke", func(ctx ActionContext, step Step) error {
+		return runUIAOp(ctx, step, func(sel uia.Selector, timeout, retry time.Duration) (uia.ActionDiagnostics, error) {
+			return ctx.Services.UIA.Invoke(ctx.Context, sel, timeout, retry)
+		})
+	})
+	r.MustRegister("uia.value_set", func(ctx ActionContext, step Step) error {
+		value := step.Params["value"]
+		return runUIAOp(ctx, step, func(sel uia.Selector, timeout, retry time.Duration) (uia.ActionDiagnostics, error) {
+			return ctx.Services.UIA.ValueSet(ctx.Context, sel, value, timeout, retry)
+		})
+	})
+	r.MustRegister("uia.value_get", func(ctx ActionContext, step Step) error {
+		if ctx.Services.UIA == nil {
+			return nil
+		}
+		sel, timeout, retry, err := parseUIAActionInputs(step)
+		if err != nil {
+			return err
+		}
+		value, diag, err := ctx.Services.UIA.ValueGet(ctx.Context, sel, timeout, retry)
+		logUIADiagnostics(ctx, step, sel, timeout, diag)
+		if err != nil {
+			return err
+		}
+		if key := strings.TrimSpace(step.Params["save_as"]); key != "" {
+			if ctx.Metadata == nil {
+				ctx.Metadata = map[string]string{}
+			}
+			ctx.Metadata[key] = value
+		}
+		return nil
+	})
+	r.MustRegister("uia.toggle", func(ctx ActionContext, step Step) error {
+		return runUIAOp(ctx, step, func(sel uia.Selector, timeout, retry time.Duration) (uia.ActionDiagnostics, error) {
+			return ctx.Services.UIA.Toggle(ctx.Context, sel, timeout, retry)
+		})
+	})
+	r.MustRegister("uia.expand", func(ctx ActionContext, step Step) error {
+		return runUIAOp(ctx, step, func(sel uia.Selector, timeout, retry time.Duration) (uia.ActionDiagnostics, error) {
+			return ctx.Services.UIA.Expand(ctx.Context, sel, timeout, retry)
+		})
+	})
+	r.MustRegister("uia.select", func(ctx ActionContext, step Step) error {
+		return runUIAOp(ctx, step, func(sel uia.Selector, timeout, retry time.Duration) (uia.ActionDiagnostics, error) {
+			return ctx.Services.UIA.Select(ctx.Context, sel, timeout, retry)
+		})
+	})
 }
 
 func withRestore(step Step) bool {
@@ -311,4 +384,54 @@ func serializeParams(params map[string]string) string {
 		parts = append(parts, k+"="+params[k])
 	}
 	return strings.Join(parts, ",")
+}
+
+func parseUIAActionInputs(step Step) (uia.Selector, time.Duration, time.Duration, error) {
+	raw := strings.TrimSpace(step.Params["selector_json"])
+	if raw == "" {
+		return uia.Selector{}, 0, 0, fmt.Errorf("%s requires selector_json", step.Name)
+	}
+	var sel uia.Selector
+	if err := json.Unmarshal([]byte(raw), &sel); err != nil {
+		return uia.Selector{}, 0, 0, fmt.Errorf("decode selector_json: %w", err)
+	}
+	if err := sel.Validate(); err != nil {
+		return uia.Selector{}, 0, 0, err
+	}
+	timeoutMS, err := parseIntParam(step.Params, "timeout_ms")
+	if err != nil {
+		return uia.Selector{}, 0, 0, err
+	}
+	retryMS, err := parseIntParam(step.Params, "retry_interval_ms")
+	if err != nil {
+		return uia.Selector{}, 0, 0, err
+	}
+	return sel, time.Duration(timeoutMS) * time.Millisecond, time.Duration(retryMS) * time.Millisecond, nil
+}
+
+func runUIAOp(ctx ActionContext, step Step, op func(uia.Selector, time.Duration, time.Duration) (uia.ActionDiagnostics, error)) error {
+	if ctx.Services.UIA == nil {
+		return nil
+	}
+	sel, timeout, retry, err := parseUIAActionInputs(step)
+	if err != nil {
+		return err
+	}
+	diag, err := op(sel, timeout, retry)
+	logUIADiagnostics(ctx, step, sel, timeout, diag)
+	return err
+}
+
+func logUIADiagnostics(ctx ActionContext, step Step, sel uia.Selector, timeout time.Duration, diag uia.ActionDiagnostics) {
+	if ctx.Logger == nil {
+		ctx.Logger = NoopLogger{}
+	}
+	ctx.Logger.Info("uia.action", map[string]any{
+		"action":             step.Name,
+		"selector":           sel,
+		"retry_count":        diag.RetryCount,
+		"timeout":            timeout.String(),
+		"supported_patterns": diag.SupportedPatterns,
+		"missing_pattern":    diag.MissingPattern,
+	})
 }
