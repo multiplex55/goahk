@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -56,5 +57,30 @@ func TestExecutor_TimeoutAndMetadataPropagation(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cap.order, []string{"test.capture"}) || cap.ctxValue != "abc" {
 		t.Fatalf("capture=%#v", cap)
+	}
+}
+
+func TestExecutor_MissingServiceErrorIncludedInActionResult(t *testing.T) {
+	r := NewRegistry()
+	ex := NewExecutor(r)
+	res := ex.Execute(ActionContext{Context: context.Background()}, Plan{
+		{Name: "system.log", Params: map[string]string{"message": "ok"}},
+		{Name: "process.launch", Params: map[string]string{"executable": "x"}},
+	})
+	if res.Success {
+		t.Fatal("execution should fail")
+	}
+	if len(res.Steps) != 2 {
+		t.Fatalf("steps=%d want 2", len(res.Steps))
+	}
+	failed := res.Steps[1]
+	if failed.Status != StepStatusFailed {
+		t.Fatalf("status=%s want %s", failed.Status, StepStatusFailed)
+	}
+	if !strings.Contains(failed.Error, "process.launch") || !strings.Contains(failed.Error, "process service unavailable") {
+		t.Fatalf("step error=%q", failed.Error)
+	}
+	if len(failed.ErrorChain) == 0 || !strings.Contains(failed.ErrorChain[0], "process service unavailable") {
+		t.Fatalf("error chain=%v", failed.ErrorChain)
 	}
 }

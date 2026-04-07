@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	"goahk/internal/input"
@@ -79,6 +80,29 @@ func TestInputActions_Validation(t *testing.T) {
 		h, _ := r.Lookup(step.Name)
 		if err := h(ctx, step); err == nil {
 			t.Fatalf("expected error for %#v", step)
+		}
+	}
+}
+
+func TestInputActions_MissingServiceErrors(t *testing.T) {
+	r := NewRegistry()
+	ctx := ActionContext{Context: context.Background(), BindingID: "b1"}
+	cases := []Step{
+		{Name: "input.send_text", Params: map[string]string{"text": "hi"}},
+		{Name: "input.send_keys", Params: map[string]string{"sequence": "ctrl+c"}},
+		{Name: "input.send_chord", Params: map[string]string{"chord": "alt+tab"}},
+	}
+	for _, step := range cases {
+		h, _ := r.Lookup(step.Name)
+		err := h(ctx, step)
+		if err == nil {
+			t.Fatalf("expected error for %s", step.Name)
+		}
+		if !strings.Contains(err.Error(), "input service unavailable") {
+			t.Fatalf("%s err=%q", step.Name, err.Error())
+		}
+		if !strings.Contains(err.Error(), step.Name) {
+			t.Fatalf("%s err=%q missing action identity", step.Name, err.Error())
 		}
 	}
 }

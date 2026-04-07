@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -43,5 +44,29 @@ func TestClipboardWrite_WithRestore(t *testing.T) {
 	}
 	if clip.text != "original" {
 		t.Fatalf("clipboard should be restored, got %q", clip.text)
+	}
+}
+
+func TestClipboardActions_MissingServiceErrors(t *testing.T) {
+	r := NewRegistry()
+	ctx := ActionContext{Context: context.Background()}
+	cases := []Step{
+		{Name: "clipboard.read"},
+		{Name: "clipboard.write", Params: map[string]string{"text": "x"}},
+		{Name: "clipboard.append", Params: map[string]string{"text": "x"}},
+		{Name: "clipboard.prepend", Params: map[string]string{"text": "x"}},
+	}
+	for _, step := range cases {
+		h, _ := r.Lookup(step.Name)
+		err := h(ctx, step)
+		if err == nil {
+			t.Fatalf("expected error for %s", step.Name)
+		}
+		if !strings.Contains(err.Error(), "clipboard service unavailable") {
+			t.Fatalf("%s err=%q", step.Name, err.Error())
+		}
+		if !strings.Contains(err.Error(), step.Name) {
+			t.Fatalf("%s err=%q missing action identity", step.Name, err.Error())
+		}
 	}
 }

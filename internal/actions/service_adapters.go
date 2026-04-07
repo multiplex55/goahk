@@ -10,7 +10,7 @@ import (
 
 func runMessageBoxAction(ctx ActionContext, step Step) error {
 	if ctx.Services.MessageBox == nil {
-		return nil
+		return missingServiceError(step, "message box")
 	}
 	body := strings.TrimSpace(step.Params["body"])
 	if body == "" {
@@ -33,7 +33,7 @@ func runMessageBoxAction(ctx ActionContext, step Step) error {
 
 func runClipboardWriteAction(ctx ActionContext, step Step) error {
 	if ctx.Services.Clipboard == nil {
-		return nil
+		return missingServiceError(step, "clipboard")
 	}
 	text, ok := step.Params["text"]
 	if !ok {
@@ -48,7 +48,7 @@ func runClipboardWriteAction(ctx ActionContext, step Step) error {
 
 func runProcessLaunchAction(ctx ActionContext, step Step) error {
 	if ctx.Services.Process == nil {
-		return nil
+		return missingServiceError(step, "process")
 	}
 	executable := strings.TrimSpace(step.Params["executable"])
 	if executable == "" {
@@ -106,4 +106,8 @@ func defaultString(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func missingServiceError(step Step, service string) error {
+	return fmt.Errorf("%s: %s service unavailable", step.Name, service)
 }

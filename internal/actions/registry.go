@@ -68,7 +68,7 @@ func (r *Registry) registerBuiltins() {
 
 	r.MustRegister("clipboard.read", func(ctx ActionContext, step Step) error {
 		if ctx.Services.Clipboard == nil {
-			return nil
+			return missingServiceError(step, "clipboard")
 		}
 		text, err := ctx.Services.Clipboard.ReadText(ctx.Context)
 		if err != nil {
@@ -87,7 +87,7 @@ func (r *Registry) registerBuiltins() {
 
 	r.MustRegister("clipboard.append", func(ctx ActionContext, step Step) error {
 		if ctx.Services.Clipboard == nil {
-			return nil
+			return missingServiceError(step, "clipboard")
 		}
 		runner := func() error { return ctx.Services.Clipboard.AppendText(ctx.Context, step.Params["text"]) }
 		if withRestore(step) {
@@ -98,7 +98,7 @@ func (r *Registry) registerBuiltins() {
 
 	r.MustRegister("clipboard.prepend", func(ctx ActionContext, step Step) error {
 		if ctx.Services.Clipboard == nil {
-			return nil
+			return missingServiceError(step, "clipboard")
 		}
 		runner := func() error { return ctx.Services.Clipboard.PrependText(ctx.Context, step.Params["text"]) }
 		if withRestore(step) {
@@ -111,14 +111,17 @@ func (r *Registry) registerBuiltins() {
 
 	r.MustRegister("window.activate", func(ctx ActionContext, step Step) error {
 		if ctx.Services.WindowActivate == nil {
-			return nil
+			return missingServiceError(step, "window")
 		}
 		return ctx.Services.WindowActivate(ctx.Context, step.Params["matcher"])
 	})
 
 	r.MustRegister("window.copy_active_title_to_clipboard", func(ctx ActionContext, step Step) error {
-		if ctx.Services.ActiveWindowTitle == nil || ctx.Services.Clipboard == nil {
-			return nil
+		if ctx.Services.ActiveWindowTitle == nil {
+			return missingServiceError(step, "window")
+		}
+		if ctx.Services.Clipboard == nil {
+			return missingServiceError(step, "clipboard")
 		}
 		title, err := ctx.Services.ActiveWindowTitle(ctx.Context)
 		if err != nil {
@@ -129,7 +132,7 @@ func (r *Registry) registerBuiltins() {
 
 	r.MustRegister("input.send_text", func(ctx ActionContext, step Step) error {
 		if ctx.Services.Input == nil {
-			return nil
+			return missingServiceError(step, "input")
 		}
 		opts, err := guardInputAction(ctx, step)
 		if err != nil {
@@ -147,7 +150,7 @@ func (r *Registry) registerBuiltins() {
 
 	r.MustRegister("input.send_keys", func(ctx ActionContext, step Step) error {
 		if ctx.Services.Input == nil {
-			return nil
+			return missingServiceError(step, "input")
 		}
 		opts, err := guardInputAction(ctx, step)
 		if err != nil {
@@ -169,7 +172,7 @@ func (r *Registry) registerBuiltins() {
 
 	r.MustRegister("input.send_chord", func(ctx ActionContext, step Step) error {
 		if ctx.Services.Input == nil {
-			return nil
+			return missingServiceError(step, "input")
 		}
 		opts, err := guardInputAction(ctx, step)
 		if err != nil {
