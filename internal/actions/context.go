@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"goahk/internal/clipboard"
+	"goahk/internal/input"
 )
 
 type Logger interface {
@@ -23,7 +24,7 @@ type Services struct {
 	ProcessLaunch     func(context.Context, string, []string) error
 	WindowActivate    func(context.Context, string) error
 	ActiveWindowTitle func(context.Context) (string, error)
-	InputSendText     func(context.Context, string) error
+	Input             input.Service
 }
 
 type ActionContext struct {

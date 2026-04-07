@@ -4,13 +4,18 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"goahk/internal/clipboard"
+	"goahk/internal/input"
 )
 
 type Registry struct {
 	handlers map[string]Handler
 }
+
+var cooldowns sync.Map
 
 func NewRegistry() *Registry {
 	r := &Registry{handlers: map[string]Handler{}}
@@ -149,10 +154,65 @@ func (r *Registry) registerBuiltins() {
 	})
 
 	r.MustRegister("input.send_text", func(ctx ActionContext, step Step) error {
-		if ctx.Services.InputSendText == nil {
+		if ctx.Services.Input == nil {
 			return nil
 		}
-		return ctx.Services.InputSendText(ctx.Context, step.Params["text"])
+		opts, err := guardInputAction(ctx, step)
+		if err != nil {
+			return err
+		}
+		text := step.Params["text"]
+		if parseBoolDefault(step.Params["decode_escapes"], false) {
+			text, err = input.DecodeEscapes(text)
+			if err != nil {
+				return err
+			}
+		}
+		return ctx.Services.Input.SendText(ctx.Context, text, opts)
+	})
+
+	r.MustRegister("input.send_keys", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Input == nil {
+			return nil
+		}
+		opts, err := guardInputAction(ctx, step)
+		if err != nil {
+			return err
+		}
+		raw := strings.TrimSpace(step.Params["sequence"])
+		if raw == "" {
+			raw = strings.TrimSpace(step.Params["keys"])
+		}
+		if raw == "" {
+			return fmt.Errorf("input.send_keys requires sequence")
+		}
+		seq, err := input.ParseSequence(raw)
+		if err != nil {
+			return err
+		}
+		return ctx.Services.Input.SendKeys(ctx.Context, seq, opts)
+	})
+
+	r.MustRegister("input.send_chord", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Input == nil {
+			return nil
+		}
+		opts, err := guardInputAction(ctx, step)
+		if err != nil {
+			return err
+		}
+		raw := strings.TrimSpace(step.Params["chord"])
+		if raw == "" {
+			return fmt.Errorf("input.send_chord requires chord")
+		}
+		tokens, err := input.TokenizeSequence(raw)
+		if err != nil {
+			return err
+		}
+		if len(tokens) != 1 {
+			return fmt.Errorf("input.send_chord expects a single token")
+		}
+		return ctx.Services.Input.SendChord(ctx.Context, input.Chord{Keys: tokens[0].Keys}, opts)
 	})
 }
 
@@ -174,4 +234,81 @@ func runWithClipboardRestore(ctx ActionContext, run func() error) error {
 		return err
 	}
 	return ctx.Services.Clipboard.WriteText(ctx.Context, clipboard.NormalizeWriteText(prior))
+}
+
+func guardInputAction(ctx ActionContext, step Step) (input.SendOptions, error) {
+	delayMS, err := parseIntParam(step.Params, "delay_ms")
+	if err != nil {
+		return input.SendOptions{}, err
+	}
+	cooldownMS, err := parseIntParam(step.Params, "cooldown_ms")
+	if err != nil {
+		return input.SendOptions{}, err
+	}
+	if cooldownMS > 0 {
+		key := strings.Join([]string{ctx.BindingID, step.Name, serializeParams(step.Params)}, "|")
+		now := time.Now()
+		if priorRaw, ok := cooldowns.Load(key); ok {
+			prior := priorRaw.(time.Time)
+			if now.Sub(prior) < time.Duration(cooldownMS)*time.Millisecond {
+				return input.SendOptions{}, nil
+			}
+		}
+		cooldowns.Store(key, now)
+	}
+	if ctx.Metadata == nil {
+		ctx.Metadata = map[string]string{}
+	}
+	suppress := parseBoolDefault(step.Params["suppress_reentrancy"], true)
+	if suppress {
+		ctx.Metadata["suppress_reentrancy"] = "true"
+	}
+	return input.SendOptions{DelayBefore: time.Duration(delayMS) * time.Millisecond, SuppressReentrancy: suppress}, nil
+}
+
+func parseIntParam(params map[string]string, key string) (int, error) {
+	raw := strings.TrimSpace(params[key])
+	if raw == "" {
+		return 0, nil
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v < 0 {
+		return 0, fmt.Errorf("invalid %s: %q", key, raw)
+	}
+	return v, nil
+}
+
+func parseBoolDefault(raw string, defaultValue bool) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultValue
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return defaultValue
+	}
+	return v
+}
+
+func serializeParams(params map[string]string) string {
+	if len(params) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	// stable order for cooldown key
+	for i := 0; i < len(keys); i++ {
+		for j := i + 1; j < len(keys); j++ {
+			if keys[j] < keys[i] {
+				keys[i], keys[j] = keys[j], keys[i]
+			}
+		}
+	}
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+params[k])
+	}
+	return strings.Join(parts, ",")
 }
