@@ -1,34 +1,113 @@
 # Testing strategy
 
-## CI matrix
+This document defines a staged test plan so we can land deterministic unit coverage first, then add Windows-specific integration coverage as listener/runtime wiring hardens.
 
-### 1) Pure unit tests (always)
+## Prerequisites
 
-Run on every push/PR for fast feedback and deterministic behavior.
+### Local development (all platforms)
 
-- `go test ./...`
-- `go test -race ./...` (where supported by CI runtime)
+- Go toolchain installed (match `go.mod` version).
+- Repository cloned with testdata fixtures available.
+- No desktop/UI session is required for pure unit suites.
 
-These tests must not rely on real desktop/UI state. OS interactions are abstracted behind boundaries and faked in unit tests.
+### Windows integration runner requirements
 
-### 2) Windows integration tests (gated/nightly)
+Use a Windows runner (local machine or CI) with:
 
-Run on Windows workers only, and preferably on nightly or manually-dispatched workflows.
+- Interactive desktop session available to the test process.
+- Permissions to register/unregister global hotkeys.
+- Stable keyboard layout for chord parsing/trigger checks.
+- A clean environment with no conflicting global hotkey registrations.
 
-- Exercise real clipboard backend
-- Exercise real window enumeration/activation
-- Exercise real hotkey listener registration
-- Exercise UIA traversal against known fixture apps
+> Integration tests are intentionally gated with build tags so Linux/macOS CI and quick local loops stay fast.
 
-Use explicit tags (for example, `-tags=integration`) so normal CI remains fast.
+## Tag and execution conventions
 
-### 3) Manual acceptance checklist
+- **Default (no tags):** fast deterministic unit tests.
+- **`integration` tag:** longer-running and environment-dependent integration coverage.
+- **`windows` + `integration`:** real Windows runtime/listener path verification.
 
-Before release:
+### Local command examples
 
-1. Launch app with representative config and confirm startup.
-2. Verify hotkeys register and trigger expected actions.
-3. Validate clipboard read/write/append/prepend behavior.
-4. Validate window activation matcher behavior against multiple apps.
-5. Validate `goahk-inspect` output in both `text` and `json` formats.
-6. Confirm graceful shutdown and resource cleanup.
+- Unit-only quick loop:
+  - `go test ./...`
+- Unit with race detector:
+  - `go test -race ./...`
+- Targeted package unit runs:
+  - `go test ./internal/hotkey ./internal/runtime ./internal/actions`
+- Windows integration (from Windows host):
+  - `go test -tags=integration ./internal/runtime ./internal/hotkey`
+
+### CI command examples
+
+- Cross-platform unit job:
+  - `go test ./...`
+- Optional race job (where supported):
+  - `go test -race ./...`
+- Windows integration job (gated/manual/nightly):
+  - `go test -tags=integration ./internal/runtime ./internal/hotkey`
+
+## Staged suites
+
+## 1) Hotkey manager unit suite (immediate)
+
+Scope:
+
+- lifecycle
+- mapping
+- cancellation
+- listener close
+- safe shutdown
+
+Status: **immediate / required in normal CI**.
+
+Current scaffold entrypoint: `internal/hotkey/manager_suite_test.go`.
+
+## 2) Runtime wiring unit suite (immediate)
+
+Scope:
+
+- compile-to-plan mapping
+- dispatch behavior
+- early failure
+- clean stop
+
+Status: **immediate / required in normal CI**.
+
+Current scaffold entrypoint: `internal/runtime/wiring_suite_test.go`.
+
+## 3) Service adapter unit suites (as implemented)
+
+Scope (expand incrementally as adapters are added):
+
+- message box
+- clipboard
+- process
+- window activation
+
+Status: **incremental / required once adapter exists**.
+
+Current scaffold entrypoint: `internal/actions/service_adapter_suite_test.go`.
+
+## 4) Windows integration suite (post-listener)
+
+Scope:
+
+- runtime start
+- single hotkey registration
+- trigger path verification
+- clean shutdown/unregister
+
+Status: **post-listener hardening / gated on Windows + integration tags**.
+
+Current scaffold entrypoint: `internal/runtime/windows_integration_suite_test.go`.
+
+## 5) Manual acceptance checklist
+
+Before release on Windows:
+
+1. Build and launch the `goahk` executable.
+2. Trigger configured hotkey once.
+3. Verify action path fires exactly once.
+4. Exit application cleanly.
+5. Restart application and confirm no stale hotkey registration remains.
