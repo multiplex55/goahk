@@ -1,8 +1,10 @@
 # goahk
 
-`goahk` is a Windows-first hotkey automation runtime written in Go. The core model is **code-first** (`goahk.NewApp()` + `Bind(...)`), and the JSON config runner remains available as a compatibility adapter via `cmd/goahk`.
+`goahk` is a Windows-first hotkey automation runtime written in Go.
 
-## Quick start (code-first, primary)
+## Quick start (script-as-code, primary)
+
+Use `goahk.NewApp()` and `Bind(...)` directly from Go.
 
 ```go
 package main
@@ -25,45 +27,52 @@ func main() {
 }
 ```
 
-Runnable examples: [`examples/basic-script/main.go`](examples/basic-script/main.go) and [`examples/standalone-script/main.go`](examples/standalone-script/main.go).
+Runnable examples:
 
-## JSON mode (optional compatibility path)
+- [`examples/basic-script/main.go`](examples/basic-script/main.go)
+- [`examples/custom-callback/main.go`](examples/custom-callback/main.go)
+- [`examples/clipboard-transform-paste/main.go`](examples/clipboard-transform-paste/main.go)
+- [`examples/window-aware-script/main.go`](examples/window-aware-script/main.go)
+- [`examples/mixed-actions/main.go`](examples/mixed-actions/main.go)
 
-If you already have JSON configs, you can continue using:
+## Declarative + callback can be mixed
+
+You can chain built-in declarative actions and custom callback logic in one binding.
+
+```go
+app.Bind("Ctrl+Shift+M",
+	goahk.ClipboardRead("clipboard"),
+	goahk.Func(func(ctx *goahk.Context) error {
+		ctx.Vars["clipboard"] = strings.ToUpper(ctx.Vars["clipboard"])
+		return nil
+	}),
+	goahk.ClipboardWrite("{{clipboard}}"),
+)
+```
+
+See: [`examples/mixed-actions/main.go`](examples/mixed-actions/main.go).
+
+## State model (`Vars` vs `AppState`)
+
+- `ctx.Vars` is per-trigger state (per execution of a hotkey callback). Treat it as local scratch data for that single run.
+- `ctx.AppState` is process-wide shared state across all callbacks and hotkey executions.
+
+Thread-safety guidance:
+
+- `ctx.Vars` does not need cross-goroutine synchronization if you keep it inside one callback execution.
+- `ctx.AppState` is safe for concurrent access (`Get` / `Set` / `LoadOrStore` are synchronized), and is the right place for shared counters/flags/cache values.
+- If you store composite values that require read-modify-write semantics across multiple operations, keep updates in one callback section or encode as single string values with `LoadOrStore`/`Set` boundaries.
+
+## Compatibility and migration notes
+
+- Script-as-code is the primary API and recommended for new scripts.
+- JSON config mode remains available through `cmd/goahk` for compatibility.
+- Old declarative usage (action helpers like `MessageBox`, `ClipboardRead`, `SendKeys`, etc.) is still fully supported.
+
+JSON compatibility runner:
 
 ```powershell
 go run ./cmd/goahk -config .\config.json
-```
-
-`cmd/goahk/main.go` intentionally remains the config-runner entry point for compatibility while code-first usage becomes the primary documented API.
-
-## Migration note: JSON bindings -> code API
-
-Map each JSON hotkey object to one `Bind(...)` call:
-
-- JSON `hotkeys[].hotkey` -> `app.Bind("<hotkey>", ...)`
-- JSON `hotkeys[].steps[].action` -> corresponding `goahk` action helper (`MessageBox`, `SendText`, `Launch`, etc.)
-- JSON stop-style behavior -> `goahk.Stop()`
-
-Example mapping:
-
-```json
-{
-  "id": "hello-hotkey",
-  "hotkey": "Ctrl+Alt+H",
-  "steps": [
-    {
-      "action": "system.message_box",
-      "params": { "title": "goahk", "body": "Hello" }
-    }
-  ]
-}
-```
-
-becomes:
-
-```go
-app.Bind("Ctrl+Alt+H", goahk.MessageBox("goahk", "Hello"))
 ```
 
 ## Documentation index
