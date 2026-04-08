@@ -7,6 +7,7 @@ func TestParse_ValidAndNormalized(t *testing.T) {
 		in   string
 		want string
 	}{
+		{"1", "1"},
 		{"Ctrl+Shift+V", "Ctrl+Shift+V"},
 		{"shift+control+v", "Ctrl+Shift+V"},
 		{"option+cmd+esc", "Alt+Win+Escape"},
@@ -24,7 +25,7 @@ func TestParse_ValidAndNormalized(t *testing.T) {
 }
 
 func TestParse_Invalid(t *testing.T) {
-	for _, in := range []string{"", "A", "Ctrl+", "Ctrl+Shift", "Ctrl+Nope"} {
+	for _, in := range []string{"", "Ctrl+", "Ctrl+Shift", "Ctrl+Nope"} {
 		if _, err := Parse(in); err == nil {
 			t.Fatalf("Parse(%q) expected error", in)
 		}
