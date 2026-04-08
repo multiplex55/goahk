@@ -19,8 +19,11 @@ type ConfigLoader func(context.Context, string) (config.Config, error)
 type RegistryBuilder func(context.Context, program.Program) (*actions.Registry, error)
 
 type Listener interface {
-	hotkey.Listener
+	Register(registrationID int, chord hotkey.Chord) error
+	Unregister(registrationID int) error
+	Events() <-chan hotkey.ListenerEvent
 	Run(context.Context) error
+	Close() error
 }
 
 type ListenerFactory func(context.Context) (Listener, error)
