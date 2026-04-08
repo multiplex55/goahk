@@ -24,7 +24,7 @@ func (a *App) Run(ctx context.Context) error {
 
 	var registry *actions.Registry
 	if a.validateActions || len(callbacks) > 0 {
-		registry = buildRegistryWithCallbacks(callbacks)
+		registry = buildRegistryWithCallbacks(a.state, callbacks)
 	}
 
 	if _, err := internalapp.CompileRuntimeBindingsFromProgram(p, registry); err != nil {
@@ -40,7 +40,7 @@ func (a *App) Run(ctx context.Context) error {
 		return cfg, nil
 	}
 	bootstrap.BuildRegistry = func(context.Context, program.Program) (*actions.Registry, error) {
-		return buildRegistryWithCallbacks(callbacks), nil
+		return buildRegistryWithCallbacks(a.state, callbacks), nil
 	}
 	return bootstrap.Run(ctx, "")
 }
@@ -50,13 +50,15 @@ func (a *App) toConfig() config.Config {
 	return cfg
 }
 
-func buildRegistryWithCallbacks(callbacks []callbackRegistration) *actions.Registry {
+func buildRegistryWithCallbacks(state StateStore, callbacks []callbackRegistration) *actions.Registry {
 	r := actions.NewRegistry()
 	for _, cb := range callbacks {
 		cb := cb
 		r.MustRegister(cb.actionName, func(actionCtx actions.ActionContext, _ actions.Step) error {
-			ctx := &Context{actionCtx: &actionCtx}
-			return cb.fn(ctx)
+			ctx := newContext(&actionCtx, state)
+			err := cb.fn(ctx)
+			syncVarsToActionContext(ctx)
+			return err
 		})
 	}
 	return r

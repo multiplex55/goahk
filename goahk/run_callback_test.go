@@ -32,7 +32,7 @@ func compileTestBindings(t *testing.T, a *App) ([]internalapp.RuntimeBinding, *a
 	t.Helper()
 
 	program, _, callbacks := a.runtimeArtifacts()
-	registry := buildRegistryWithCallbacks(callbacks)
+	registry := buildRegistryWithCallbacks(a.state, callbacks)
 	bindings, err := internalapp.CompileRuntimeBindingsFromProgram(program, registry)
 	if err != nil {
 		t.Fatalf("CompileRuntimeBindingsFromProgram() error = %v", err)
