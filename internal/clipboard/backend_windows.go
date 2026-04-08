@@ -3,8 +3,6 @@
 
 package clipboard
 
-import platformwindows "goahk/internal/platform/windows"
-
 func NewPlatformBackend() Backend {
-	return platformwindows.NewClipboardBackend()
+	return windowsBackend{}
 }

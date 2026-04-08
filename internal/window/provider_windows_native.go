@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-package windows
+package window
 
 import (
 	"context"
@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"syscall"
 	"unsafe"
-
-	"goahk/internal/window"
 )
 
 const (
@@ -35,24 +33,22 @@ var (
 	errWindowEnumAborted           = errors.New("window enumeration aborted")
 )
 
-type WindowProvider struct{}
+type OSProvider struct{}
 
-func NewWindowProvider() *WindowProvider { return &WindowProvider{} }
-
-func (p *WindowProvider) EnumerateWindows(ctx context.Context) ([]window.Info, error) {
+func (p *OSProvider) EnumerateWindows(ctx context.Context) ([]Info, error) {
 	activeHWND, _ := getForegroundWindow()
-	out := make([]window.Info, 0, 32)
+	out := make([]Info, 0, 32)
 	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
 		select {
 		case <-ctx.Done():
 			return 0
 		default:
 		}
-		visible, err := isWindowVisible(window.HWND(hwnd))
+		visible, err := isWindowVisible(HWND(hwnd))
 		if err != nil || !visible {
 			return 1
 		}
-		info, err := p.readInfo(window.HWND(hwnd), activeHWND)
+		info, err := p.readInfo(HWND(hwnd), activeHWND)
 		if err != nil {
 			return 1
 		}
@@ -72,20 +68,20 @@ func (p *WindowProvider) EnumerateWindows(ctx context.Context) ([]window.Info, e
 	return out, nil
 }
 
-func (p *WindowProvider) ActiveWindow(ctx context.Context) (window.Info, error) {
+func (p *OSProvider) ActiveWindow(ctx context.Context) (Info, error) {
 	select {
 	case <-ctx.Done():
-		return window.Info{}, ctx.Err()
+		return Info{}, ctx.Err()
 	default:
 	}
 	hwnd, err := getForegroundWindow()
 	if err != nil {
-		return window.Info{}, err
+		return Info{}, err
 	}
 	return p.readInfo(hwnd, hwnd)
 }
 
-func (p *WindowProvider) ActivateWindow(ctx context.Context, hwnd window.HWND) error {
+func (p *OSProvider) ActivateWindow(ctx context.Context, hwnd HWND) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -101,27 +97,27 @@ func (p *WindowProvider) ActivateWindow(ctx context.Context, hwnd window.HWND) e
 	return nil
 }
 
-func (p *WindowProvider) readInfo(hwnd, active window.HWND) (window.Info, error) {
+func (p *OSProvider) readInfo(hwnd, active HWND) (Info, error) {
 	title, err := getWindowText(hwnd)
 	if err != nil {
-		return window.Info{}, err
+		return Info{}, err
 	}
 	className, err := getClassName(hwnd)
 	if err != nil {
-		return window.Info{}, err
+		return Info{}, err
 	}
 	pid, err := getWindowPID(hwnd)
 	if err != nil {
-		return window.Info{}, err
+		return Info{}, err
 	}
 	exe, err := getProcessExeBaseName(pid)
 	if err != nil {
 		exe = ""
 	}
-	return window.Info{HWND: hwnd, Title: title, Class: className, PID: pid, Exe: exe, Active: hwnd == active}, nil
+	return Info{HWND: hwnd, Title: title, Class: className, PID: pid, Exe: exe, Active: hwnd == active}, nil
 }
 
-func getForegroundWindow() (window.HWND, error) {
+func getForegroundWindow() (HWND, error) {
 	ret, _, err := procGetForegroundWindow.Call()
 	if ret == 0 {
 		if err != syscall.Errno(0) {
@@ -129,10 +125,10 @@ func getForegroundWindow() (window.HWND, error) {
 		}
 		return 0, errors.New("GetForegroundWindow returned null")
 	}
-	return window.HWND(ret), nil
+	return HWND(ret), nil
 }
 
-func isWindowVisible(hwnd window.HWND) (bool, error) {
+func isWindowVisible(hwnd HWND) (bool, error) {
 	ret, _, err := procIsWindowVisible.Call(uintptr(hwnd))
 	if ret == 0 {
 		if err != syscall.Errno(0) {
@@ -143,7 +139,7 @@ func isWindowVisible(hwnd window.HWND) (bool, error) {
 	return true, nil
 }
 
-func getWindowText(hwnd window.HWND) (string, error) {
+func getWindowText(hwnd HWND) (string, error) {
 	lengthRet, _, lengthErr := procGetWindowTextLengthW.Call(uintptr(hwnd))
 	if lengthRet == 0 && lengthErr != syscall.Errno(0) {
 		return "", fmt.Errorf("GetWindowTextLengthW(%s): %w", hwnd, lengthErr)
@@ -156,7 +152,7 @@ func getWindowText(hwnd window.HWND) (string, error) {
 	return syscall.UTF16ToString(buf), nil
 }
 
-func getClassName(hwnd window.HWND) (string, error) {
+func getClassName(hwnd HWND) (string, error) {
 	buf := make([]uint16, 256)
 	ret, _, err := procGetClassNameW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
 	if ret == 0 {
@@ -168,7 +164,7 @@ func getClassName(hwnd window.HWND) (string, error) {
 	return syscall.UTF16ToString(buf[:ret]), nil
 }
 
-func getWindowPID(hwnd window.HWND) (uint32, error) {
+func getWindowPID(hwnd HWND) (uint32, error) {
 	var pid uint32
 	_, _, err := procGetWindowThreadProcessID.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&pid)))
 	if pid == 0 {

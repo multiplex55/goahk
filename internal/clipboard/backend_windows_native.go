@@ -1,15 +1,13 @@
 //go:build windows
 // +build windows
 
-package windows
+package clipboard
 
 import (
 	"context"
 	"fmt"
 	"syscall"
 	"unsafe"
-
-	"goahk/internal/clipboard"
 )
 
 const (
@@ -30,13 +28,9 @@ var (
 	procGlobalUnlock     = clipboardKernel32.NewProc("GlobalUnlock")
 )
 
-type ClipboardBackend struct{}
+type windowsBackend struct{}
 
-func NewClipboardBackend() clipboard.Backend {
-	return ClipboardBackend{}
-}
-
-func (ClipboardBackend) ReadText(ctx context.Context) (string, error) {
+func (windowsBackend) ReadText(ctx context.Context) (string, error) {
 	if err := openClipboard(ctx); err != nil {
 		return "", err
 	}
@@ -60,14 +54,10 @@ func (ClipboardBackend) ReadText(ctx context.Context) (string, error) {
 			break
 		}
 	}
-	text, err := clipboard.DecodeUTF16(units)
-	if err != nil {
-		return "", err
-	}
-	return clipboard.NormalizeReadText(text), nil
+	return DecodeUTF16(units)
 }
 
-func (ClipboardBackend) WriteText(ctx context.Context, text string) error {
+func (windowsBackend) WriteText(ctx context.Context, text string) error {
 	if err := openClipboard(ctx); err != nil {
 		return err
 	}
@@ -76,7 +66,7 @@ func (ClipboardBackend) WriteText(ctx context.Context, text string) error {
 		return fmt.Errorf("clipboard: EmptyClipboard failed")
 	}
 
-	units := clipboard.EncodeUTF16(text)
+	units := EncodeUTF16(text)
 	size := uintptr(len(units) * 2)
 	hMem, _, _ := procGlobalAlloc.Call(gmEMoveable, size)
 	if hMem == 0 {
