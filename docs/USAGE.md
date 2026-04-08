@@ -136,7 +136,47 @@ Application:
 
 `kind=application` requires an absolute `.exe` path. Relative or non-`.exe` targets are rejected.
 
-## 6) See also
+## 6) `window.list_open_applications` examples
+
+Collect open apps into metadata:
+
+```json
+{
+  "action": "window.list_open_applications",
+  "params": {
+    "save_as": "open_apps"
+  }
+}
+```
+
+This saves JSON to `metadata.open_apps` using stable fields:
+`title`, `exe`, `pid`, `hwnd`, `class`, `active`.
+
+Include inactive/background windows and disable process-level dedupe:
+
+```json
+{
+  "action": "window.list_open_applications",
+  "params": {
+    "save_as": "open_windows",
+    "include_background": "true",
+    "dedupe_by": "window"
+  }
+}
+```
+
+Follow-up action example (for logging/inspection):
+
+```json
+{
+  "action": "system.log",
+  "params": {
+    "message": "Collected open app inventory in metadata.open_apps"
+  }
+}
+```
+
+## 7) See also
 
 - Project overview: [`README.md`](../README.md)
 - Architecture: [`docs/architecture.md`](./architecture.md)

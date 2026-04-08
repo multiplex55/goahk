@@ -1,6 +1,10 @@
 package goahk
 
-import "goahk/internal/program"
+import (
+	"strconv"
+
+	"goahk/internal/program"
+)
 
 type Action struct {
 	name   string
@@ -45,6 +49,20 @@ func StartApplication(executable string) Action {
 
 func ActivateWindow(matcher string) Action {
 	return Action{name: "window.activate", params: map[string]string{"matcher": matcher}}
+}
+
+// ListOpenApplications stores window inventory JSON in metadata at saveAs.
+func ListOpenApplications(saveAs string) Action {
+	return Action{name: "window.list_open_applications", params: map[string]string{"save_as": saveAs}}
+}
+
+// ListOpenApplicationsWithOptions stores window inventory JSON with optional background and dedupe behavior.
+func ListOpenApplicationsWithOptions(saveAs string, includeBackground bool, dedupeBy string) Action {
+	params := map[string]string{"save_as": saveAs, "include_background": strconv.FormatBool(includeBackground)}
+	if dedupeBy != "" {
+		params["dedupe_by"] = dedupeBy
+	}
+	return Action{name: "window.list_open_applications", params: params}
 }
 
 func SendText(text string) Action {

@@ -16,6 +16,9 @@ func TestRegistry_Lookup(t *testing.T) {
 	if _, ok := r.Lookup("system.open"); !ok {
 		t.Fatal("expected built-in action system.open")
 	}
+	if _, ok := r.Lookup("window.list_open_applications"); !ok {
+		t.Fatal("expected built-in action window.list_open_applications")
+	}
 }
 
 func TestRegistry_DuplicateProtected(t *testing.T) {

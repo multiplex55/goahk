@@ -8,6 +8,7 @@ import (
 	"goahk/internal/process"
 	"goahk/internal/services/messagebox"
 	"goahk/internal/uia"
+	"goahk/internal/window"
 )
 
 type Logger interface {
@@ -41,6 +42,7 @@ type Services struct {
 	Process           ProcessService
 	WindowActivate    func(context.Context, string) error
 	ActiveWindowTitle func(context.Context) (string, error)
+	WindowList        func(context.Context) ([]window.Info, error)
 	Input             input.Service
 	UIA               uia.ActionService
 }

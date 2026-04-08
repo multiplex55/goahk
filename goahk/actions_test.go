@@ -21,6 +21,8 @@ func TestActionConstructorsSerializeStepSpecs(t *testing.T) {
 		{name: "open folder", in: OpenFolder(`C:\\Temp`), want: program.StepSpec{Action: "system.open", Params: map[string]any{"target": `C:\\Temp`, "kind": "folder"}}},
 		{name: "start application", in: StartApplication(`C:\\Windows\\notepad.exe`), want: program.StepSpec{Action: "system.open", Params: map[string]any{"target": `C:\\Windows\\notepad.exe`, "kind": "application"}}},
 		{name: "activate", in: ActivateWindow("title:Editor"), want: program.StepSpec{Action: "window.activate", Params: map[string]any{"matcher": "title:Editor"}}},
+		{name: "list open applications", in: ListOpenApplications("apps"), want: program.StepSpec{Action: "window.list_open_applications", Params: map[string]any{"save_as": "apps"}}},
+		{name: "list open applications with options", in: ListOpenApplicationsWithOptions("apps", true, "window"), want: program.StepSpec{Action: "window.list_open_applications", Params: map[string]any{"save_as": "apps", "include_background": "true", "dedupe_by": "window"}}},
 		{name: "send text", in: SendText("hello"), want: program.StepSpec{Action: "input.send_text", Params: map[string]any{"text": "hello"}}},
 		{name: "log", in: Log("ok"), want: program.StepSpec{Action: "system.log", Params: map[string]any{"message": "ok"}}},
 		{name: "stop", in: Stop(), want: program.StepSpec{Action: "runtime.stop", Params: map[string]any{}}},
