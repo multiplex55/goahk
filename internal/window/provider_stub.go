@@ -25,3 +25,27 @@ func (p *OSProvider) ActiveWindow(context.Context) (Info, error) {
 func (p *OSProvider) ActivateWindow(context.Context, HWND) error {
 	return ErrUnsupportedPlatform
 }
+
+func (p *OSProvider) WindowBounds(context.Context, HWND) (Rect, error) {
+	return Rect{}, ErrUnsupportedPlatform
+}
+
+func (p *OSProvider) MoveWindow(context.Context, HWND, int, int) error {
+	return ErrUnsupportedPlatform
+}
+
+func (p *OSProvider) ResizeWindow(context.Context, HWND, int, int) error {
+	return ErrUnsupportedPlatform
+}
+
+func (p *OSProvider) MinimizeWindow(context.Context, HWND) error {
+	return ErrUnsupportedPlatform
+}
+
+func (p *OSProvider) MaximizeWindow(context.Context, HWND) error {
+	return ErrUnsupportedPlatform
+}
+
+func (p *OSProvider) RestoreWindow(context.Context, HWND) error {
+	return ErrUnsupportedPlatform
+}

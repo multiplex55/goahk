@@ -20,13 +20,17 @@ type ActivatorProvider interface {
 	ActivateWindow(ctx context.Context, hwnd HWND) error
 }
 
+type ResolverProvider interface {
+	EnumerateWindows(ctx context.Context) ([]Info, error)
+}
+
 // ActivateForeground selects the first matching window and activates it.
 func ActivateForeground(ctx context.Context, provider ActivatorProvider, matcher Matcher) (Info, error) {
 	return ActivateForegroundWithPolicy(ctx, provider, matcher, ActivationPolicy{})
 }
 
 // ResolveTargetWindow returns the window selected by matcher and policy.
-func ResolveTargetWindow(ctx context.Context, provider ActivatorProvider, matcher Matcher, policy ActivationPolicy) (Info, error) {
+func ResolveTargetWindow(ctx context.Context, provider ResolverProvider, matcher Matcher, policy ActivationPolicy) (Info, error) {
 	windows, err := provider.EnumerateWindows(ctx)
 	if err != nil {
 		return Info{}, fmt.Errorf("enumerate windows: %w", err)
