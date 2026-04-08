@@ -43,8 +43,12 @@ func Parse(input string) (Chord, error) {
 		return Chord{}, fmt.Errorf("hotkey is empty")
 	}
 	tokens := strings.Split(input, "+")
-	if len(tokens) < 2 {
-		return Chord{}, fmt.Errorf("hotkey must include modifier and key: %q", input)
+	if len(tokens) == 1 {
+		key, err := normalizeKey(normalizeToken(tokens[0]))
+		if err != nil {
+			return Chord{}, err
+		}
+		return Chord{Key: key}, nil
 	}
 
 	var chord Chord
@@ -70,9 +74,6 @@ func Parse(input string) (Chord, error) {
 		chord.Key = key
 	}
 
-	if chord.Modifiers == 0 {
-		return Chord{}, fmt.Errorf("at least one modifier is required")
-	}
 	if chord.Key == "" {
 		return Chord{}, fmt.Errorf("missing non-modifier key")
 	}

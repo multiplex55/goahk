@@ -1,70 +1,74 @@
 # goahk
 
-`goahk` is a Windows-first hotkey automation runtime written in Go. It loads JSON configuration, registers global hotkeys for the current user session, and dispatches configured actions when those hotkeys are pressed.
+`goahk` is a Windows-first hotkey automation runtime written in Go. The core model is **code-first** (`goahk.NewApp()` + `Bind(...)`), and the JSON config runner remains available as a compatibility adapter via `cmd/goahk`.
 
-## Current State
+## Quick start (code-first, primary)
 
-- **Maturity:** actively developed, with a stable core runtime shape (`config -> register -> listen -> dispatch -> shutdown`).
-- **API stability:** no public library API is promised yet; most runtime code is in `internal/` packages, so integration should be process-based via `cmd/goahk`.
-- **Known limitations:**
-  - Windows desktop sessions only.
-  - Runtime dispatch currently executes direct `steps` plans; flow-linked bindings are compiled but not dispatched by the main runtime path yet.
-  - Global hotkeys can fail to register when another app already owns the same key chord.
-- **Roadmap pointer:** see architecture and testing docs for ongoing direction and hardening plans (`docs/architecture.md`, `docs/testing.md`).
+```go
+package main
 
-## What goahk does
+import (
+	"context"
+	"log"
 
-At a high level, `goahk` runs as a per-user background process and turns key chords (for example, `Ctrl+Alt+H`) into deterministic action execution.
+	"goahk/goahk"
+)
 
-### Key features
+func main() {
+	app := goahk.NewApp()
+	app.Bind("1", goahk.MessageBox("goahk", "You pressed 1"))
+	app.Bind("Escape", goahk.Stop())
 
-- Global hotkey registration and lifecycle management (startup register, shutdown unregister).
-- Config-driven bindings and validation with conflict detection.
-- Action callback dispatch through a centralized executor.
-- Windows message-loop listener integration for real hotkey events.
-- Deterministic “test trigger” workflow via `cmd/goahk-test` for validating binding execution without relying on desktop hotkey delivery.
+	if err := app.Run(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+}
+```
 
-## How it works (high-level internals)
+Runnable example: [`examples/basic-script/main.go`](examples/basic-script/main.go).
 
-### 1) Input / listener layer
+## JSON mode (optional compatibility path)
 
-- `internal/hotkey` defines listener interfaces and a manager that translates platform listener events into binding trigger events.
-- `internal/runtime/listener_windows.go` hosts the Windows listener + message-loop path used by `cmd/goahk`.
+If you already have JSON configs, you can continue using:
 
-### 2) Hotkey registry / state management
+```powershell
+go run ./cmd/goahk -config .\config.json
+```
 
-- `runtime.Bootstrap.Run` loads config, compiles runtime bindings, creates the listener, and registers each binding with `hotkey.Manager`.
-- `hotkey.Manager` owns registration IDs and binding mappings, and supports explicit register/unregister lifecycle methods.
+`cmd/goahk/main.go` intentionally remains the config-runner entry point for compatibility while code-first usage becomes the primary documented API.
 
-### 3) Dispatch / callback execution path
+## Migration note: JSON bindings -> code API
 
-- `runtime.DispatchHotkeyEvents` receives trigger events and looks up the compiled plan for each binding.
-- `actions.Executor` executes configured steps and records per-step outcomes.
-- `runtime.Bootstrap.Run` drains dispatch results and performs cleanup in shutdown, including unregister and listener close.
+Map each JSON hotkey object to one `Bind(...)` call:
 
-### Threading / event-loop assumptions
+- JSON `hotkeys[].hotkey` -> `app.Bind("<hotkey>", ...)`
+- JSON `hotkeys[].steps[].action` -> corresponding `goahk` action helper (`MessageBox`, `SendText`, `Launch`, etc.)
+- JSON stop-style behavior -> `goahk.Stop()`
 
-- The runtime assumes an **interactive Windows user session** and a running Windows message loop for global hotkey delivery.
-- Event dispatch runs concurrently with listener/message-loop execution and shuts down through context cancellation.
+Example mapping:
 
-## Getting started
+```json
+{
+  "id": "hello-hotkey",
+  "hotkey": "Ctrl+Alt+H",
+  "steps": [
+    {
+      "action": "system.message_box",
+      "params": { "title": "goahk", "body": "Hello" }
+    }
+  ]
+}
+```
 
-Keep onboarding short and jump to focused docs:
+becomes:
 
-- **Usage guide:** [`docs/USAGE.md`](docs/USAGE.md)
-- **Build/test guide (single source of truth for local + CI workflows):** [`docs/BUILD.md`](docs/BUILD.md)
-- **See also:** architecture and constraints in [`docs/architecture.md`](docs/architecture.md)
+```go
+app.Bind("Ctrl+Alt+H", goahk.MessageBox("goahk", "Hello"))
+```
 
-## API and examples index
+## Documentation index
 
-| Goal | Entry point | Where to look |
-| --- | --- | --- |
-| Register global hotkeys | Runtime startup (`goahk -config ...`) -> `hotkey.Manager.Register` | `cmd/goahk/main.go`, `internal/runtime/bootstrap.go`, `internal/hotkey/manager.go` |
-| Test/trigger feedback for a binding | Deterministic binding execution via `goahk-test` | `cmd/goahk-test/main.go` |
-| Unregister hotkeys | Runtime shutdown -> `unregisterAll` + `hotkey.Manager.Unregister` | `internal/runtime/bootstrap.go`, `internal/hotkey/manager.go` |
-
-## Maintenance notes
-
-- **Contributing/testing pointers:** start with [`docs/testing.md`](docs/testing.md) for unit/integration commands and staged suite expectations.
-- **Supported environments:** Windows user desktop sessions are supported for runtime behavior; non-Windows builds are primarily for development/unit testing paths.
-- **Non-goals (current):** cross-platform runtime guarantees and a stable exported SDK/library surface.
+- Usage guide: [`docs/USAGE.md`](docs/USAGE.md)
+- Architecture: [`docs/architecture.md`](docs/architecture.md)
+- Build/test guide: [`docs/BUILD.md`](docs/BUILD.md)
+- Testing strategy: [`docs/testing.md`](docs/testing.md)
