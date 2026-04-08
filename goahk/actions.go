@@ -27,6 +27,22 @@ func Launch(executable string) Action {
 	return Action{name: "process.launch", params: map[string]string{"executable": executable}}
 }
 
+func Open(target string) Action {
+	return Action{name: "system.open", params: map[string]string{"target": target}}
+}
+
+func OpenURL(target string) Action {
+	return Action{name: "system.open", params: map[string]string{"target": target, "kind": "url"}}
+}
+
+func OpenFolder(target string) Action {
+	return Action{name: "system.open", params: map[string]string{"target": target, "kind": "folder"}}
+}
+
+func StartApplication(executable string) Action {
+	return Action{name: "system.open", params: map[string]string{"target": executable, "kind": "application"}}
+}
+
 func ActivateWindow(matcher string) Action {
 	return Action{name: "window.activate", params: map[string]string{"matcher": matcher}}
 }

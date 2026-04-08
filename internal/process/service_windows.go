@@ -18,6 +18,14 @@ func newPlatformService() Service {
 }
 
 func (windowsService) Launch(ctx context.Context, req Request) error {
+	if req.OpenKind == OpenKindURL || req.OpenKind == OpenKindFolder {
+		target := strings.TrimSpace(req.OpenTarget)
+		if target == "" {
+			return fmt.Errorf("process: open target is required")
+		}
+		return shellOpen(ctx, target)
+	}
+
 	exe := strings.TrimSpace(req.Executable)
 	if exe == "" {
 		return fmt.Errorf("process: executable is required")
@@ -31,6 +39,17 @@ func (windowsService) Launch(ctx context.Context, req Request) error {
 	}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("process launch %q: %w", exe, err)
+	}
+	if cmd.Process != nil {
+		_ = cmd.Process.Release()
+	}
+	return nil
+}
+
+func shellOpen(ctx context.Context, target string) error {
+	cmd := exec.CommandContext(ctx, "rundll32.exe", "url.dll,FileProtocolHandler", target)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("process shell open %q: %w", target, err)
 	}
 	if cmd.Process != nil {
 		_ = cmd.Process.Release()

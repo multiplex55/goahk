@@ -13,6 +13,9 @@ func TestRegistry_Lookup(t *testing.T) {
 	if _, ok := r.Lookup("runtime.stop"); !ok {
 		t.Fatal("expected built-in action runtime.stop")
 	}
+	if _, ok := r.Lookup("system.open"); !ok {
+		t.Fatal("expected built-in action system.open")
+	}
 }
 
 func TestRegistry_DuplicateProtected(t *testing.T) {
