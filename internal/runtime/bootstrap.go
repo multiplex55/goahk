@@ -12,6 +12,7 @@ import (
 	"goahk/internal/process"
 	"goahk/internal/program"
 	"goahk/internal/services/messagebox"
+	"goahk/internal/window"
 )
 
 type ConfigLoader func(context.Context, string) (config.Config, error)
@@ -40,6 +41,7 @@ type Bootstrap struct {
 }
 
 func NewBootstrap() Bootstrap {
+	windowProvider := window.NewOSProvider()
 	return Bootstrap{
 		LoadConfig: func(_ context.Context, path string) (config.Config, error) {
 			return config.LoadFile(path)
@@ -54,6 +56,9 @@ func NewBootstrap() Bootstrap {
 			MessageBox: messagebox.NewService(),
 			Clipboard:  clipboard.NewService(nil),
 			Process:    process.NewService(),
+			WindowList: func(ctx context.Context) ([]window.Info, error) {
+				return window.Enumerate(ctx, windowProvider)
+			},
 		}},
 	}
 }

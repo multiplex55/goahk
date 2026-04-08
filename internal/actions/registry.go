@@ -143,6 +143,8 @@ func (r *Registry) registerBuiltins() {
 		return ctx.Services.Clipboard.WriteText(ctx.Context, title)
 	})
 
+	r.MustRegister("window.list_open_applications", runWindowListOpenApplicationsAction)
+
 	r.MustRegister("input.send_text", func(ctx ActionContext, step Step) error {
 		if ctx.Services.Input == nil {
 			return missingServiceError(step, "input")
