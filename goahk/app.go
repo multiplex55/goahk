@@ -1,11 +1,16 @@
 package goahk
 
-import "goahk/internal/program"
+import (
+	"sync"
+
+	"goahk/internal/program"
+)
 
 type App struct {
 	bindings        []bindingSpec
 	logger          Logger
 	validateActions bool
+	state           *appState
 }
 
 type bindingSpec struct {
@@ -14,7 +19,7 @@ type bindingSpec struct {
 }
 
 func NewApp(opts ...Option) *App {
-	a := &App{validateActions: true}
+	a := &App{validateActions: true, state: newAppState()}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(a)
@@ -33,4 +38,51 @@ func (a *App) toProgram() program.Program {
 		out.Bindings = append(out.Bindings, program.BindingSpec{ID: bindingID(i), Hotkey: b.hotkey, Steps: steps})
 	}
 	return out
+}
+
+type StateStore interface {
+	Get(key string) (string, bool)
+	Set(key, value string)
+	LoadOrStore(key, value string) (string, bool)
+}
+
+type appState struct {
+	mu   sync.RWMutex
+	data map[string]string
+}
+
+func newAppState() *appState {
+	return &appState{data: map[string]string{}}
+}
+
+func (s *appState) Get(key string) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	value, ok := s.data[key]
+	return value, ok
+}
+
+func (s *appState) Set(key, value string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[key] = value
+}
+
+func (s *appState) LoadOrStore(key, value string) (string, bool) {
+	if s == nil {
+		return value, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing, ok := s.data[key]; ok {
+		return existing, true
+	}
+	s.data[key] = value
+	return value, false
 }
