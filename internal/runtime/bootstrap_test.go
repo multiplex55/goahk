@@ -230,3 +230,80 @@ func TestBootstrap_EscBindingWithRuntimeStopExits(t *testing.T) {
 		t.Fatal("Run() did not exit after Esc/runtime.stop")
 	}
 }
+
+func TestNewBootstrap_BaseActionContextWiresWindowAndInputServices(t *testing.T) {
+	b := NewBootstrap()
+	svcs := b.BaseActionCtx.Services
+	if svcs.WindowActivate == nil {
+		t.Fatal("WindowActivate service = nil")
+	}
+	if svcs.ActiveWindowTitle == nil {
+		t.Fatal("ActiveWindowTitle service = nil")
+	}
+	if svcs.Input == nil {
+		t.Fatal("Input service = nil")
+	}
+}
+
+func TestBootstrap_WiredWindowAndInputActionsDoNotFailMissingService(t *testing.T) {
+	tests := []struct {
+		name   string
+		action string
+		params map[string]string
+	}{
+		{name: "window.activate", action: "window.activate", params: map[string]string{"matcher": "notepad"}},
+		{name: "window.copy_active_title_to_clipboard", action: "window.copy_active_title_to_clipboard", params: map[string]string{}},
+		{name: "input.send_keys", action: "input.send_keys", params: map[string]string{"sequence": "ctrl+c"}},
+		{name: "input.send_chord", action: "input.send_chord", params: map[string]string{"chord": "ctrl+v"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			listener := newFakeListener()
+			cfg := config.Config{Hotkeys: []config.HotkeyBinding{{
+				ID:     tc.action,
+				Hotkey: "ctrl+1",
+				Steps:  []config.Step{{Action: tc.action, Params: tc.params}},
+			}}}
+
+			resultCh := make(chan actions.ExecutionResult, 1)
+			b := NewBootstrap()
+			b.LoadConfig = func(context.Context, string) (config.Config, error) { return cfg, nil }
+			b.NewListener = func(context.Context) (Listener, error) { return listener, nil }
+			b.RecordResult = func(_ context.Context, _ string, res actions.ExecutionResult) {
+				select {
+				case resultCh <- res:
+				default:
+				}
+			}
+			listener.runFn = func(ctx context.Context) error {
+				go func() {
+					time.Sleep(10 * time.Millisecond)
+					listener.Emit(1)
+				}()
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(50 * time.Millisecond):
+					return nil
+				}
+			}
+
+			if err := b.Run(context.Background(), "ignored"); err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+
+			select {
+			case res := <-resultCh:
+				if len(res.Steps) != 1 {
+					t.Fatalf("steps = %d, want 1", len(res.Steps))
+				}
+				if strings.Contains(strings.ToLower(res.Steps[0].Error), "service unavailable") {
+					t.Fatalf("unexpected missing service error: %q", res.Steps[0].Error)
+				}
+			default:
+				t.Fatal("no dispatch result recorded")
+			}
+		})
+	}
+}

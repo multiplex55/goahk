@@ -9,6 +9,7 @@ import (
 	"goahk/internal/clipboard"
 	"goahk/internal/config"
 	"goahk/internal/hotkey"
+	"goahk/internal/input"
 	"goahk/internal/process"
 	"goahk/internal/program"
 	"goahk/internal/services/messagebox"
@@ -58,10 +59,22 @@ func NewBootstrap() Bootstrap {
 			MessageBox: messagebox.NewService(),
 			Clipboard:  clipboard.NewService(nil),
 			Process:    process.NewService(),
+			WindowActivate: func(ctx context.Context, matcher string) error {
+				_, err := window.ActivateForeground(ctx, windowProvider, window.Matcher{TitleContains: matcher})
+				return err
+			},
+			ActiveWindowTitle: func(ctx context.Context) (string, error) {
+				active, err := window.Active(ctx, windowProvider)
+				if err != nil {
+					return "", err
+				}
+				return active.Title, nil
+			},
 			WindowList: func(ctx context.Context) ([]window.Info, error) {
 				return window.Enumerate(ctx, windowProvider)
 			},
 			FolderList: folderSvc.ListOpenFolders,
+			Input:      input.NewService(),
 		}},
 	}
 }
