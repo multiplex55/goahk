@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"goahk/internal/clipboard"
 	"goahk/internal/input"
 	"goahk/internal/process"
 	"goahk/internal/services/messagebox"
@@ -21,10 +20,25 @@ type NoopLogger struct{}
 func (NoopLogger) Info(string, map[string]any)  {}
 func (NoopLogger) Error(string, map[string]any) {}
 
+type MessageBoxService interface {
+	Show(context.Context, messagebox.Request) error
+}
+
+type ClipboardService interface {
+	ReadText(context.Context) (string, error)
+	WriteText(context.Context, string) error
+	AppendText(context.Context, string) error
+	PrependText(context.Context, string) error
+}
+
+type ProcessService interface {
+	Launch(context.Context, process.Request) error
+}
+
 type Services struct {
-	MessageBox        messagebox.Service
-	Clipboard         clipboard.Service
-	Process           process.Service
+	MessageBox        MessageBoxService
+	Clipboard         ClipboardService
+	Process           ProcessService
 	WindowActivate    func(context.Context, string) error
 	ActiveWindowTitle func(context.Context) (string, error)
 	Input             input.Service

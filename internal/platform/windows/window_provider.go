@@ -1,0 +1,204 @@
+//go:build windows
+// +build windows
+
+package windows
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"path/filepath"
+	"syscall"
+	"unsafe"
+
+	"goahk/internal/window"
+)
+
+const (
+	processQueryLimitedInformation = 0x1000
+)
+
+var (
+	windowUser32                   = syscall.NewLazyDLL("user32.dll")
+	windowKernel32                 = syscall.NewLazyDLL("kernel32.dll")
+	procEnumWindows                = windowUser32.NewProc("EnumWindows")
+	procGetForegroundWindow        = windowUser32.NewProc("GetForegroundWindow")
+	procSetForegroundWindow        = windowUser32.NewProc("SetForegroundWindow")
+	procIsWindowVisible            = windowUser32.NewProc("IsWindowVisible")
+	procGetWindowTextW             = windowUser32.NewProc("GetWindowTextW")
+	procGetWindowTextLengthW       = windowUser32.NewProc("GetWindowTextLengthW")
+	procGetClassNameW              = windowUser32.NewProc("GetClassNameW")
+	procGetWindowThreadProcessID   = windowUser32.NewProc("GetWindowThreadProcessId")
+	procOpenProcess                = windowKernel32.NewProc("OpenProcess")
+	procCloseHandle                = windowKernel32.NewProc("CloseHandle")
+	procQueryFullProcessImageNameW = windowKernel32.NewProc("QueryFullProcessImageNameW")
+	errWindowEnumAborted           = errors.New("window enumeration aborted")
+)
+
+type WindowProvider struct{}
+
+func NewWindowProvider() *WindowProvider { return &WindowProvider{} }
+
+func (p *WindowProvider) EnumerateWindows(ctx context.Context) ([]window.Info, error) {
+	activeHWND, _ := getForegroundWindow()
+	out := make([]window.Info, 0, 32)
+	cb := syscall.NewCallback(func(hwnd uintptr, _ uintptr) uintptr {
+		select {
+		case <-ctx.Done():
+			return 0
+		default:
+		}
+		visible, err := isWindowVisible(window.HWND(hwnd))
+		if err != nil || !visible {
+			return 1
+		}
+		info, err := p.readInfo(window.HWND(hwnd), activeHWND)
+		if err != nil {
+			return 1
+		}
+		out = append(out, info)
+		return 1
+	})
+	ret, _, callErr := procEnumWindows.Call(cb, 0)
+	if ret == 0 {
+		if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, ctx.Err()
+		}
+		if callErr != syscall.Errno(0) {
+			return nil, fmt.Errorf("EnumWindows: %w", callErr)
+		}
+		return nil, errWindowEnumAborted
+	}
+	return out, nil
+}
+
+func (p *WindowProvider) ActiveWindow(ctx context.Context) (window.Info, error) {
+	select {
+	case <-ctx.Done():
+		return window.Info{}, ctx.Err()
+	default:
+	}
+	hwnd, err := getForegroundWindow()
+	if err != nil {
+		return window.Info{}, err
+	}
+	return p.readInfo(hwnd, hwnd)
+}
+
+func (p *WindowProvider) ActivateWindow(ctx context.Context, hwnd window.HWND) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	ret, _, err := procSetForegroundWindow.Call(uintptr(hwnd))
+	if ret == 0 {
+		if err != syscall.Errno(0) {
+			return fmt.Errorf("SetForegroundWindow(%s): %w", hwnd, err)
+		}
+		return fmt.Errorf("SetForegroundWindow(%s): failed", hwnd)
+	}
+	return nil
+}
+
+func (p *WindowProvider) readInfo(hwnd, active window.HWND) (window.Info, error) {
+	title, err := getWindowText(hwnd)
+	if err != nil {
+		return window.Info{}, err
+	}
+	className, err := getClassName(hwnd)
+	if err != nil {
+		return window.Info{}, err
+	}
+	pid, err := getWindowPID(hwnd)
+	if err != nil {
+		return window.Info{}, err
+	}
+	exe, err := getProcessExeBaseName(pid)
+	if err != nil {
+		exe = ""
+	}
+	return window.Info{HWND: hwnd, Title: title, Class: className, PID: pid, Exe: exe, Active: hwnd == active}, nil
+}
+
+func getForegroundWindow() (window.HWND, error) {
+	ret, _, err := procGetForegroundWindow.Call()
+	if ret == 0 {
+		if err != syscall.Errno(0) {
+			return 0, fmt.Errorf("GetForegroundWindow: %w", err)
+		}
+		return 0, errors.New("GetForegroundWindow returned null")
+	}
+	return window.HWND(ret), nil
+}
+
+func isWindowVisible(hwnd window.HWND) (bool, error) {
+	ret, _, err := procIsWindowVisible.Call(uintptr(hwnd))
+	if ret == 0 {
+		if err != syscall.Errno(0) {
+			return false, fmt.Errorf("IsWindowVisible(%s): %w", hwnd, err)
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
+func getWindowText(hwnd window.HWND) (string, error) {
+	lengthRet, _, lengthErr := procGetWindowTextLengthW.Call(uintptr(hwnd))
+	if lengthRet == 0 && lengthErr != syscall.Errno(0) {
+		return "", fmt.Errorf("GetWindowTextLengthW(%s): %w", hwnd, lengthErr)
+	}
+	buf := make([]uint16, int(lengthRet)+1)
+	ret, _, err := procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	if ret == 0 && err != syscall.Errno(0) {
+		return "", fmt.Errorf("GetWindowTextW(%s): %w", hwnd, err)
+	}
+	return syscall.UTF16ToString(buf), nil
+}
+
+func getClassName(hwnd window.HWND) (string, error) {
+	buf := make([]uint16, 256)
+	ret, _, err := procGetClassNameW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	if ret == 0 {
+		if err != syscall.Errno(0) {
+			return "", fmt.Errorf("GetClassNameW(%s): %w", hwnd, err)
+		}
+		return "", nil
+	}
+	return syscall.UTF16ToString(buf[:ret]), nil
+}
+
+func getWindowPID(hwnd window.HWND) (uint32, error) {
+	var pid uint32
+	_, _, err := procGetWindowThreadProcessID.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&pid)))
+	if pid == 0 {
+		if err != syscall.Errno(0) {
+			return 0, fmt.Errorf("GetWindowThreadProcessId(%s): %w", hwnd, err)
+		}
+		return 0, fmt.Errorf("GetWindowThreadProcessId(%s): missing pid", hwnd)
+	}
+	return pid, nil
+}
+
+func getProcessExeBaseName(pid uint32) (string, error) {
+	h, _, err := procOpenProcess.Call(processQueryLimitedInformation, 0, uintptr(pid))
+	if h == 0 {
+		if err != syscall.Errno(0) {
+			return "", fmt.Errorf("OpenProcess(%d): %w", pid, err)
+		}
+		return "", fmt.Errorf("OpenProcess(%d): failed", pid)
+	}
+	defer procCloseHandle.Call(h)
+
+	buf := make([]uint16, syscall.MAX_PATH)
+	size := uint32(len(buf))
+	ret, _, qErr := procQueryFullProcessImageNameW.Call(h, 0, uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&size)))
+	if ret == 0 {
+		if qErr != syscall.Errno(0) {
+			return "", fmt.Errorf("QueryFullProcessImageNameW(%d): %w", pid, qErr)
+		}
+		return "", fmt.Errorf("QueryFullProcessImageNameW(%d): failed", pid)
+	}
+	full := syscall.UTF16ToString(buf[:size])
+	return filepath.Base(full), nil
+}
