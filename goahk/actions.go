@@ -39,6 +39,13 @@ func Log(message string) Action {
 	return Action{name: "system.log", params: map[string]string{"message": message}}
 }
 
+// Stop requests runtime shutdown after the current action step completes.
+// Remaining steps in the same binding are skipped.
 func Stop() Action {
-	return Action{name: "system.stop", params: map[string]string{}}
+	return Action{name: "runtime.stop", params: map[string]string{}}
+}
+
+// Quit is an alias for Stop.
+func Quit() Action {
+	return Stop()
 }

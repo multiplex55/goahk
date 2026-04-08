@@ -84,3 +84,39 @@ func TestExecutor_MissingServiceErrorIncludedInActionResult(t *testing.T) {
 		t.Fatalf("error chain=%v", failed.ErrorChain)
 	}
 }
+
+func TestExecutor_RuntimeStopStopsAfterCurrentStepAndSkipsRemaining(t *testing.T) {
+	r := NewRegistry()
+	called := false
+	_ = r.Register("test.never", func(_ ActionContext, _ Step) error {
+		called = true
+		return nil
+	})
+	ex := NewExecutor(r)
+	stopCalls := 0
+	res := ex.Execute(ActionContext{
+		Context: context.Background(),
+		Stop: func(string) {
+			stopCalls++
+		},
+	}, Plan{
+		{Name: "system.log", Params: map[string]string{"message": "before"}},
+		{Name: "runtime.stop"},
+		{Name: "test.never"},
+	})
+	if !res.Success {
+		t.Fatalf("execution should succeed on runtime.stop: %#v", res)
+	}
+	if called {
+		t.Fatal("actions after runtime.stop should be skipped")
+	}
+	if stopCalls != 1 {
+		t.Fatalf("stop callback calls = %d, want 1", stopCalls)
+	}
+	if len(res.Steps) != 3 {
+		t.Fatalf("steps=%d, want 3", len(res.Steps))
+	}
+	if res.Steps[0].Status != StepStatusSuccess || res.Steps[1].Status != StepStatusSuccess || res.Steps[2].Status != StepStatusSkipped {
+		t.Fatalf("unexpected statuses: %#v", res.Steps)
+	}
+}

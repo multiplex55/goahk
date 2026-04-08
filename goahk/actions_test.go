@@ -19,7 +19,8 @@ func TestActionConstructorsSerializeStepSpecs(t *testing.T) {
 		{name: "activate", in: ActivateWindow("title:Editor"), want: program.StepSpec{Action: "window.activate", Params: map[string]any{"matcher": "title:Editor"}}},
 		{name: "send text", in: SendText("hello"), want: program.StepSpec{Action: "input.send_text", Params: map[string]any{"text": "hello"}}},
 		{name: "log", in: Log("ok"), want: program.StepSpec{Action: "system.log", Params: map[string]any{"message": "ok"}}},
-		{name: "stop", in: Stop(), want: program.StepSpec{Action: "system.stop", Params: map[string]any{}}},
+		{name: "stop", in: Stop(), want: program.StepSpec{Action: "runtime.stop", Params: map[string]any{}}},
+		{name: "quit alias", in: Quit(), want: program.StepSpec{Action: "runtime.stop", Params: map[string]any{}}},
 	}
 
 	for _, tt := range tests {

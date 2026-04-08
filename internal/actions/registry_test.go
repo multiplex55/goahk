@@ -10,6 +10,9 @@ func TestRegistry_Lookup(t *testing.T) {
 	if _, ok := r.Lookup("system.log"); !ok {
 		t.Fatal("expected built-in action system.log")
 	}
+	if _, ok := r.Lookup("runtime.stop"); !ok {
+		t.Fatal("expected built-in action runtime.stop")
+	}
 }
 
 func TestRegistry_DuplicateProtected(t *testing.T) {
