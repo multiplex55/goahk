@@ -23,6 +23,26 @@ func TestListOpenAppsExampleBuilds(t *testing.T) {
 	buildPackage(t, "./list-open-apps")
 }
 
+func TestCustomCallbackExampleBuilds(t *testing.T) {
+	t.Parallel()
+	buildPackage(t, "./custom-callback")
+}
+
+func TestClipboardTransformPasteExampleBuilds(t *testing.T) {
+	t.Parallel()
+	buildPackage(t, "./clipboard-transform-paste")
+}
+
+func TestWindowAwareScriptExampleBuilds(t *testing.T) {
+	t.Parallel()
+	buildPackage(t, "./window-aware-script")
+}
+
+func TestMixedActionsExampleBuilds(t *testing.T) {
+	t.Parallel()
+	buildPackage(t, "./mixed-actions")
+}
+
 func TestWindowsTargetedCompilationRegressions(t *testing.T) {
 	t.Parallel()
 
