@@ -18,6 +18,11 @@ func TestStandaloneScriptExampleBuilds(t *testing.T) {
 	buildPackage(t, "./standalone-script")
 }
 
+func TestListOpenAppsExampleBuilds(t *testing.T) {
+	t.Parallel()
+	buildPackage(t, "./list-open-apps")
+}
+
 func TestWindowsTargetedCompilationRegressions(t *testing.T) {
 	t.Parallel()
 

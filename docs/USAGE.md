@@ -176,7 +176,47 @@ Follow-up action example (for logging/inspection):
 }
 ```
 
-## 7) See also
+## 7) `window.list_open_folders` examples
+
+Collect open File Explorer folders into metadata:
+
+```json
+{
+  "action": "window.list_open_folders",
+  "params": {
+    "save_as": "open_folders"
+  }
+}
+```
+
+This saves JSON to `metadata.open_folders` with objects shaped like:
+
+- `path` (string, resolved filesystem path for the folder tab/window)
+- `title` (string, Explorer title/location label)
+- `pid` (number, Explorer window process id)
+- `hwnd` (string, hex window handle)
+- `diagnostic` (optional string; emitted only for entries where path resolution failed)
+
+Optional dedupe by folder path:
+
+```json
+{
+  "action": "window.list_open_folders",
+  "params": {
+    "save_as": "open_folders",
+    "dedupe": "true"
+  }
+}
+```
+
+If no open folders are found, the action stores `[]` (JSON array) in the metadata key.
+
+Platform behavior:
+
+- Windows: supported (uses Explorer/Shell enumeration and resolves real folder paths).
+- Non-Windows: currently stubbed/unsupported and returns an action error.
+
+## 8) See also
 
 - Project overview: [`README.md`](../README.md)
 - Architecture: [`docs/architecture.md`](./architecture.md)

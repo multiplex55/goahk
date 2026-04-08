@@ -7,6 +7,7 @@ import (
 	"goahk/internal/input"
 	"goahk/internal/process"
 	"goahk/internal/services/messagebox"
+	"goahk/internal/shell/folders"
 	"goahk/internal/uia"
 	"goahk/internal/window"
 )
@@ -43,6 +44,7 @@ type Services struct {
 	WindowActivate    func(context.Context, string) error
 	ActiveWindowTitle func(context.Context) (string, error)
 	WindowList        func(context.Context) ([]window.Info, error)
+	FolderList        func(context.Context) ([]folders.FolderInfo, error)
 	Input             input.Service
 	UIA               uia.ActionService
 }

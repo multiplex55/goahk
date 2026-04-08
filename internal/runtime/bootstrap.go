@@ -12,6 +12,7 @@ import (
 	"goahk/internal/process"
 	"goahk/internal/program"
 	"goahk/internal/services/messagebox"
+	"goahk/internal/shell/folders"
 	"goahk/internal/window"
 )
 
@@ -42,6 +43,7 @@ type Bootstrap struct {
 
 func NewBootstrap() Bootstrap {
 	windowProvider := window.NewOSProvider()
+	folderSvc := folders.NewService()
 	return Bootstrap{
 		LoadConfig: func(_ context.Context, path string) (config.Config, error) {
 			return config.LoadFile(path)
@@ -59,6 +61,7 @@ func NewBootstrap() Bootstrap {
 			WindowList: func(ctx context.Context) ([]window.Info, error) {
 				return window.Enumerate(ctx, windowProvider)
 			},
+			FolderList: folderSvc.ListOpenFolders,
 		}},
 	}
 }

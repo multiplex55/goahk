@@ -144,6 +144,7 @@ func (r *Registry) registerBuiltins() {
 	})
 
 	r.MustRegister("window.list_open_applications", runWindowListOpenApplicationsAction)
+	r.MustRegister("window.list_open_folders", runWindowListOpenFoldersAction)
 
 	r.MustRegister("input.send_text", func(ctx ActionContext, step Step) error {
 		if ctx.Services.Input == nil {
