@@ -120,6 +120,7 @@ func (r *Registry) registerBuiltins() {
 	})
 
 	r.MustRegister("process.launch", runProcessLaunchAction)
+	r.MustRegister("system.open", runSystemOpenAction)
 
 	r.MustRegister("window.activate", func(ctx ActionContext, step Step) error {
 		if ctx.Services.WindowActivate == nil {

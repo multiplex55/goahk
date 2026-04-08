@@ -3,6 +3,8 @@ package actions
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -117,6 +119,11 @@ func TestServiceAdapters_MissingServiceErrors(t *testing.T) {
 			ctx:         ActionContext{Context: context.Background()},
 			serviceText: "process service unavailable",
 		},
+		{
+			step:        Step{Name: "system.open", Params: map[string]string{"target": "https://chatgpt.com"}},
+			ctx:         ActionContext{Context: context.Background()},
+			serviceText: "process service unavailable",
+		},
 	}
 	for _, tc := range cases {
 		h, _ := r.Lookup(tc.step.Name)
@@ -130,5 +137,95 @@ func TestServiceAdapters_MissingServiceErrors(t *testing.T) {
 		if !strings.Contains(err.Error(), tc.step.Name) {
 			t.Fatalf("%s err=%q missing action identity", tc.step.Name, err.Error())
 		}
+	}
+}
+
+func TestSystemOpenAction_URLNormalization(t *testing.T) {
+	r := NewRegistry()
+	h, _ := r.Lookup("system.open")
+	proc := &fakeProcessService{}
+	ctx := ActionContext{Context: context.Background(), Services: Services{Process: proc}}
+
+	err := h(ctx, Step{Name: "system.open", Params: map[string]string{"target": "www.chatgpt.com", "kind": "url"}})
+	if err != nil {
+		t.Fatalf("system.open err = %v", err)
+	}
+	if proc.lastReq.OpenKind != process.OpenKindURL || proc.lastReq.OpenTarget != "https://www.chatgpt.com" {
+		t.Fatalf("request = %#v", proc.lastReq)
+	}
+}
+
+func TestSystemOpenAction_InvalidURLRejected(t *testing.T) {
+	r := NewRegistry()
+	h, _ := r.Lookup("system.open")
+	ctx := ActionContext{Context: context.Background(), Services: Services{Process: &fakeProcessService{}}}
+
+	err := h(ctx, Step{Name: "system.open", Params: map[string]string{"target": "http://bad url", "kind": "url"}})
+	if err == nil || !strings.Contains(err.Error(), "invalid url") {
+		t.Fatalf("expected invalid url error, got %v", err)
+	}
+}
+
+func TestSystemOpenAction_FolderValidation(t *testing.T) {
+	r := NewRegistry()
+	h, _ := r.Lookup("system.open")
+	proc := &fakeProcessService{}
+	ctx := ActionContext{Context: context.Background(), Services: Services{Process: proc}}
+
+	root := t.TempDir()
+	err := h(ctx, Step{Name: "system.open", Params: map[string]string{"target": root, "kind": "folder"}})
+	if err != nil {
+		t.Fatalf("expected existing folder to pass: %v", err)
+	}
+	if proc.lastReq.OpenKind != process.OpenKindFolder || proc.lastReq.OpenTarget == "" {
+		t.Fatalf("request = %#v", proc.lastReq)
+	}
+
+	missing := filepath.Join(root, "does-not-exist")
+	err = h(ctx, Step{Name: "system.open", Params: map[string]string{"target": missing, "kind": "folder"}})
+	if err == nil {
+		t.Fatal("expected missing folder error")
+	}
+}
+
+func TestSystemOpenAction_ApplicationValidation(t *testing.T) {
+	r := NewRegistry()
+	h, _ := r.Lookup("system.open")
+	proc := &fakeProcessService{}
+	ctx := ActionContext{Context: context.Background(), Services: Services{Process: proc}}
+
+	exe := filepath.Join(t.TempDir(), "app.exe")
+	if err := h(ctx, Step{Name: "system.open", Params: map[string]string{"target": exe, "kind": "application"}}); err != nil {
+		t.Fatalf("expected absolute exe to pass: %v", err)
+	}
+	if proc.lastReq.Executable != exe {
+		t.Fatalf("request = %#v", proc.lastReq)
+	}
+
+	err := h(ctx, Step{Name: "system.open", Params: map[string]string{"target": "notepad.exe", "kind": "application"}})
+	if err == nil || !strings.Contains(err.Error(), "absolute .exe path") {
+		t.Fatalf("expected relative exe rejection, got %v", err)
+	}
+}
+
+func TestSystemOpenAction_FolderAliasDownloads(t *testing.T) {
+	r := NewRegistry()
+	h, _ := r.Lookup("system.open")
+	proc := &fakeProcessService{}
+	ctx := ActionContext{Context: context.Background(), Services: Services{Process: proc}}
+
+	home := t.TempDir()
+	downloads := filepath.Join(home, "Downloads")
+	if err := os.MkdirAll(downloads, 0o755); err != nil {
+		t.Fatalf("mkdir downloads: %v", err)
+	}
+	t.Setenv("USERPROFILE", home)
+
+	err := h(ctx, Step{Name: "system.open", Params: map[string]string{"target": "downloads", "kind": "folder"}})
+	if err != nil {
+		t.Fatalf("downloads alias should resolve: %v", err)
+	}
+	if proc.lastReq.OpenTarget != downloads {
+		t.Fatalf("open target = %q, want %q", proc.lastReq.OpenTarget, downloads)
 	}
 }

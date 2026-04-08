@@ -87,7 +87,56 @@ app.Bind("Ctrl+Alt+H", goahk.MessageBox("goahk", "Hello from Ctrl+Alt+H"))
 - **Invalid hotkey format:** use `<Modifier>+<Key>` (for example `Ctrl+Alt+H`).
 - **Action validation errors:** ensure required params are present (for message box, include `body`).
 
-## 5) See also
+## 5) `system.open` examples
+
+You can open websites, folders, or an executable via the `system.open` action.
+
+Website:
+
+```json
+{
+  "action": "system.open",
+  "params": {
+    "target": "www.chatgpt.com",
+    "kind": "url"
+  }
+}
+```
+
+`www.chatgpt.com` is normalized to `https://www.chatgpt.com`. Invalid URLs return a validation error.
+
+Folder:
+
+```json
+{
+  "action": "system.open",
+  "params": {
+    "target": "C:\\\\testing",
+    "kind": "folder"
+  }
+}
+```
+
+Folder paths must be absolute and exist on disk. Unknown/missing paths return an error.
+
+Application:
+
+```json
+{
+  "action": "system.open",
+  "params": {
+    "target": "C:\\\\Windows\\\\System32\\\\notepad.exe",
+    "kind": "application",
+    "args": "notes.txt",
+    "working_dir": "C:\\\\Temp",
+    "env": "A=1;B=2"
+  }
+}
+```
+
+`kind=application` requires an absolute `.exe` path. Relative or non-`.exe` targets are rejected.
+
+## 6) See also
 
 - Project overview: [`README.md`](../README.md)
 - Architecture: [`docs/architecture.md`](./architecture.md)
