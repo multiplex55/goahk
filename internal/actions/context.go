@@ -39,6 +39,9 @@ type ActionContext struct {
 	Metadata    map[string]string
 	BindingID   string
 	TriggerText string
+	Stop        func(string)
+
+	stopRequested *bool
 }
 
 func (c ActionContext) withContext(ctx context.Context) ActionContext {
@@ -49,5 +52,19 @@ func (c ActionContext) withContext(ctx context.Context) ActionContext {
 	if c.Metadata == nil {
 		c.Metadata = map[string]string{}
 	}
+	if c.stopRequested == nil {
+		c.stopRequested = new(bool)
+	}
 	return c
+}
+
+func (c ActionContext) requestStop() {
+	if c.stopRequested == nil {
+		c.stopRequested = new(bool)
+	}
+	*c.stopRequested = true
+}
+
+func (c ActionContext) isStopRequested() bool {
+	return c.stopRequested != nil && *c.stopRequested
 }

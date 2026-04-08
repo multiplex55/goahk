@@ -5,12 +5,12 @@ import (
 	"fmt"
 
 	"goahk/internal/actions"
+	appinternal "goahk/internal/app"
 	"goahk/internal/clipboard"
 	"goahk/internal/config"
 	"goahk/internal/hotkey"
 	"goahk/internal/process"
 	"goahk/internal/program"
-	appinternal "goahk/internal/app"
 	"goahk/internal/services/messagebox"
 )
 
@@ -113,6 +113,14 @@ func (b Bootstrap) Run(ctx context.Context, configPath string) error {
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	baseActionCtx := b.BaseActionCtx
+	prevStop := baseActionCtx.Stop
+	baseActionCtx.Stop = func(reason string) {
+		if prevStop != nil {
+			prevStop(reason)
+		}
+		cancel()
+	}
 
 	managerErr := make(chan error, 1)
 	go func() {
@@ -132,7 +140,7 @@ func (b Bootstrap) Run(ctx context.Context, configPath string) error {
 	}
 
 	executor := actions.NewExecutor(registry)
-	results := DispatchHotkeyEvents(runCtx, runCtx.Done(), manager.Events(), plansByBindingID, executor, b.BaseActionCtx, b.LogDispatch)
+	results := DispatchHotkeyEvents(runCtx, runCtx.Done(), manager.Events(), plansByBindingID, executor, baseActionCtx, b.LogDispatch)
 	dispatchDone := make(chan struct{})
 	go func() {
 		defer close(dispatchDone)

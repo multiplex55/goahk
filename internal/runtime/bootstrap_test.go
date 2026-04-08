@@ -200,3 +200,33 @@ func TestBootstrap_FailsFastOnUnknownAction(t *testing.T) {
 		}
 	}
 }
+
+func TestBootstrap_EscBindingWithRuntimeStopExits(t *testing.T) {
+	listener := newFakeListener()
+	cfg := config.Config{Hotkeys: []config.HotkeyBinding{
+		{ID: "quit", Hotkey: "ctrl+esc", Steps: []config.Step{{Action: "runtime.stop"}}},
+	}}
+	b := NewBootstrap()
+	b.LoadConfig = func(context.Context, string) (config.Config, error) { return cfg, nil }
+	b.NewListener = func(context.Context) (Listener, error) { return listener, nil }
+	listener.runFn = func(ctx context.Context) error {
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			listener.Emit(1)
+		}()
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- b.Run(context.Background(), "ignored") }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run() did not exit after Esc/runtime.stop")
+	}
+}

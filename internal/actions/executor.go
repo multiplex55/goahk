@@ -19,9 +19,14 @@ func NewExecutor(registry *Registry) *Executor {
 }
 
 func (e *Executor) Execute(ctx ActionContext, plan Plan) ExecutionResult {
+	ctx = ctx.withContext(baseContext(ctx.Context))
 	started := time.Now().UTC()
 	result := ExecutionResult{StartedAt: started, Success: true, Steps: make([]StepResult, 0, len(plan))}
-	for _, step := range plan {
+	for i, step := range plan {
+		if ctx.isStopRequested() {
+			result.Steps = append(result.Steps, skippedStepResults(plan[i:])...)
+			break
+		}
 		stepResult := StepResult{Action: step.Name, Kind: "action", StartedAt: time.Now().UTC()}
 		err := e.executeActionStep(ctx, step)
 		stepResult.EndedAt = time.Now().UTC()
@@ -36,10 +41,29 @@ func (e *Executor) Execute(ctx ActionContext, plan Plan) ExecutionResult {
 		}
 		stepResult.Status = StepStatusSuccess
 		result.Steps = append(result.Steps, stepResult)
+		if ctx.isStopRequested() && i+1 < len(plan) {
+			result.Steps = append(result.Steps, skippedStepResults(plan[i+1:])...)
+			break
+		}
 	}
 	result.EndedAt = time.Now().UTC()
 	result.Duration = result.EndedAt.Sub(result.StartedAt)
 	return result
+}
+
+func skippedStepResults(plan Plan) []StepResult {
+	out := make([]StepResult, 0, len(plan))
+	for _, step := range plan {
+		now := time.Now().UTC()
+		out = append(out, StepResult{
+			Action:    step.Name,
+			Kind:      "action",
+			Status:    StepStatusSkipped,
+			StartedAt: now,
+			EndedAt:   now,
+		})
+	}
+	return out
 }
 
 func (e *Executor) ExecuteFlow(ctx ActionContext, def flow.Definition, conditions flow.ConditionEvaluator) ExecutionResult {

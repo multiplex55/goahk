@@ -74,11 +74,15 @@ func DispatchHotkeyEvents(
 					logSink(ctx, DispatchLogEntry{Event: "dispatch_failure_detail", BindingID: envelope.BindingID, Error: envelope.Error, FailedAction: firstFailedAction(execResult), Timestamp: envelope.Timestamp})
 				}
 				select {
-				case <-ctx.Done():
-					return
-				case <-shutdown:
-					return
 				case results <- envelope:
+				default:
+					select {
+					case results <- envelope:
+					case <-ctx.Done():
+						return
+					case <-shutdown:
+						return
+					}
 				}
 			}
 		}
