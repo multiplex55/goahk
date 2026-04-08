@@ -27,11 +27,30 @@ var (
 	procGetWindowTextLengthW       = windowUser32.NewProc("GetWindowTextLengthW")
 	procGetClassNameW              = windowUser32.NewProc("GetClassNameW")
 	procGetWindowThreadProcessID   = windowUser32.NewProc("GetWindowThreadProcessId")
+	procGetWindowRect              = windowUser32.NewProc("GetWindowRect")
+	procSetWindowPos               = windowUser32.NewProc("SetWindowPos")
+	procShowWindow                 = windowUser32.NewProc("ShowWindow")
 	procOpenProcess                = windowKernel32.NewProc("OpenProcess")
 	procCloseHandle                = windowKernel32.NewProc("CloseHandle")
 	procQueryFullProcessImageNameW = windowKernel32.NewProc("QueryFullProcessImageNameW")
 	errWindowEnumAborted           = errors.New("window enumeration aborted")
 )
+
+const (
+	swpNoZOrder = 0x0004
+	swpNoSize   = 0x0001
+	swpNoMove   = 0x0002
+	swMinimize  = 6
+	swMaximize  = 3
+	swRestore   = 9
+)
+
+type rect struct {
+	Left   int32
+	Top    int32
+	Right  int32
+	Bottom int32
+}
 
 type OSProvider struct{}
 
@@ -93,6 +112,80 @@ func (p *OSProvider) ActivateWindow(ctx context.Context, hwnd HWND) error {
 			return fmt.Errorf("SetForegroundWindow(%s): %w", hwnd, err)
 		}
 		return fmt.Errorf("SetForegroundWindow(%s): failed", hwnd)
+	}
+	return nil
+}
+
+func (p *OSProvider) WindowBounds(ctx context.Context, hwnd HWND) (Rect, error) {
+	select {
+	case <-ctx.Done():
+		return Rect{}, ctx.Err()
+	default:
+	}
+	var r rect
+	ret, _, err := procGetWindowRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&r)))
+	if ret == 0 {
+		if err != syscall.Errno(0) {
+			return Rect{}, fmt.Errorf("GetWindowRect(%s): %w", hwnd, err)
+		}
+		return Rect{}, fmt.Errorf("GetWindowRect(%s): failed", hwnd)
+	}
+	return Rect{Left: int(r.Left), Top: int(r.Top), Right: int(r.Right), Bottom: int(r.Bottom)}, nil
+}
+
+func (p *OSProvider) MoveWindow(ctx context.Context, hwnd HWND, x, y int) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	ret, _, err := procSetWindowPos.Call(uintptr(hwnd), 0, uintptr(x), uintptr(y), 0, 0, swpNoSize|swpNoZOrder)
+	if ret == 0 {
+		if err != syscall.Errno(0) {
+			return fmt.Errorf("SetWindowPos(move %s): %w", hwnd, err)
+		}
+		return fmt.Errorf("SetWindowPos(move %s): failed", hwnd)
+	}
+	return nil
+}
+
+func (p *OSProvider) ResizeWindow(ctx context.Context, hwnd HWND, width, height int) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	ret, _, err := procSetWindowPos.Call(uintptr(hwnd), 0, 0, 0, uintptr(width), uintptr(height), swpNoMove|swpNoZOrder)
+	if ret == 0 {
+		if err != syscall.Errno(0) {
+			return fmt.Errorf("SetWindowPos(resize %s): %w", hwnd, err)
+		}
+		return fmt.Errorf("SetWindowPos(resize %s): failed", hwnd)
+	}
+	return nil
+}
+
+func (p *OSProvider) MinimizeWindow(ctx context.Context, hwnd HWND) error {
+	return p.showWindow(ctx, hwnd, swMinimize, "minimize")
+}
+
+func (p *OSProvider) MaximizeWindow(ctx context.Context, hwnd HWND) error {
+	return p.showWindow(ctx, hwnd, swMaximize, "maximize")
+}
+
+func (p *OSProvider) RestoreWindow(ctx context.Context, hwnd HWND) error {
+	return p.showWindow(ctx, hwnd, swRestore, "restore")
+}
+
+func (p *OSProvider) showWindow(ctx context.Context, hwnd HWND, cmd int, action string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	ret, _, err := procShowWindow.Call(uintptr(hwnd), uintptr(cmd))
+	if ret == 0 && err != syscall.Errno(0) {
+		return fmt.Errorf("ShowWindow(%s %s): %w", action, hwnd, err)
 	}
 	return nil
 }

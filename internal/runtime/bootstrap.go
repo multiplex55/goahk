@@ -60,8 +60,11 @@ func NewBootstrap() Bootstrap {
 			Clipboard:  clipboard.NewService(nil),
 			Process:    process.NewService(),
 			WindowActivate: func(ctx context.Context, matcher string) error {
-				_, err := window.ActivateForeground(ctx, windowProvider, window.Matcher{TitleContains: matcher})
+				_, err := window.ActivateForeground(ctx, windowProvider, window.ParseMatcherString(matcher))
 				return err
+			},
+			WindowActive: func(ctx context.Context) (window.Info, error) {
+				return window.Active(ctx, windowProvider)
 			},
 			ActiveWindowTitle: func(ctx context.Context) (string, error) {
 				active, err := window.Active(ctx, windowProvider)
@@ -73,8 +76,11 @@ func NewBootstrap() Bootstrap {
 			WindowList: func(ctx context.Context) ([]window.Info, error) {
 				return window.Enumerate(ctx, windowProvider)
 			},
-			FolderList: folderSvc.ListOpenFolders,
-			Input:      input.NewService(),
+			WindowBounds: windowProvider.WindowBounds,
+			WindowMove:   windowProvider.MoveWindow,
+			WindowResize: windowProvider.ResizeWindow,
+			FolderList:   folderSvc.ListOpenFolders,
+			Input:        input.NewService(),
 		}},
 	}
 }

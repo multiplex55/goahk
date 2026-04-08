@@ -27,6 +27,9 @@ type WindowAPI interface {
 	Active() (window.Info, error)
 	List() ([]window.Info, error)
 	Activate(matcher string) error
+	Bounds(hwnd window.HWND) (window.Rect, error)
+	Move(hwnd window.HWND, x, y int) error
+	Resize(hwnd window.HWND, width, height int) error
 	Title() (string, error)
 }
 

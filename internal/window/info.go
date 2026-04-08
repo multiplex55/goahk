@@ -18,3 +18,19 @@ type Info struct {
 	Exe    string
 	Active bool
 }
+
+// Rect describes a window rectangle in screen coordinates.
+type Rect struct {
+	Left   int
+	Top    int
+	Right  int
+	Bottom int
+}
+
+func (r Rect) Width() int {
+	return r.Right - r.Left
+}
+
+func (r Rect) Height() int {
+	return r.Bottom - r.Top
+}
