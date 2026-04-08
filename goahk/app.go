@@ -9,8 +9,8 @@ type App struct {
 }
 
 type bindingSpec struct {
-	hotkey  string
-	actions []Action
+	hotkey string
+	steps  []stepSpecProvider
 }
 
 func NewApp(opts ...Option) *App {
@@ -26,9 +26,9 @@ func NewApp(opts ...Option) *App {
 func (a *App) toProgram() program.Program {
 	out := program.Program{Bindings: make([]program.BindingSpec, 0, len(a.bindings))}
 	for i, b := range a.bindings {
-		steps := make([]program.StepSpec, 0, len(b.actions))
-		for _, action := range b.actions {
-			steps = append(steps, action.stepSpec())
+		steps := make([]program.StepSpec, 0, len(b.steps))
+		for _, step := range b.steps {
+			steps = append(steps, step.stepSpec())
 		}
 		out.Bindings = append(out.Bindings, program.BindingSpec{ID: bindingID(i), Hotkey: b.hotkey, Steps: steps})
 	}

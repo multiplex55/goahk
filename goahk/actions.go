@@ -6,6 +6,10 @@ import (
 	"goahk/internal/program"
 )
 
+type stepSpecProvider interface {
+	stepSpec() program.StepSpec
+}
+
 type Action struct {
 	name   string
 	params map[string]string

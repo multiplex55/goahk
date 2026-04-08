@@ -14,14 +14,14 @@ func (a *App) On(hotkey string) *BindingBuilder {
 	return &BindingBuilder{app: a, hotkey: normalizeHotkey(hotkey)}
 }
 
-func (a *App) Bind(hotkey string, actions ...Action) *App {
-	return a.On(hotkey).Do(actions...)
+func (a *App) Bind(hotkey string, steps ...stepSpecProvider) *App {
+	return a.On(hotkey).Do(steps...)
 }
 
-func (b *BindingBuilder) Do(actions ...Action) *App {
-	copied := make([]Action, len(actions))
-	copy(copied, actions)
-	b.app.bindings = append(b.app.bindings, bindingSpec{hotkey: b.hotkey, actions: copied})
+func (b *BindingBuilder) Do(steps ...stepSpecProvider) *App {
+	copied := make([]stepSpecProvider, len(steps))
+	copy(copied, steps)
+	b.app.bindings = append(b.app.bindings, bindingSpec{hotkey: b.hotkey, steps: copied})
 	return b.app
 }
 

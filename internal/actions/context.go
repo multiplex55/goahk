@@ -86,3 +86,13 @@ func (c ActionContext) requestStop() {
 func (c ActionContext) isStopRequested() bool {
 	return c.stopRequested != nil && *c.stopRequested
 }
+
+func RequestRuntimeStop(ctx *ActionContext, reason string) {
+	if ctx == nil {
+		return
+	}
+	ctx.requestStop()
+	if ctx.Stop != nil {
+		ctx.Stop(reason)
+	}
+}
