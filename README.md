@@ -25,7 +25,7 @@ func main() {
 }
 ```
 
-Runnable example: [`examples/basic-script/main.go`](examples/basic-script/main.go).
+Runnable examples: [`examples/basic-script/main.go`](examples/basic-script/main.go) and [`examples/standalone-script/main.go`](examples/standalone-script/main.go).
 
 ## JSON mode (optional compatibility path)
 

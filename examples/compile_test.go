@@ -16,3 +16,14 @@ func TestBasicScriptExampleBuilds(t *testing.T) {
 		t.Fatalf("go build ./basic-script failed: %v\n%s", err, out)
 	}
 }
+
+func TestStandaloneScriptExampleBuilds(t *testing.T) {
+	t.Parallel()
+
+	outPath := filepath.Join(t.TempDir(), "standalone-script.exe")
+	cmd := exec.Command("go", "build", "-o", outPath, "./standalone-script")
+	cmd.Dir = "."
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go build ./standalone-script failed: %v\n%s", err, out)
+	}
+}
