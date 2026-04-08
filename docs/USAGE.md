@@ -1,6 +1,6 @@
 # goahk practical usage guide
 
-## 1) Script-as-code quick start (primary)
+## 1) Code-first quick start (primary)
 
 Use `goahk.NewApp()` and declare each hotkey in Go.
 
@@ -15,11 +15,10 @@ import (
 )
 
 func main() {
-	app := goahk.NewApp()
-	app.Bind("1", goahk.MessageBox("goahk", "You pressed 1"))
-	app.Bind("Escape", goahk.Stop())
-
-	if err := app.Run(context.Background()); err != nil {
+	if err := goahk.NewApp().
+		Bind("1", goahk.MessageBox("goahk", "You pressed 1")).
+		Bind("Escape", goahk.Stop()).
+		Run(context.Background()); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -88,13 +87,13 @@ go run ./examples/mixed-actions
 - `ctx.Vars` should be treated as callback-local scratch state.
 - For multi-step shared updates, prefer a single callback section to keep read/modify/write logic coherent.
 
-## 5) Additional example scripts
+## 5) Additional code-first examples
 
 - Clipboard transform + paste: `go run ./examples/clipboard-transform-paste`
 - Window-aware logic by active title/process: `go run ./examples/window-aware-script`
 - Built-in + callback + built-in pipeline: `go run ./examples/mixed-actions`
 
-## 6) Config mode compatibility (`cmd/goahk`)
+## 6) Config mode compatibility adapter (`cmd/goahk`)
 
 JSON config mode remains supported for existing deployments/tooling.
 
@@ -102,14 +101,34 @@ JSON config mode remains supported for existing deployments/tooling.
 go run ./cmd/goahk -config .\config.json
 ```
 
-## 7) Migration note
+Use config mode when you need to preserve existing JSON assets; prefer code-first for all new authoring.
 
-- New projects should prefer script-as-code.
-- Existing JSON config flows continue to work.
-- Old declarative usage style is still supported while you gradually adopt callbacks or script-as-code patterns.
+## 7) Compatibility matrix
 
-## 8) See also
+Guaranteed equivalent behavior between:
+
+- builder path (`goahk.NewApp().Bind(...).Run(...)`)
+- JSON adapter path (`internal/config/adapter.go`)
+
+| Capability | Equivalent guarantee |
+| --- | --- |
+| Hotkey normalization/chord parsing | Yes |
+| Linear action `steps` pipelines | Yes |
+| Flow references (`flow`) | Yes |
+| UIA selector mapping | Yes |
+| Runtime compile-time action validation/defaulting | Yes |
+
+Not guaranteed equivalent: arbitrary Go callbacks (`goahk.Func`) and other purely code-level logic.
+
+## 8) Migration boundaries
+
+- New projects should prefer code-first.
+- Existing JSON config flows continue to work through the compatibility runner.
+- Migration can be incremental per hotkey/flow; parity expectations are limited to features represented in both surfaces.
+
+## 9) See also
 
 - Project overview: [`README.md`](../README.md)
 - Architecture: [`docs/architecture.md`](./architecture.md)
+- ADR 0001: [`docs/adr/0001-code-first-primary.md`](./adr/0001-code-first-primary.md)
 - Build/test workflows: [`docs/BUILD.md`](./BUILD.md)

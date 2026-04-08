@@ -4,11 +4,19 @@
 
 `goahk` v1 is a lightweight Windows runtime centered on a **program model core** with optional adapters:
 
-1. Build a hotkey program (code-first API or config adapter).
+1. Build a hotkey program (primary code-first API, or compatibility config adapter).
 2. Apply defaults and validate compiled bindings.
 3. Initialize runtime services in deterministic order.
 4. Register hotkeys and run a message loop.
 5. Shut down gracefully with reverse-order cleanup.
+
+## ADR alignment
+
+Authoring mode policy is defined by [ADR 0001](./adr/0001-code-first-primary.md):
+
+- Primary mode: Go-authored script API (`goahk` package).
+- Compatibility mode: JSON config runner (`cmd/goahk`).
+- Migration boundaries and non-goals are documented in the ADR.
 
 ## Explicit v1 non-goals
 
@@ -27,6 +35,25 @@ To keep v1 narrow and reliable, these are explicit non-goals:
 - **Compatibility adapter:** JSON config loader used by `cmd/goahk`.
 
 This keeps runtime dispatch independent from how programs are authored, while preserving existing JSON workflows.
+
+## Compatibility matrix (builder vs JSON adapter)
+
+Guaranteed equivalent behavior between:
+
+- `goahk` builder path
+- JSON adapter path (`internal/config/adapter.go`)
+
+| Area | Equivalent guarantee |
+| --- | --- |
+| Hotkey normalization + chord compilation | Yes |
+| Linear `steps` pipeline behavior | Yes |
+| Flow reference wiring (`flow`) | Yes |
+| UIA selector mapping | Yes |
+| Runtime action validation/defaulting via compiler | Yes |
+
+These guarantees are enforced by executable tests in `internal/config/adapter_parity_test.go`.
+
+Not guaranteed equivalent: custom Go callbacks (`goahk.Func`) because JSON cannot represent arbitrary executable code.
 
 ## Startup lifecycle
 
