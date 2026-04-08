@@ -37,5 +37,11 @@ jobs:
       - name: Build application
         run: go build -v ./...
 
+      - name: Run targeted regression checks
+        run: |
+          go test -v ./examples -run TestWindowsTargetedCompilationRegressions -count=1
+          go test -v ./internal/services/messagebox -run "TestParseIcon|TestParseOptions" -count=1
+          go test -v ./internal/clipboard -run "TestEncodeUTF16_AppendsSingleNULTerminator|TestDecodeUTF16_EmptyAndTerminatorOnly|TestDecodeUTF16_InvalidSurrogateFails|TestUTF16RoundTripAndNormalizationBoundaries" -count=1
+
       - name: Run tests
         run: go test -v ./...
