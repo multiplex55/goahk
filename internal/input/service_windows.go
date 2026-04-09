@@ -5,29 +5,48 @@ package input
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 )
 
+var (
+	ErrInvalidInputArgument = errors.New("input: invalid argument")
+	ErrSendKeysFailed       = errors.New("input: send keys failed")
+)
+
 type windowsService struct{}
+
+type sendKeysRunner func(context.Context, string, bool) error
+
+var platformSendKeys sendKeysRunner = runPowerShellSendKeys
 
 func newPlatformService() Service {
 	return windowsService{}
 }
 
 func (windowsService) SendText(ctx context.Context, text string, opts SendOptions) error {
+	if err := validateSendOptions(opts); err != nil {
+		return err
+	}
 	if err := sleepBefore(ctx, opts.DelayBefore); err != nil {
 		return err
 	}
 	if strings.TrimSpace(text) == "" {
 		return nil
 	}
-	return runPowerShellSendKeys(ctx, escapeSendKeysLiteral(text), false)
+	return mapSendError(platformSendKeys(ctx, escapeSendKeysLiteral(text), false))
 }
 
 func (windowsService) SendKeys(ctx context.Context, seq Sequence, opts SendOptions) error {
+	if err := validateSendOptions(opts); err != nil {
+		return err
+	}
+	if err := validateSequence(seq); err != nil {
+		return err
+	}
 	if err := sleepBefore(ctx, opts.DelayBefore); err != nil {
 		return err
 	}
@@ -36,7 +55,7 @@ func (windowsService) SendKeys(ctx context.Context, seq Sequence, opts SendOptio
 		if combo == "" {
 			continue
 		}
-		if err := runPowerShellSendKeys(ctx, toSendKeysChord(combo), true); err != nil {
+		if err := mapSendError(platformSendKeys(ctx, toSendKeysChord(combo), true)); err != nil {
 			return err
 		}
 	}
@@ -44,6 +63,12 @@ func (windowsService) SendKeys(ctx context.Context, seq Sequence, opts SendOptio
 }
 
 func (windowsService) SendChord(ctx context.Context, chord Chord, opts SendOptions) error {
+	if err := validateSendOptions(opts); err != nil {
+		return err
+	}
+	if err := validateChord(chord); err != nil {
+		return err
+	}
 	if err := sleepBefore(ctx, opts.DelayBefore); err != nil {
 		return err
 	}
@@ -51,7 +76,50 @@ func (windowsService) SendChord(ctx context.Context, chord Chord, opts SendOptio
 	if combo == "" {
 		return nil
 	}
-	return runPowerShellSendKeys(ctx, toSendKeysChord(combo), true)
+	return mapSendError(platformSendKeys(ctx, toSendKeysChord(combo), true))
+}
+
+func validateSendOptions(opts SendOptions) error {
+	if opts.DelayBefore < 0 {
+		return fmt.Errorf("%w: delay_before must be >= 0", ErrInvalidInputArgument)
+	}
+	return nil
+}
+
+func validateSequence(seq Sequence) error {
+	for _, token := range seq.Tokens {
+		if len(token.Keys) == 0 {
+			return fmt.Errorf("%w: sequence contains an empty token", ErrInvalidInputArgument)
+		}
+		for _, key := range token.Keys {
+			if strings.TrimSpace(key) == "" {
+				return fmt.Errorf("%w: sequence contains an empty key", ErrInvalidInputArgument)
+			}
+		}
+	}
+	return nil
+}
+
+func validateChord(chord Chord) error {
+	if len(chord.Keys) == 0 {
+		return fmt.Errorf("%w: chord must contain at least one key", ErrInvalidInputArgument)
+	}
+	for _, key := range chord.Keys {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("%w: chord contains an empty key", ErrInvalidInputArgument)
+		}
+	}
+	return nil
+}
+
+func mapSendError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	return fmt.Errorf("%w: %v", ErrSendKeysFailed, err)
 }
 
 func sleepBefore(ctx context.Context, d time.Duration) error {
