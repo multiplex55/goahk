@@ -64,6 +64,7 @@ type ActionContext struct {
 	Stop        func(string)
 
 	stopRequested *bool
+	stopNotified  *bool
 }
 
 func (c ActionContext) withContext(ctx context.Context) ActionContext {
@@ -77,14 +78,24 @@ func (c ActionContext) withContext(ctx context.Context) ActionContext {
 	if c.stopRequested == nil {
 		c.stopRequested = new(bool)
 	}
+	if c.stopNotified == nil {
+		c.stopNotified = new(bool)
+	}
 	return c
 }
 
-func (c ActionContext) requestStop() {
+func (c ActionContext) requestStop() bool {
 	if c.stopRequested == nil {
 		c.stopRequested = new(bool)
 	}
+	if c.stopNotified == nil {
+		c.stopNotified = new(bool)
+	}
+	if *c.stopRequested {
+		return false
+	}
 	*c.stopRequested = true
+	return true
 }
 
 func (c ActionContext) isStopRequested() bool {
@@ -95,7 +106,11 @@ func RequestRuntimeStop(ctx *ActionContext, reason string) {
 	if ctx == nil {
 		return
 	}
-	ctx.requestStop()
+	first := ctx.requestStop()
+	if !first || *ctx.stopNotified {
+		return
+	}
+	*ctx.stopNotified = true
 	if ctx.Stop != nil {
 		ctx.Stop(reason)
 	}

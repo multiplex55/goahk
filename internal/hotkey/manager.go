@@ -21,15 +21,29 @@ type Manager struct {
 	mu           sync.RWMutex
 	byBindingID  map[string]int
 	byRegID      map[int]registration
+	state        managerState
 	triggerEvent chan TriggerEvent
 
-	runWG       sync.WaitGroup
-	closeOnce   sync.Once
-	closeDone   chan struct{}
-	closeErr    error
-	triggerOnce sync.Once
-	shutdown    chan struct{}
+	runWG     sync.WaitGroup
+	closeOnce sync.Once
+	closeDone chan struct{}
+	closeErr  error
+	shutdown  chan struct{}
+	closeChan sync.Once
 }
+
+type managerState int
+
+const (
+	// managerStateIdle is the initial state before Run starts.
+	managerStateIdle managerState = iota
+	// managerStateRunning means Run is active and may forward listener events.
+	managerStateRunning
+	// managerStateShuttingDown means Close has been requested and shutdown is in progress.
+	managerStateShuttingDown
+	// managerStateClosed is terminal; no more Run/Close transitions should perform work.
+	managerStateClosed
+)
 
 type registration struct {
 	bindingID string
@@ -42,6 +56,7 @@ func NewManager(listener Listener) *Manager {
 		nextID:       1,
 		byBindingID:  map[string]int{},
 		byRegID:      map[int]registration{},
+		state:        managerStateIdle,
 		triggerEvent: make(chan TriggerEvent, 32),
 		closeDone:    make(chan struct{}),
 		shutdown:     make(chan struct{}),
@@ -84,11 +99,29 @@ func (m *Manager) Events() <-chan TriggerEvent {
 }
 
 func (m *Manager) Run(ctx context.Context) error {
-	m.runWG.Add(1)
-	defer m.runWG.Done()
-	defer m.triggerOnce.Do(func() {
-		close(m.triggerEvent)
-	})
+	m.mu.Lock()
+	switch m.state {
+	case managerStateIdle:
+		m.state = managerStateRunning
+		m.runWG.Add(1)
+	case managerStateShuttingDown, managerStateClosed:
+		m.mu.Unlock()
+		m.closeTriggerEvents()
+		return nil
+	default:
+		m.mu.Unlock()
+		return fmt.Errorf("hotkey manager already running")
+	}
+	m.mu.Unlock()
+
+	defer func() {
+		m.mu.Lock()
+		if m.state == managerStateRunning {
+			m.state = managerStateIdle
+		}
+		m.mu.Unlock()
+		m.runWG.Done()
+	}()
 
 	for {
 		select {
@@ -123,11 +156,27 @@ func (m *Manager) Run(ctx context.Context) error {
 
 func (m *Manager) Close() error {
 	m.closeOnce.Do(func() {
+		m.mu.Lock()
+		if m.state != managerStateClosed {
+			m.state = managerStateShuttingDown
+		}
+		m.mu.Unlock()
+
 		close(m.shutdown)
 		m.closeErr = m.listener.Close()
 		m.runWG.Wait()
+		m.mu.Lock()
+		m.state = managerStateClosed
+		m.mu.Unlock()
+		m.closeTriggerEvents()
 		close(m.closeDone)
 	})
 	<-m.closeDone
 	return m.closeErr
+}
+
+func (m *Manager) closeTriggerEvents() {
+	m.closeChan.Do(func() {
+		close(m.triggerEvent)
+	})
 }

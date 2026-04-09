@@ -67,10 +67,7 @@ func (r *Registry) registerBuiltins() {
 	r.MustRegister("system.message_box", runMessageBoxAction)
 
 	r.MustRegister("runtime.stop", func(ctx ActionContext, _ Step) error {
-		ctx.requestStop()
-		if ctx.Stop != nil {
-			ctx.Stop("runtime.stop")
-		}
+		RequestRuntimeStop(&ctx, "runtime.stop")
 		return nil
 	})
 	r.MustRegister("system.stop", func(ctx ActionContext, step Step) error {

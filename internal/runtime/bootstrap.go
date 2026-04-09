@@ -135,7 +135,7 @@ func (b Bootstrap) RunProgram(ctx context.Context, p program.Program) error {
 	for _, binding := range compiled {
 		if err := manager.Register(binding.ID, binding.Chord); err != nil {
 			_ = unregisterAll(manager, registered)
-			_ = listener.Close()
+			_ = manager.Close()
 			return fmt.Errorf("register binding %q: %w", binding.ID, err)
 		}
 		registered = append(registered, binding.ID)
@@ -185,11 +185,11 @@ func (b Bootstrap) RunProgram(ctx context.Context, p program.Program) error {
 	_ = <-managerErr
 
 	if err := unregisterAll(manager, registered); err != nil {
-		_ = listener.Close()
+		_ = manager.Close()
 		return fmt.Errorf("unregister hotkeys: %w", err)
 	}
-	if err := listener.Close(); err != nil {
-		return fmt.Errorf("close listener: %w", err)
+	if err := manager.Close(); err != nil {
+		return fmt.Errorf("close hotkey manager: %w", err)
 	}
 	if loopErr != nil {
 		return loopErr
