@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	stdruntime "runtime"
+	"strings"
 
 	"goahk/internal/actions"
 	internalapp "goahk/internal/app"
@@ -19,7 +20,12 @@ type callbackRegistration struct {
 	fn         ActionFunc
 }
 
+// Run validates configured bindings, then starts the runtime loop.
 func (a *App) Run(ctx context.Context) error {
+	if len(a.buildErrors) > 0 {
+		return fmt.Errorf("invalid binding wiring: %s", strings.Join(a.buildErrors, "; "))
+	}
+
 	p, _, callbacks := a.runtimeArtifacts()
 
 	var registry *actions.Registry
@@ -107,6 +113,7 @@ func stringifyStepParams(params map[string]any) map[string]string {
 	return out
 }
 
+// MustRun executes Run and panics if Run returns an error.
 func (a *App) MustRun(ctx context.Context) {
 	if err := a.Run(ctx); err != nil {
 		panic(err)

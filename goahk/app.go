@@ -6,11 +6,13 @@ import (
 	"goahk/internal/program"
 )
 
+// App describes a hotkey script built from bindings and actions.
 type App struct {
 	bindings        []bindingSpec
 	logger          Logger
 	validateActions bool
 	state           *appState
+	buildErrors     []string
 }
 
 type bindingSpec struct {
@@ -18,6 +20,10 @@ type bindingSpec struct {
 	steps  []stepSpecProvider
 }
 
+// NewApp creates a script app configured through fluent Bind/On calls.
+//
+// The returned App is safe to configure from a single goroutine and run once.
+// Validation is deferred until Run so small "tiny main.go" scripts can stay concise.
 func NewApp(opts ...Option) *App {
 	a := &App{validateActions: true, state: newAppState()}
 	for _, opt := range opts {
@@ -40,6 +46,7 @@ func (a *App) toProgram() program.Program {
 	return program.Normalize(out)
 }
 
+// StateStore provides app-wide state shared across all triggers.
 type StateStore interface {
 	Get(key string) (string, bool)
 	Set(key, value string)

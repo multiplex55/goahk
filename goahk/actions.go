@@ -11,6 +11,7 @@ type stepSpecProvider interface {
 	stepSpec() program.StepSpec
 }
 
+// Action represents a declarative runtime action.
 type Action struct {
 	name   string
 	params map[string]string
@@ -24,18 +25,22 @@ func (a Action) stepSpec() program.StepSpec {
 	return program.StepSpec{Action: a.name, Params: params}
 }
 
+// MessageBox shows a system modal dialog with title and body text.
 func MessageBox(title, body string) Action {
 	return Action{name: "system.message_box", params: map[string]string{"title": title, "body": body}}
 }
 
+// ClipboardWrite replaces clipboard text with text.
 func ClipboardWrite(text string) Action {
 	return Action{name: "clipboard.write", params: map[string]string{"text": text}}
 }
 
+// ClipboardAppend appends text to current clipboard contents.
 func ClipboardAppend(text string) Action {
 	return Action{name: "clipboard.append", params: map[string]string{"text": text}}
 }
 
+// ClipboardPrepend prepends text to current clipboard contents.
 func ClipboardPrepend(text string) Action {
 	return Action{name: "clipboard.prepend", params: map[string]string{"text": text}}
 }
@@ -45,30 +50,37 @@ func ClipboardRead(saveAs string) Action {
 	return Action{name: "clipboard.read", params: map[string]string{"save_as": saveAs}}
 }
 
+// Launch starts an executable process.
 func Launch(executable string) Action {
 	return Action{name: "process.launch", params: map[string]string{"executable": executable}}
 }
 
+// Open opens a path or URL with the OS default handler.
 func Open(target string) Action {
 	return Action{name: "system.open", params: map[string]string{"target": target}}
 }
 
+// OpenURL opens a URL with the default browser.
 func OpenURL(target string) Action {
 	return Action{name: "system.open", params: map[string]string{"target": target, "kind": "url"}}
 }
 
+// OpenFolder opens a folder path in the default file explorer.
 func OpenFolder(target string) Action {
 	return Action{name: "system.open", params: map[string]string{"target": target, "kind": "folder"}}
 }
 
+// StartApplication opens an application executable path.
 func StartApplication(executable string) Action {
 	return Action{name: "system.open", params: map[string]string{"target": executable, "kind": "application"}}
 }
 
+// ActivateWindow focuses the first window matching matcher.
 func ActivateWindow(matcher string) Action {
 	return Action{name: "window.activate", params: map[string]string{"matcher": matcher}}
 }
 
+// CopyActiveWindowTitle copies the active window title to the clipboard.
 func CopyActiveWindowTitle() Action {
 	return Action{name: "window.copy_active_title_to_clipboard", params: map[string]string{}}
 }
@@ -92,6 +104,7 @@ func ListOpenApplicationsWithOptions(saveAs string, includeBackground bool, dedu
 	return Action{name: "window.list_open_applications", params: params}
 }
 
+// SendText sends literal text as keyboard input.
 func SendText(text string) Action {
 	return Action{name: "input.send_text", params: map[string]string{"text": text}}
 }
@@ -106,6 +119,7 @@ func SendChord(chordOrKeys ...string) Action {
 	return Action{name: "input.send_chord", params: map[string]string{"chord": encodeChord(chordOrKeys...)}}
 }
 
+// Log records a message with action/system metadata.
 func Log(message string) Action {
 	return Action{name: "system.log", params: map[string]string{"message": message}}
 }
