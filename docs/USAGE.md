@@ -93,7 +93,18 @@ go run ./examples/mixed-actions
 - Window-aware logic by active title/process: `go run ./examples/window-aware-script`
 - Built-in + callback + built-in pipeline: `go run ./examples/mixed-actions`
 
-## 6) Config mode compatibility adapter (`cmd/goahk`)
+## 6) Runtime reliability scenario docs
+
+Operational scenario references (config snippets + expected logs + cancellation notes):
+
+- [`docs/examples/custom-callback-stop-safe.md`](./examples/custom-callback-stop-safe.md)
+- [`docs/examples/window-inspect.md`](./examples/window-inspect.md)
+- [`docs/examples/move-window.md`](./examples/move-window.md)
+- [`docs/examples/mouse-move-and-click.md`](./examples/mouse-move-and-click.md)
+- [`docs/examples/long-running-task-with-replace-policy.md`](./examples/long-running-task-with-replace-policy.md)
+- [`docs/examples/emergency-stop.md`](./examples/emergency-stop.md)
+
+## 7) Config mode compatibility adapter (`cmd/goahk`)
 
 JSON config mode remains supported for existing deployments/tooling.
 
@@ -103,7 +114,7 @@ go run ./cmd/goahk -config .\config.json
 
 Use config mode when you need to preserve existing JSON assets; prefer code-first for all new authoring.
 
-## 7) Compatibility matrix
+## 8) Compatibility matrix
 
 Guaranteed equivalent behavior between:
 
@@ -120,13 +131,13 @@ Guaranteed equivalent behavior between:
 
 Not guaranteed equivalent: arbitrary Go callbacks (`goahk.Func`) and other purely code-level logic.
 
-## 8) Migration boundaries
+## 9) Migration boundaries
 
 - New projects should prefer code-first.
 - Existing JSON config flows continue to work through the compatibility runner.
 - Migration can be incremental per hotkey/flow; parity expectations are limited to features represented in both surfaces.
 
-## 9) See also
+## 10) See also
 
 - Project overview: [`README.md`](../README.md)
 - Architecture: [`docs/architecture.md`](./architecture.md)

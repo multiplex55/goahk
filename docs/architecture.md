@@ -55,6 +55,50 @@ These guarantees are enforced by executable tests in `internal/config/adapter_pa
 
 Not guaranteed equivalent: custom Go callbacks (`goahk.Func`) because JSON cannot represent arbitrary executable code.
 
+## Runtime planes: control plane vs work plane
+
+The runtime deliberately separates **control** and **work** concerns.
+
+- **Control plane**
+  - Receives high-priority runtime commands from bound control chords.
+  - Canonical commands: `stop`, `hard_stop`, `suspend`, `reload`.
+  - `Escape` maps to `stop`; `Shift+Escape` maps to `hard_stop` at compile time.
+  - Control events are emitted as `control_command_received` log entries.
+- **Work plane**
+  - Executes binding plans, flows, and callbacks under the supervisor.
+  - Applies per-binding concurrency policy (`serial`, `drop`, `parallel`, `queue-one`, `replace`).
+  - Emits policy/job/dispatch logs (`policy_*`, `job_*`, `dispatch_trigger_result`).
+
+This split ensures that emergency control chords remain responsive even when work callbacks are blocked or long-running.
+
+## Callback lifecycle contract
+
+Custom callbacks (`goahk.callback`) follow a strict lifecycle contract:
+
+1. **Admission**: callback execution starts only after policy admission (`policy_*_admit*`).
+2. **Context attachment**: runtime injects binding metadata (`BindingID`, trigger text, services, state bag).
+3. **Steady-state**: callback may perform long-running work but must check cancellation boundaries (`Done`, `Sleep`, or service call returns).
+4. **Cancellation**: graceful stop and replace-policy preemption cancel callback context; callback should return promptly with `ctx.Err()` when canceled.
+5. **Completion**: runtime emits `dispatch_trigger_result`; failures surface `dispatch_failure_detail` with the first failed action.
+
+Practical expectation: callbacks are cancellation-cooperative; hard-stop exists as a safety valve, not normal control flow.
+
+## Policy semantics
+
+Concurrency policy is binding-scoped and applies only within a binding ID.
+
+- `serial`: admit only when idle; ignore triggers while busy.
+- `drop`: same as serial admission, but explicitly modeled as drop-on-busy.
+- `parallel`: admit every trigger as an independent run.
+- `queue-one`: keep exactly one latest pending run while one is active.
+- `replace`: cancel active run(s) and admit newest trigger.
+
+Operationally:
+
+- Policies are observable in dispatch logs (`policy_serial_ignored_busy`, `policy_replace_cancel_running`, etc.).
+- Cancellation-heavy policies (`replace`) require callback code to be idempotent and interruption-safe.
+- Policy choice is part of runtime reliability design, not just throughput tuning.
+
 ## Startup lifecycle
 
 Startup order is fixed:
