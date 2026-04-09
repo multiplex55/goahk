@@ -3,8 +3,11 @@ package actions
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+
+	"goahk/internal/window"
 )
 
 type fakeClipboard struct {
@@ -78,6 +81,11 @@ func TestWindowActions_MissingServiceErrors(t *testing.T) {
 			want: "window service unavailable",
 		},
 		{
+			step: Step{Name: "window.move", Params: map[string]string{"matcher": "title:one", "x": "1", "y": "2"}},
+			ctx:  ActionContext{Context: context.Background()},
+			want: "window service unavailable",
+		},
+		{
 			step: Step{Name: "window.copy_active_title_to_clipboard"},
 			ctx:  ActionContext{Context: context.Background(), Services: Services{Clipboard: &fakeClipboard{}}},
 			want: "window service unavailable",
@@ -105,5 +113,54 @@ func TestWindowActions_MissingServiceErrors(t *testing.T) {
 		if !strings.Contains(err.Error(), tc.step.Name) {
 			t.Fatalf("%s err=%q missing action identity", tc.step.Name, err.Error())
 		}
+	}
+}
+
+func TestWindowActions_MoveResizeAndStateDispatch(t *testing.T) {
+	r := NewRegistry()
+	calls := map[string]string{}
+	ctx := ActionContext{
+		Context: context.Background(),
+		Services: Services{
+			WindowList: func(context.Context) ([]window.Info, error) {
+				return []window.Info{{HWND: 91, Title: "Editor"}}, nil
+			},
+			WindowMove: func(_ context.Context, hwnd window.HWND, x, y int) error {
+				calls["move"] = fmt.Sprintf("%d:%d:%d", hwnd, x, y)
+				return nil
+			},
+			WindowResize: func(_ context.Context, hwnd window.HWND, w, h int) error {
+				calls["resize"] = fmt.Sprintf("%d:%d:%d", hwnd, w, h)
+				return nil
+			},
+			WindowMinimize: func(_ context.Context, hwnd window.HWND) error {
+				calls["minimize"] = fmt.Sprintf("%d", hwnd)
+				return nil
+			},
+			WindowMaximize: func(_ context.Context, hwnd window.HWND) error {
+				calls["maximize"] = fmt.Sprintf("%d", hwnd)
+				return nil
+			},
+			WindowRestore: func(_ context.Context, hwnd window.HWND) error {
+				calls["restore"] = fmt.Sprintf("%d", hwnd)
+				return nil
+			},
+		},
+	}
+	steps := []Step{
+		{Name: "window.move", Params: map[string]string{"matcher": "title:Editor", "x": "15", "y": "25"}},
+		{Name: "window.resize", Params: map[string]string{"matcher": "title:Editor", "width": "800", "height": "600"}},
+		{Name: "window.minimize", Params: map[string]string{"matcher": "title:Editor"}},
+		{Name: "window.maximize", Params: map[string]string{"matcher": "title:Editor"}},
+		{Name: "window.restore", Params: map[string]string{"matcher": "title:Editor"}},
+	}
+	for _, step := range steps {
+		h, _ := r.Lookup(step.Name)
+		if err := h(ctx, step); err != nil {
+			t.Fatalf("%s err=%v", step.Name, err)
+		}
+	}
+	if calls["move"] != "91:15:25" || calls["resize"] != "91:800:600" || calls["minimize"] != "91" || calls["maximize"] != "91" || calls["restore"] != "91" {
+		t.Fatalf("calls=%v", calls)
 	}
 }

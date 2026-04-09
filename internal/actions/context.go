@@ -48,6 +48,9 @@ type Services struct {
 	WindowBounds      func(context.Context, window.HWND) (window.Rect, error)
 	WindowMove        func(context.Context, window.HWND, int, int) error
 	WindowResize      func(context.Context, window.HWND, int, int) error
+	WindowMinimize    func(context.Context, window.HWND) error
+	WindowMaximize    func(context.Context, window.HWND) error
+	WindowRestore     func(context.Context, window.HWND) error
 	FolderList        func(context.Context) ([]folders.FolderInfo, error)
 	Input             input.Service
 	UIA               uia.ActionService

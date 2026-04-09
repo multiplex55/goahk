@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"goahk/internal/actions"
+	"goahk/internal/input"
 	"goahk/internal/process"
 	"goahk/internal/window"
 )
@@ -20,6 +21,15 @@ type InputAPI interface {
 	SendText(text string) error
 	SendKeys(keys ...string) error
 	SendChord(keys ...string) error
+	MouseMoveAbsolute(x, y int) error
+	MouseMoveRelative(dx, dy int) error
+	MousePosition() (input.MousePosition, error)
+	MouseButtonDown(button string) error
+	MouseButtonUp(button string) error
+	MouseClick(button string) error
+	MouseDoubleClick(button string) error
+	MouseWheel(delta int) error
+	MouseDrag(button string, startX, startY, endX, endY int) error
 	Paste(text string) error
 }
 

@@ -13,6 +13,7 @@ type Service interface {
 	SendText(ctx context.Context, text string, opts SendOptions) error
 	SendKeys(ctx context.Context, seq Sequence, opts SendOptions) error
 	SendChord(ctx context.Context, chord Chord, opts SendOptions) error
+	MouseService
 }
 
 type SendOptions struct {

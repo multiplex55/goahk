@@ -63,6 +63,36 @@ func TestBoundsForMatcher_UsesMatcherResolution(t *testing.T) {
 	}
 }
 
+func TestInfoBoundsPositionAndSizeHelpers(t *testing.T) {
+	info := Info{}
+	if _, ok := info.Bounds(); ok {
+		t.Fatal("Bounds() should report missing rect")
+	}
+	if _, _, ok := info.Position(); ok {
+		t.Fatal("Position() should report missing rect")
+	}
+	if _, _, ok := info.Size(); ok {
+		t.Fatal("Size() should report missing rect")
+	}
+
+	info.Rect = &Rect{Left: 10, Top: 12, Right: 210, Bottom: 312}
+	bounds, ok := info.Bounds()
+	if !ok {
+		t.Fatal("Bounds() should report rect present")
+	}
+	if bounds.Width() != 200 || bounds.Height() != 300 {
+		t.Fatalf("unexpected bounds size: %#v", bounds)
+	}
+	x, y, ok := info.Position()
+	if !ok || x != 10 || y != 12 {
+		t.Fatalf("unexpected position: x=%d y=%d ok=%t", x, y, ok)
+	}
+	w, h, ok := info.Size()
+	if !ok || w != 200 || h != 300 {
+		t.Fatalf("unexpected size: w=%d h=%d ok=%t", w, h, ok)
+	}
+}
+
 func TestMoveAndResizeForMatcher_DelegatesToProvider(t *testing.T) {
 	p := &fakeGeometryProvider{
 		windows: []Info{{HWND: 44, Title: "Terminal"}},

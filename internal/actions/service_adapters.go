@@ -5,10 +5,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"goahk/internal/process"
 	"goahk/internal/services/messagebox"
+	"goahk/internal/window"
 )
 
 func runMessageBoxAction(ctx ActionContext, step Step) error {
@@ -262,4 +264,38 @@ func defaultString(value, fallback string) string {
 
 func missingServiceError(step Step, service string) error {
 	return fmt.Errorf("%s: %s service unavailable", step.Name, service)
+}
+
+func resolveWindowForMatcher(ctx ActionContext, step Step) (window.Info, error) {
+	if ctx.Services.WindowList == nil {
+		return window.Info{}, missingServiceError(step, "window")
+	}
+	matcher := window.ParseMatcherString(step.Params["matcher"])
+	windows, err := ctx.Services.WindowList(ctx.Context)
+	if err != nil {
+		return window.Info{}, fmt.Errorf("list windows: %w", err)
+	}
+	matches, err := window.Filter(windows, matcher)
+	if err != nil {
+		return window.Info{}, err
+	}
+	if len(matches) == 0 {
+		return window.Info{}, window.ErrNoMatchingWindow
+	}
+	if len(matches) > 1 {
+		return window.Info{}, fmt.Errorf("%w: %d windows matched", window.ErrAmbiguousWindow, len(matches))
+	}
+	return matches[0], nil
+}
+
+func parseInt(params map[string]string, key string) (int, error) {
+	raw := strings.TrimSpace(params[key])
+	if raw == "" {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %q", key, raw)
+	}
+	return v, nil
 }
