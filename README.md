@@ -17,22 +17,70 @@ import (
 )
 
 func main() {
-	if err := goahk.NewApp().
-		Bind("1", goahk.MessageBox("goahk", "You pressed 1")).
-		Bind("Escape", goahk.Stop()).
-		Run(context.Background()); err != nil {
+	app := goahk.NewApp()
+	// snippet:start:basic-script-main
+	app.Bind("Ctrl+Alt+B", goahk.SendText("basic script trigger"))
+	// snippet:end:basic-script-main
+	app.Bind("Escape", goahk.Stop())
+
+	if err := app.Run(context.Background()); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
 
-Runnable examples:
+Runnable examples (priority order):
 
-- [`examples/basic-script/main.go`](examples/basic-script/main.go)
-- [`examples/custom-callback/main.go`](examples/custom-callback/main.go)
-- [`examples/clipboard-transform-paste/main.go`](examples/clipboard-transform-paste/main.go)
-- [`examples/window-aware-script/main.go`](examples/window-aware-script/main.go)
-- [`examples/mixed-actions/main.go`](examples/mixed-actions/main.go)
+1. [`examples/basic-script`](examples/basic-script)
+2. [`examples/messagebox-and-exit`](examples/messagebox-and-exit)
+3. [`examples/clipboard-helper`](examples/clipboard-helper)
+4. [`examples/window-aware-script`](examples/window-aware-script)
+
+
+Primary example snippets:
+
+```go
+// snippet:start:messagebox-and-exit-main
+app.Bind("F1", goahk.MessageBox("goahk", "Hello from messagebox-and-exit"))
+app.Bind("Escape", goahk.Stop())
+// snippet:end:messagebox-and-exit-main
+```
+
+```go
+// snippet:start:clipboard-helper-main
+app.Bind("Ctrl+Shift+V", goahk.Func(func(ctx *goahk.Context) error {
+	text, err := ctx.Clipboard.ReadText()
+	if err != nil {
+		return err
+	}
+	transformed := strings.ReplaceAll(text, "foo", "bar")
+	return ctx.Input.Paste(transformed)
+}))
+// snippet:end:clipboard-helper-main
+```
+
+```go
+// snippet:start:window-aware-script-main
+app.Bind("Ctrl+Shift+W", goahk.Func(func(ctx *goahk.Context) error {
+	active, err := ctx.Window.Active()
+	if err != nil {
+		return err
+	}
+
+	title := strings.ToLower(active.Title)
+	exe := strings.ToLower(active.Exe)
+
+	switch {
+	case strings.Contains(exe, "code") || strings.Contains(title, "visual studio"):
+		return ctx.Input.SendText("// editor mode")
+	case strings.Contains(exe, "chrome") || strings.Contains(exe, "msedge") || strings.Contains(title, "firefox"):
+		return ctx.Input.SendText("https://github.com/")
+	default:
+		return ctx.Input.SendText("Window: " + active.Title)
+	}
+}))
+// snippet:end:window-aware-script-main
+```
 
 ## Declarative + callback can be mixed
 
