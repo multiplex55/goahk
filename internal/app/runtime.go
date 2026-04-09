@@ -48,6 +48,7 @@ func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]Ru
 }
 
 func CompileRuntimeBindingsFromProgram(p program.Program, registry *actions.Registry) ([]RuntimeBinding, error) {
+	p = program.Normalize(p)
 	if err := program.Validate(p); err != nil {
 		return nil, err
 	}
@@ -59,9 +60,6 @@ func CompileRuntimeBindingsFromProgram(p program.Program, registry *actions.Regi
 			return nil, err
 		}
 		parsed = append(parsed, binding)
-	}
-	if err := hotkey.DetectConflicts(parsed); err != nil {
-		return nil, err
 	}
 
 	selectors := convertUIASelectors(p.Options.UIASelectors)

@@ -1,0 +1,17 @@
+{
+  "flows": [
+    {
+      "id": " paste-flow ",
+      "steps": [
+        {"action": "input.send_text", "params": {"text": "hello"}}
+      ]
+    }
+  ],
+  "hotkeys": [
+    {
+      "id": "paste",
+      "hotkey": "Ctrl+Alt+P",
+      "flow": " paste-flow "
+    }
+  ]
+}

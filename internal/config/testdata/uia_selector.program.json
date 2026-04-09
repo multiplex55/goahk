@@ -1,0 +1,21 @@
+{
+  "Bindings": [
+    {
+      "ID": "focus",
+      "Hotkey": "Ctrl+F",
+      "Steps": [
+        {"Action": "system.log", "Params": {"msg": "ok"}}
+      ]
+    }
+  ],
+  "Options": {
+    "Flows": [],
+    "UIASelectors": {
+      "searchBox": {
+        "AutomationID": "SearchBox",
+        "Name": "Search",
+        "ControlType": "Edit"
+      }
+    }
+  }
+}

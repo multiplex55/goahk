@@ -37,7 +37,7 @@ func (a *App) toProgram() program.Program {
 		}
 		out.Bindings = append(out.Bindings, program.BindingSpec{ID: bindingID(i), Hotkey: b.hotkey, Steps: steps})
 	}
-	return out
+	return program.Normalize(out)
 }
 
 type StateStore interface {

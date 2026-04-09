@@ -1,0 +1,20 @@
+{
+  "Bindings": [
+    {
+      "ID": "paste",
+      "Hotkey": "Ctrl+Alt+P",
+      "Flow": "paste-flow"
+    }
+  ],
+  "Options": {
+    "Flows": [
+      {
+        "ID": "paste-flow",
+        "Steps": [
+          {"Action": "input.send_text", "Params": {"text": "hello"}}
+        ]
+      }
+    ],
+    "UIASelectors": {}
+  }
+}
