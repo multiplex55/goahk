@@ -61,15 +61,33 @@ func DispatchHotkeyEventsWithHandle(
 	logSink DispatchLogSink,
 	onControl func(runtimeControlEvent),
 ) DispatchHandle {
+	bindings := make(map[string]actions.ExecutableBinding, len(plans))
+	for id, plan := range plans {
+		bindings[id] = actions.ExecutableBinding{ID: id, Kind: actions.BindingKindPlan, Plan: plan}
+	}
+	return DispatchHotkeyEventsWithBindingsHandle(ctx, shutdown, events, bindings, control, executor, base, logSink, onControl)
+}
+
+func DispatchHotkeyEventsWithBindingsHandle(
+	ctx context.Context,
+	shutdown <-chan struct{},
+	events <-chan hotkey.TriggerEvent,
+	bindings map[string]actions.ExecutableBinding,
+	control map[string]RuntimeControlCommand,
+	executor *actions.Executor,
+	base actions.ActionContext,
+	logSink DispatchLogSink,
+	onControl func(runtimeControlEvent),
+) DispatchHandle {
 	if logSink == nil {
 		logSink = func(context.Context, DispatchLogEntry) {}
 	}
-	supervisor := NewSupervisor(ctx, executor, base, logSink, onControl)
+	supervisor := NewSupervisor(ctx, bindings, executor, base, logSink, onControl)
 	supervisor.Start(4)
 	results := supervisor.Results()
 
 	go func() {
-		logSink(ctx, DispatchLogEntry{Event: "dispatch_startup", KnownCount: len(plans), Timestamp: time.Now().UTC()})
+		logSink(ctx, DispatchLogEntry{Event: "dispatch_startup", KnownCount: len(bindings), Timestamp: time.Now().UTC()})
 		for {
 			select {
 			case <-ctx.Done():
@@ -81,16 +99,11 @@ func DispatchHotkeyEventsWithHandle(
 				if !ok {
 					return
 				}
-				plan, exists := plans[ev.BindingID]
-				if !exists {
-					logSink(ctx, DispatchLogEntry{Event: "dispatch_unknown_binding", BindingID: ev.BindingID, Error: "binding plan not found", Timestamp: time.Now().UTC()})
-					continue
-				}
 				if cmd, isControl := control[ev.BindingID]; isControl {
 					supervisor.SubmitControl(runtimeControlEvent{BindingID: ev.BindingID, Command: cmd, Triggered: ev, Received: time.Now().UTC()})
 					continue
 				}
-				supervisor.SubmitWork(supervisorJob{bindingID: ev.BindingID, trigger: ev, plan: plan})
+				supervisor.SubmitWork(supervisorJob{bindingID: ev.BindingID, trigger: ev})
 			}
 		}
 	}()
@@ -115,23 +128,42 @@ func DispatchHotkeyEventsWithHandle(
 	}
 }
 
-func buildDispatchResult(bindingID string, plan actions.Plan, res actions.ExecutionResult) DispatchResult {
-	actionsList := make([]string, 0, len(plan))
-	for _, step := range plan {
-		actionsList = append(actionsList, step.Name)
-	}
+func buildDispatchResult(bindingID string, binding actions.ExecutableBinding, res actions.ExecutionResult) DispatchResult {
 	ts := res.EndedAt
 	if ts.IsZero() {
 		ts = time.Now().UTC()
 	}
 	return DispatchResult{
 		BindingID: bindingID,
-		Actions:   actionsList,
+		Actions:   dispatchActions(binding),
 		Outcomes:  append([]actions.StepResult(nil), res.Steps...),
 		Duration:  res.Duration,
 		Error:     extractExecutionError(res),
 		Timestamp: ts,
 		Execution: res,
+	}
+}
+
+func dispatchActions(binding actions.ExecutableBinding) []string {
+	switch binding.Kind {
+	case actions.BindingKindPlan:
+		actionsList := make([]string, 0, len(binding.Plan))
+		for _, step := range binding.Plan {
+			actionsList = append(actionsList, step.Name)
+		}
+		return actionsList
+	case actions.BindingKindFlow:
+		if binding.Flow != nil && binding.Flow.ID != "" {
+			return []string{"flow:" + binding.Flow.ID}
+		}
+		return []string{"flow"}
+	case actions.BindingKindCallback:
+		if binding.Policy.CallbackRef != "" {
+			return []string{actions.CallbackActionName + ":" + binding.Policy.CallbackRef}
+		}
+		return []string{actions.CallbackActionName}
+	default:
+		return []string{string(binding.Kind)}
 	}
 }
 
