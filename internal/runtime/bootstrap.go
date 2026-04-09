@@ -3,6 +3,8 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
+	"time"
 
 	"goahk/internal/actions"
 	"goahk/internal/clipboard"
@@ -39,6 +41,7 @@ type Bootstrap struct {
 	RecordResult  ResultRecorder
 	LogDispatch   DispatchLogSink
 	BaseActionCtx actions.ActionContext
+	StopGrace     time.Duration
 }
 
 func NewBootstrap() Bootstrap {
@@ -81,6 +84,7 @@ func NewBootstrap() Bootstrap {
 			FolderList:   folderSvc.ListOpenFolders,
 			Input:        input.NewService(),
 		}},
+		StopGrace: 300 * time.Millisecond,
 	}
 }
 
@@ -163,14 +167,28 @@ func (b Bootstrap) RunProgram(ctx context.Context, p program.Program) error {
 	}()
 
 	plansByBindingID := make(map[string]actions.Plan, len(compiled))
+	controlByBindingID := make(map[string]RuntimeControlCommand, len(compiled))
 	for _, binding := range compiled {
+		switch RuntimeControlCommand(binding.ControlCommand) {
+		case RuntimeControlStop, RuntimeControlHardStop, RuntimeControlSuspend, RuntimeControlReload:
+			controlByBindingID[binding.ID] = RuntimeControlCommand(binding.ControlCommand)
+		}
 		if binding.Flow == nil {
 			plansByBindingID[binding.ID] = binding.Plan
 		}
 	}
 
 	executor := actions.NewExecutor(registry)
-	results := DispatchHotkeyEvents(runCtx, runCtx.Done(), manager.Events(), plansByBindingID, executor, baseActionCtx, b.LogDispatch)
+	var hardStop atomic.Bool
+	results := DispatchHotkeyEvents(runCtx, runCtx.Done(), manager.Events(), plansByBindingID, controlByBindingID, executor, baseActionCtx, b.LogDispatch, func(ev runtimeControlEvent) {
+		switch ev.Command {
+		case RuntimeControlHardStop:
+			hardStop.Store(true)
+			cancel()
+		case RuntimeControlStop:
+			cancel()
+		}
+	})
 	dispatchDone := make(chan struct{})
 	go func() {
 		defer close(dispatchDone)
@@ -181,7 +199,18 @@ func (b Bootstrap) RunProgram(ctx context.Context, p program.Program) error {
 
 	loopErr := b.runLoop(runCtx, listener, managerErr)
 	cancel()
-	<-dispatchDone
+	grace := b.StopGrace
+	if grace <= 0 {
+		grace = 300 * time.Millisecond
+	}
+	select {
+	case <-dispatchDone:
+	case <-time.After(grace):
+		b.LogDispatch(ctx, DispatchLogEntry{Event: "shutdown_grace_timeout", Timestamp: time.Now().UTC()})
+	}
+	if hardStop.Load() {
+		b.LogDispatch(ctx, DispatchLogEntry{Event: "job_forced_termination", Timestamp: time.Now().UTC()})
+	}
 	_ = <-managerErr
 
 	if err := unregisterAll(manager, registered); err != nil {

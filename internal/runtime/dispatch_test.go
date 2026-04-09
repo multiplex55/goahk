@@ -27,7 +27,7 @@ func TestDispatchHotkeyEvents_KnownBindingExecutesExpectedPlan(t *testing.T) {
 	events := make(chan hotkey.TriggerEvent, 1)
 	results := DispatchHotkeyEvents(context.Background(), make(chan struct{}), events, map[string]actions.Plan{
 		"binding.paste": {{Name: "test.mark"}},
-	}, executor, actions.ActionContext{}, nil)
+	}, nil, executor, actions.ActionContext{}, nil, nil)
 	events <- hotkey.TriggerEvent{BindingID: "binding.paste", Chord: hotkey.Chord{Key: "V"}}
 
 	select {
@@ -67,7 +67,7 @@ func TestDispatchHotkeyEvents_UnknownBindingLoggedAndSkipped(t *testing.T) {
 		logs = append(logs, entry)
 	}
 
-	results := DispatchHotkeyEvents(context.Background(), shutdown, events, map[string]actions.Plan{"known": {{Name: "test.mark"}}}, executor, actions.ActionContext{}, sink)
+	results := DispatchHotkeyEvents(context.Background(), shutdown, events, map[string]actions.Plan{"known": {{Name: "test.mark"}}}, nil, executor, actions.ActionContext{}, sink, nil)
 	events <- hotkey.TriggerEvent{BindingID: "missing"}
 	time.Sleep(20 * time.Millisecond)
 	close(shutdown)
@@ -112,7 +112,7 @@ func TestDispatchHotkeyEvents_ExecutorErrorCapturedAndLogged(t *testing.T) {
 
 	results := DispatchHotkeyEvents(context.Background(), shutdown, events, map[string]actions.Plan{
 		"broken": {{Name: "test.fail"}},
-	}, executor, actions.ActionContext{}, sink)
+	}, nil, executor, actions.ActionContext{}, sink, nil)
 	events <- hotkey.TriggerEvent{BindingID: "broken"}
 
 	var result DispatchResult
@@ -163,7 +163,7 @@ func TestDispatchHotkeyEvents_StopsImmediatelyAfterShutdownSignal(t *testing.T) 
 
 	results := DispatchHotkeyEvents(context.Background(), shutdown, events, map[string]actions.Plan{
 		"hk": {{Name: "test.mark"}},
-	}, executor, actions.ActionContext{}, nil)
+	}, nil, executor, actions.ActionContext{}, nil, nil)
 
 	events <- hotkey.TriggerEvent{BindingID: "hk"}
 	select {
@@ -209,7 +209,7 @@ func TestDispatchHotkeyEvents_CallbackOrderingAndArguments(t *testing.T) {
 			{Name: "test.first", Params: map[string]string{"tag": "one"}},
 			{Name: "test.second", Params: map[string]string{"tag": "two"}},
 		},
-	}, executor, actions.ActionContext{}, nil)
+	}, nil, executor, actions.ActionContext{}, nil, nil)
 
 	events <- hotkey.TriggerEvent{
 		BindingID: "binding.sequence",
@@ -276,8 +276,10 @@ func TestDispatchHotkeyEvents_MessageBoxActionReceivesExpectedDialogPayload(t *t
 				{Name: "system.message_box", Params: map[string]string{"title": "Hotkey Test", "body": "Pressed Ctrl+Alt+D", "icon": "info", "options": "ok"}},
 			},
 		},
+		nil,
 		executor,
 		actions.ActionContext{Services: actions.Services{MessageBox: box}},
+		nil,
 		nil,
 	)
 

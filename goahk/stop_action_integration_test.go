@@ -30,7 +30,7 @@ func TestStopActionIntegration_EscapeBindingExitsWithoutDeadlock(t *testing.T) {
 		cancel()
 	}}
 
-	results := runtime.DispatchHotkeyEvents(ctx, ctx.Done(), events, plans, executor, base, nil)
+	results := runtime.DispatchHotkeyEvents(ctx, ctx.Done(), events, plans, nil, executor, base, nil, nil)
 	events <- hotkey.TriggerEvent{BindingID: bindings[0].ID, Chord: hotkey.Chord{Key: "Escape"}}
 
 	select {

@@ -33,7 +33,7 @@ func TestIntegrationProof_HotkeyToMessageBoxPathReachable(t *testing.T) {
 
 	results := DispatchHotkeyEvents(context.Background(), shutdown, events, map[string]actions.Plan{
 		"hk.msg": {{Name: "system.message_box", Params: map[string]string{"body": "proof"}}},
-	}, exec, actions.ActionContext{Services: actions.Services{MessageBox: mb}}, nil)
+	}, nil, exec, actions.ActionContext{Services: actions.Services{MessageBox: mb}}, nil, nil)
 
 	events <- hotkey.TriggerEvent{BindingID: "hk.msg", Chord: hotkey.Chord{Modifiers: hotkey.ModCtrl, Key: "M"}}
 	select {

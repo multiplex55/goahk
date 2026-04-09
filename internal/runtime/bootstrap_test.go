@@ -316,3 +316,49 @@ func TestBootstrap_WiredWindowAndInputActionsDoNotFailMissingService(t *testing.
 		})
 	}
 }
+
+func TestBootstrap_CtrlCCancellationReturnsWithinGraceBound(t *testing.T) {
+	listener := newFakeListener()
+	cfg := config.Config{Hotkeys: []config.HotkeyBinding{
+		{ID: "one", Hotkey: "ctrl+1", Steps: []config.Step{{Action: "test.block"}}},
+	}}
+	b := NewBootstrap()
+	b.StopGrace = 80 * time.Millisecond
+	b.LoadProgram = func(context.Context, string) (program.Program, error) { return mustProgram(t, cfg), nil }
+	b.NewListener = func(context.Context) (Listener, error) { return listener, nil }
+	b.BuildRegistry = func(context.Context, program.Program) (*actions.Registry, error) {
+		reg := actions.NewRegistry()
+		_ = reg.Register("test.block", func(actions.ActionContext, actions.Step) error {
+			time.Sleep(2 * time.Second)
+			return nil
+		})
+		return reg, nil
+	}
+	listener.runFn = func(ctx context.Context) error {
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			listener.Emit(1)
+		}()
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() { done <- b.Run(ctx, "ignored") }()
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Run() did not return within grace-bound timeout")
+	}
+	if elapsed := time.Since(start); elapsed > 450*time.Millisecond {
+		t.Fatalf("Run() elapsed=%s, expected bounded shutdown", elapsed)
+	}
+}
