@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"goahk/internal/actions"
-	appinternal "goahk/internal/app"
 	"goahk/internal/clipboard"
 	"goahk/internal/config"
 	"goahk/internal/hotkey"
@@ -17,7 +16,7 @@ import (
 	"goahk/internal/window"
 )
 
-type ConfigLoader func(context.Context, string) (config.Config, error)
+type ProgramLoader func(context.Context, string) (program.Program, error)
 
 type RegistryBuilder func(context.Context, program.Program) (*actions.Registry, error)
 
@@ -34,7 +33,7 @@ type ListenerFactory func(context.Context) (Listener, error)
 type ResultRecorder func(context.Context, string, actions.ExecutionResult)
 
 type Bootstrap struct {
-	LoadConfig    ConfigLoader
+	LoadProgram   ProgramLoader
 	BuildRegistry RegistryBuilder
 	NewListener   ListenerFactory
 	RecordResult  ResultRecorder
@@ -46,8 +45,8 @@ func NewBootstrap() Bootstrap {
 	windowProvider := window.NewOSProvider()
 	folderSvc := folders.NewService()
 	return Bootstrap{
-		LoadConfig: func(_ context.Context, path string) (config.Config, error) {
-			return config.LoadFile(path)
+		LoadProgram: func(_ context.Context, path string) (program.Program, error) {
+			return config.LoadProgramFile(path)
 		},
 		BuildRegistry: func(_ context.Context, _ program.Program) (*actions.Registry, error) {
 			return actions.NewRegistry(), nil
@@ -86,9 +85,19 @@ func NewBootstrap() Bootstrap {
 }
 
 func (b Bootstrap) Run(ctx context.Context, configPath string) error {
-	if b.LoadConfig == nil {
-		return fmt.Errorf("config loader is not configured")
+	if b.LoadProgram == nil {
+		return fmt.Errorf("program loader is not configured")
 	}
+
+	p, err := b.LoadProgram(ctx, configPath)
+	if err != nil {
+		return fmt.Errorf("load program: %w", err)
+	}
+
+	return b.RunProgram(ctx, p)
+}
+
+func (b Bootstrap) RunProgram(ctx context.Context, p program.Program) error {
 	if b.BuildRegistry == nil {
 		return fmt.Errorf("registry builder is not configured")
 	}
@@ -102,15 +111,6 @@ func (b Bootstrap) Run(ctx context.Context, configPath string) error {
 		b.LogDispatch = func(context.Context, DispatchLogEntry) {}
 	}
 
-	cfg, err := b.LoadConfig(ctx, configPath)
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-
-	p, err := config.ToProgram(cfg)
-	if err != nil {
-		return fmt.Errorf("adapt config to program: %w", err)
-	}
 	if err := program.Validate(p); err != nil {
 		return fmt.Errorf("validate program: %w", err)
 	}
@@ -120,7 +120,7 @@ func (b Bootstrap) Run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("build action registry: %w", err)
 	}
 
-	compiled, err := appinternal.CompileRuntimeBindingsFromProgram(p, registry)
+	compiled, err := CompileRuntimeBindings(p, registry)
 	if err != nil {
 		return fmt.Errorf("compile runtime bindings: %w", err)
 	}

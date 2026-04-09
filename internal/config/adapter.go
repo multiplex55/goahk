@@ -2,10 +2,29 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"goahk/internal/program"
 )
+
+// LoadProgramFile loads config JSON from path and adapts it into a canonical program.Program.
+func LoadProgramFile(path string) (program.Program, error) {
+	cfg, err := LoadFile(path)
+	if err != nil {
+		return program.Program{}, err
+	}
+	return ToProgram(cfg)
+}
+
+// LoadProgramReader loads config JSON from an io.Reader and adapts it into a canonical program.Program.
+func LoadProgramReader(r io.Reader) (program.Program, error) {
+	cfg, err := LoadReader(r)
+	if err != nil {
+		return program.Program{}, err
+	}
+	return ToProgram(cfg)
+}
 
 // ToProgram maps a loaded Config into the internal Program model.
 func ToProgram(cfg Config) (program.Program, error) {
