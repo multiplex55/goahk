@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	"goahk/internal/program"
 )
 
 // Validate checks semantic constraints for runtime config.
@@ -73,6 +75,13 @@ func Validate(cfg Config) error {
 				}
 			}
 		}
+		policy := strings.ToLower(strings.TrimSpace(hk.ConcurrencyPolicy))
+		if policy == "" {
+			policy = string(program.DefaultConcurrencyPolicy())
+		}
+		if !isAllowedPolicy(policy) {
+			errs = append(errs, fmt.Sprintf("hotkeys[%d].concurrencyPolicy has unsupported value %q", i, hk.ConcurrencyPolicy))
+		}
 	}
 	for name, sel := range cfg.UIASelectors {
 		if err := validateUIASelector(sel); err != nil {
@@ -100,4 +109,13 @@ func validateUIASelector(sel UIASelector) error {
 
 func normalizeChord(chord string) string {
 	return strings.ToLower(strings.Join(strings.Fields(chord), ""))
+}
+
+func isAllowedPolicy(policy string) bool {
+	switch policy {
+	case string(program.ConcurrencyPolicySerial), string(program.ConcurrencyPolicyReplace), string(program.ConcurrencyPolicyParallel), string(program.ConcurrencyPolicyQueueOne), string(program.ConcurrencyPolicyDrop):
+		return true
+	default:
+		return false
+	}
 }

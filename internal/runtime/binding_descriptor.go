@@ -5,12 +5,17 @@ import (
 	"strings"
 
 	"goahk/internal/actions"
+	"goahk/internal/program"
 )
 
 func buildExecutableBindings(compiled []RuntimeBinding) map[string]actions.ExecutableBinding {
 	descriptors := make(map[string]actions.ExecutableBinding, len(compiled))
 	for _, binding := range compiled {
 		descriptor := actions.ExecutableBinding{ID: binding.ID, Kind: actions.BindingKindPlan, Plan: binding.Plan}
+		descriptor.Policy.Concurrency = string(binding.Policy)
+		if strings.TrimSpace(descriptor.Policy.Concurrency) == "" {
+			descriptor.Policy.Concurrency = string(program.DefaultConcurrencyPolicy())
+		}
 		switch {
 		case binding.Flow != nil:
 			descriptor.Kind = actions.BindingKindFlow

@@ -14,7 +14,10 @@ func TestDispatchHotkeyEvents_RaceCancellation(t *testing.T) {
 	reg := actions.NewRegistry()
 	_ = reg.Register("test.mark", func(_ actions.ActionContext, _ actions.Step) error { return nil })
 	ex := actions.NewExecutor(reg)
-	plans := map[string]actions.Plan{"hk": {{Name: "test.mark"}}}
+	plans := map[string]actions.Plan{
+		"hk":  {{Name: "test.mark"}},
+		"hk2": {{Name: "test.mark"}},
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -27,8 +30,12 @@ func TestDispatchHotkeyEvents_RaceCancellation(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 50; j++ {
+				target := "hk"
+				if j%2 == 0 {
+					target = "hk2"
+				}
 				select {
-				case triggers <- hotkey.TriggerEvent{BindingID: "hk"}:
+				case triggers <- hotkey.TriggerEvent{BindingID: target}:
 				case <-ctx.Done():
 					return
 				}

@@ -63,3 +63,21 @@ func TestValidate_FlowReference(t *testing.T) {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
+
+func TestValidate_ConcurrencyPolicy(t *testing.T) {
+	cfg := Config{
+		Hotkeys: []HotkeyBinding{
+			{ID: "a", Hotkey: "Ctrl+1", Steps: []Step{{Action: "noop"}}},
+			{ID: "b", Hotkey: "Ctrl+2", Steps: []Step{{Action: "noop"}}, ConcurrencyPolicy: "queue-one"},
+		},
+	}
+	if err := Validate(cfg); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+
+	cfg.Hotkeys[1].ConcurrencyPolicy = "unexpected"
+	err := Validate(cfg)
+	if err == nil || !strings.Contains(err.Error(), "concurrencyPolicy") {
+		t.Fatalf("Validate() error = %v, want concurrencyPolicy failure", err)
+	}
+}

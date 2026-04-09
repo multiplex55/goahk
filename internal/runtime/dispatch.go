@@ -2,10 +2,12 @@ package runtime
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"goahk/internal/actions"
 	"goahk/internal/hotkey"
+	"goahk/internal/program"
 )
 
 type DispatchResult struct {
@@ -63,7 +65,12 @@ func DispatchHotkeyEventsWithHandle(
 ) DispatchHandle {
 	bindings := make(map[string]actions.ExecutableBinding, len(plans))
 	for id, plan := range plans {
-		bindings[id] = actions.ExecutableBinding{ID: id, Kind: actions.BindingKindPlan, Plan: plan}
+		bindings[id] = actions.ExecutableBinding{
+			ID:     id,
+			Kind:   actions.BindingKindPlan,
+			Plan:   plan,
+			Policy: actions.BindingExecutionPolicy{Concurrency: string(program.DefaultConcurrencyPolicy())},
+		}
 	}
 	return DispatchHotkeyEventsWithBindingsHandle(ctx, shutdown, events, bindings, control, executor, base, logSink, onControl)
 }
@@ -165,6 +172,14 @@ func dispatchActions(binding actions.ExecutableBinding) []string {
 	default:
 		return []string{string(binding.Kind)}
 	}
+}
+
+func bindingConcurrencyPolicy(binding actions.ExecutableBinding) string {
+	policy := strings.ToLower(strings.TrimSpace(binding.Policy.Concurrency))
+	if policy == "" {
+		return string(program.DefaultConcurrencyPolicy())
+	}
+	return policy
 }
 
 func extractExecutionError(res actions.ExecutionResult) string {
