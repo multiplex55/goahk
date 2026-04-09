@@ -126,6 +126,11 @@ func validateBindingActions(binding program.BindingSpec, registry *actions.Regis
 		return nil
 	}
 	for idx, step := range binding.Steps {
+		if strings.EqualFold(step.Action, actions.CallbackActionName) {
+			if _, ok := step.Params["callback_ref"]; ok {
+				continue
+			}
+		}
 		if _, ok := registry.Lookup(step.Action); ok {
 			continue
 		}

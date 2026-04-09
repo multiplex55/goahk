@@ -24,7 +24,7 @@ func TestRunCallback_ErrorBubblesWithBindingStepContext(t *testing.T) {
 	if len(res.Steps) != 2 {
 		t.Fatalf("steps len = %d, want 2", len(res.Steps))
 	}
-	if got, want := res.Steps[1].Action, callbackActionName(0, 1); got != want {
+	if got, want := res.Steps[1].Action, callbackActionPlaceholder; got != want {
 		t.Fatalf("failed action = %q, want %q", got, want)
 	}
 	if !strings.Contains(res.Steps[1].Error, boom.Error()) {

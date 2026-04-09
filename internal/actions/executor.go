@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -77,7 +78,7 @@ func (e *Executor) ExecuteFlow(ctx ActionContext, def flow.Definition, condition
 }
 
 func (e *Executor) executeActionStep(ctx ActionContext, step Step) error {
-	handler, ok := e.registry.Lookup(step.Name)
+	handler, ok := e.registry.resolve(step, ctx)
 	if !ok {
 		return fmt.Errorf("action not registered")
 	}
@@ -92,9 +93,23 @@ func (e *Executor) executeActionStep(ctx ActionContext, step Step) error {
 		baseCtx, cancel = context.WithTimeout(baseCtx, timeout)
 	}
 	stepCtx = stepCtx.withContext(baseCtx)
-	err := handler(stepCtx, step)
+	err := executeSafely(step.Name, func() error {
+		return handler(stepCtx, step)
+	})
 	cancel()
 	return err
+}
+
+func executeSafely(actionName string, run func() error) (err error) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			return
+		}
+		err = fmt.Errorf("callback/action panic: %w", fmt.Errorf("%s: %v", actionName, recovered))
+		err = fmt.Errorf("%w (stack: %s)", err, strings.TrimSpace(string(debug.Stack())))
+	}()
+	return run()
 }
 
 type flowActionResolver struct {

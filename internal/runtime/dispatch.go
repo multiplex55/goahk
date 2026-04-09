@@ -31,6 +31,11 @@ type DispatchLogEntry struct {
 
 type DispatchLogSink func(context.Context, DispatchLogEntry)
 
+type DispatchHandle struct {
+	Results           <-chan DispatchResult
+	ForceTerminateAll func()
+}
+
 func DispatchHotkeyEvents(
 	ctx context.Context,
 	shutdown <-chan struct{},
@@ -42,6 +47,20 @@ func DispatchHotkeyEvents(
 	logSink DispatchLogSink,
 	onControl func(runtimeControlEvent),
 ) <-chan DispatchResult {
+	return DispatchHotkeyEventsWithHandle(ctx, shutdown, events, plans, control, executor, base, logSink, onControl).Results
+}
+
+func DispatchHotkeyEventsWithHandle(
+	ctx context.Context,
+	shutdown <-chan struct{},
+	events <-chan hotkey.TriggerEvent,
+	plans map[string]actions.Plan,
+	control map[string]RuntimeControlCommand,
+	executor *actions.Executor,
+	base actions.ActionContext,
+	logSink DispatchLogSink,
+	onControl func(runtimeControlEvent),
+) DispatchHandle {
 	if logSink == nil {
 		logSink = func(context.Context, DispatchLogEntry) {}
 	}
@@ -79,27 +98,21 @@ func DispatchHotkeyEvents(
 	output := make(chan DispatchResult, 16)
 	go func() {
 		defer close(output)
-		for {
+		for envelope := range results {
+			logSink(ctx, DispatchLogEntry{Event: "dispatch_trigger_result", BindingID: envelope.BindingID, Actions: envelope.Actions, Duration: envelope.Duration, Timestamp: envelope.Timestamp, Error: envelope.Error})
+			if envelope.Error != "" {
+				logSink(ctx, DispatchLogEntry{Event: "dispatch_failure_detail", BindingID: envelope.BindingID, Error: envelope.Error, FailedAction: firstFailedAction(envelope.Execution), Timestamp: envelope.Timestamp})
+			}
 			select {
-			case envelope, ok := <-results:
-				if !ok {
-					return
-				}
-				logSink(ctx, DispatchLogEntry{Event: "dispatch_trigger_result", BindingID: envelope.BindingID, Actions: envelope.Actions, Duration: envelope.Duration, Timestamp: envelope.Timestamp, Error: envelope.Error})
-				if envelope.Error != "" {
-					logSink(ctx, DispatchLogEntry{Event: "dispatch_failure_detail", BindingID: envelope.BindingID, Error: envelope.Error, FailedAction: firstFailedAction(envelope.Execution), Timestamp: envelope.Timestamp})
-				}
-				select {
-				case output <- envelope:
-				case <-ctx.Done():
-					return
-				case <-shutdown:
-					return
-				}
+			case output <- envelope:
+			case <-time.After(25 * time.Millisecond):
 			}
 		}
 	}()
-	return output
+	return DispatchHandle{
+		Results:           output,
+		ForceTerminateAll: supervisor.ForceTerminateAll,
+	}
 }
 
 func buildDispatchResult(bindingID string, plan actions.Plan, res actions.ExecutionResult) DispatchResult {

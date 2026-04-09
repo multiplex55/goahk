@@ -67,6 +67,112 @@ type ActionContext struct {
 	stopNotified  *bool
 }
 
+type CallbackContext interface {
+	Context() context.Context
+	Done() <-chan struct{}
+	Err() error
+	IsCancelled() bool
+	Stopped() bool
+	Sleep(time.Duration) bool
+	StopRuntime(reason string)
+	BindingID() string
+	TriggerText() string
+	Window() Services
+	Input() input.Service
+	Clipboard() ClipboardService
+	Log() Logger
+	StateBag() map[string]string
+}
+
+type callbackContext struct {
+	actionCtx *ActionContext
+}
+
+func NewCallbackContext(actionCtx *ActionContext) CallbackContext {
+	return callbackContext{actionCtx: actionCtx}
+}
+
+func (c callbackContext) Context() context.Context {
+	if c.actionCtx == nil {
+		return context.Background()
+	}
+	return baseContext(c.actionCtx.Context)
+}
+
+func (c callbackContext) Done() <-chan struct{} { return c.Context().Done() }
+func (c callbackContext) Err() error            { return c.Context().Err() }
+func (c callbackContext) IsCancelled() bool     { return c.Err() != nil }
+func (c callbackContext) Stopped() bool {
+	return c.actionCtx != nil && c.actionCtx.isStopRequested()
+}
+
+func (c callbackContext) Sleep(d time.Duration) bool {
+	if d <= 0 {
+		return true
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-c.Done():
+		return false
+	}
+}
+
+func (c callbackContext) StopRuntime(reason string) {
+	if c.actionCtx == nil {
+		return
+	}
+	RequestRuntimeStop(c.actionCtx, reason)
+}
+
+func (c callbackContext) BindingID() string {
+	if c.actionCtx == nil {
+		return ""
+	}
+	return c.actionCtx.BindingID
+}
+func (c callbackContext) TriggerText() string {
+	if c.actionCtx == nil {
+		return ""
+	}
+	return c.actionCtx.TriggerText
+}
+func (c callbackContext) Window() Services {
+	if c.actionCtx == nil {
+		return Services{}
+	}
+	return c.actionCtx.Services
+}
+func (c callbackContext) Input() input.Service {
+	if c.actionCtx == nil {
+		return nil
+	}
+	return c.actionCtx.Services.Input
+}
+func (c callbackContext) Clipboard() ClipboardService {
+	if c.actionCtx == nil {
+		return nil
+	}
+	return c.actionCtx.Services.Clipboard
+}
+func (c callbackContext) Log() Logger {
+	if c.actionCtx == nil || c.actionCtx.Logger == nil {
+		return NoopLogger{}
+	}
+	return c.actionCtx.Logger
+}
+func (c callbackContext) StateBag() map[string]string {
+	if c.actionCtx == nil {
+		return map[string]string{}
+	}
+	if c.actionCtx.Metadata == nil {
+		c.actionCtx.Metadata = map[string]string{}
+	}
+	return c.actionCtx.Metadata
+}
+
 func (c ActionContext) withContext(ctx context.Context) ActionContext {
 	c.Context = ctx
 	if c.Logger == nil {
@@ -106,7 +212,14 @@ func RequestRuntimeStop(ctx *ActionContext, reason string) {
 	if ctx == nil {
 		return
 	}
-	first := ctx.requestStop()
+	if ctx.stopRequested == nil {
+		ctx.stopRequested = new(bool)
+	}
+	if ctx.stopNotified == nil {
+		ctx.stopNotified = new(bool)
+	}
+	first := !*ctx.stopRequested
+	*ctx.stopRequested = true
 	if !first || *ctx.stopNotified {
 		return
 	}

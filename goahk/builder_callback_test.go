@@ -16,8 +16,11 @@ func TestBuilderCallback_MixedPipelineOrderPreserved(t *testing.T) {
 	if got[0].Action != "system.log" {
 		t.Fatalf("step[0].Action = %q, want system.log", got[0].Action)
 	}
-	if got[1].Action != callbackActionName(0, 1) {
-		t.Fatalf("step[1].Action = %q, want %q", got[1].Action, callbackActionName(0, 1))
+	if got[1].Action != callbackActionPlaceholder {
+		t.Fatalf("step[1].Action = %q, want %q", got[1].Action, callbackActionPlaceholder)
+	}
+	if got[1].Params["callback_ref"] != callbackActionRef(0, 1) {
+		t.Fatalf("step[1].Params[callback_ref] = %v, want %q", got[1].Params["callback_ref"], callbackActionRef(0, 1))
 	}
 	if got[2].Action != "system.log" {
 		t.Fatalf("step[2].Action = %q, want system.log", got[2].Action)

@@ -37,8 +37,11 @@ func TestCallbackComposition_DeclarativeAndCallbackOrderingAndSharedContext(t *t
 	if got, want := steps[0].Action, "system.log"; got != want {
 		t.Fatalf("step[0] action = %q, want %q", got, want)
 	}
-	if got, want := steps[1].Action, callbackActionName(0, 1); got != want {
+	if got, want := steps[1].Action, callbackActionPlaceholder; got != want {
 		t.Fatalf("step[1] action = %q, want %q", got, want)
+	}
+	if got, want := steps[1].Params["callback_ref"], callbackActionRef(0, 1); got != want {
+		t.Fatalf("step[1] callback_ref = %v, want %q", got, want)
 	}
 	if got, want := steps[2].Action, "system.log"; got != want {
 		t.Fatalf("step[2] action = %q, want %q", got, want)

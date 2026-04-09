@@ -120,3 +120,29 @@ func TestExecutor_RuntimeStopStopsAfterCurrentStepAndSkipsRemaining(t *testing.T
 		t.Fatalf("unexpected statuses: %#v", res.Steps)
 	}
 }
+
+func TestExecutor_CallbackPanicContainedAndReported(t *testing.T) {
+	r := NewRegistry()
+	r.MustRegisterCallback("panic_ref", func(CallbackContext) error {
+		panic("kaboom")
+	})
+	ex := NewExecutor(r)
+	res := ex.Execute(ActionContext{Context: context.Background(), BindingID: "binding_1"}, Plan{
+		{Name: CallbackActionName, Params: map[string]string{"callback_ref": "panic_ref"}},
+	})
+	if res.Success {
+		t.Fatalf("execution should fail: %#v", res)
+	}
+	if len(res.Steps) != 1 {
+		t.Fatalf("steps=%d want 1", len(res.Steps))
+	}
+	if res.Steps[0].Status != StepStatusFailed {
+		t.Fatalf("status=%q want %q", res.Steps[0].Status, StepStatusFailed)
+	}
+	if !strings.Contains(res.Steps[0].Error, "panic") || !strings.Contains(res.Steps[0].Error, "kaboom") {
+		t.Fatalf("error=%q", res.Steps[0].Error)
+	}
+	if len(res.Steps[0].ErrorChain) == 0 {
+		t.Fatalf("error chain should be populated")
+	}
+}

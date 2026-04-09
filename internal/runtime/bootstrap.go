@@ -35,13 +35,14 @@ type ListenerFactory func(context.Context) (Listener, error)
 type ResultRecorder func(context.Context, string, actions.ExecutionResult)
 
 type Bootstrap struct {
-	LoadProgram   ProgramLoader
-	BuildRegistry RegistryBuilder
-	NewListener   ListenerFactory
-	RecordResult  ResultRecorder
-	LogDispatch   DispatchLogSink
-	BaseActionCtx actions.ActionContext
-	StopGrace     time.Duration
+	LoadProgram        ProgramLoader
+	BuildRegistry      RegistryBuilder
+	NewListener        ListenerFactory
+	RecordResult       ResultRecorder
+	LogDispatch        DispatchLogSink
+	BaseActionCtx      actions.ActionContext
+	StopGrace          time.Duration
+	HardStopAfterGrace bool
 }
 
 func NewBootstrap() Bootstrap {
@@ -84,7 +85,8 @@ func NewBootstrap() Bootstrap {
 			FolderList:   folderSvc.ListOpenFolders,
 			Input:        input.NewService(),
 		}},
-		StopGrace: 300 * time.Millisecond,
+		StopGrace:          300 * time.Millisecond,
+		HardStopAfterGrace: false,
 	}
 }
 
@@ -180,7 +182,7 @@ func (b Bootstrap) RunProgram(ctx context.Context, p program.Program) error {
 
 	executor := actions.NewExecutor(registry)
 	var hardStop atomic.Bool
-	results := DispatchHotkeyEvents(runCtx, runCtx.Done(), manager.Events(), plansByBindingID, controlByBindingID, executor, baseActionCtx, b.LogDispatch, func(ev runtimeControlEvent) {
+	dispatch := DispatchHotkeyEventsWithHandle(runCtx, runCtx.Done(), manager.Events(), plansByBindingID, controlByBindingID, executor, baseActionCtx, b.LogDispatch, func(ev runtimeControlEvent) {
 		switch ev.Command {
 		case RuntimeControlHardStop:
 			hardStop.Store(true)
@@ -192,7 +194,7 @@ func (b Bootstrap) RunProgram(ctx context.Context, p program.Program) error {
 	dispatchDone := make(chan struct{})
 	go func() {
 		defer close(dispatchDone)
-		for result := range results {
+		for result := range dispatch.Results {
 			b.RecordResult(runCtx, result.BindingID, result.Execution)
 		}
 	}()
@@ -207,6 +209,9 @@ func (b Bootstrap) RunProgram(ctx context.Context, p program.Program) error {
 	case <-dispatchDone:
 	case <-time.After(grace):
 		b.LogDispatch(ctx, DispatchLogEntry{Event: "shutdown_grace_timeout", Timestamp: time.Now().UTC()})
+		if b.HardStopAfterGrace {
+			dispatch.ForceTerminateAll()
+		}
 	}
 	if hardStop.Load() {
 		b.LogDispatch(ctx, DispatchLogEntry{Event: "job_forced_termination", Timestamp: time.Now().UTC()})
