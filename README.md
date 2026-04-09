@@ -146,3 +146,4 @@ Thread-safety guidance:
 - Architecture: [`docs/architecture.md`](docs/architecture.md)
 - Build/test guide: [`docs/BUILD.md`](docs/BUILD.md)
 - Testing strategy: [`docs/testing.md`](docs/testing.md)
+- Release artifact strategy: [`docs/release-artifacts.md`](docs/release-artifacts.md)

@@ -6,12 +6,19 @@ if command -v cmd.exe >/dev/null 2>&1; then
   exec cmd.exe /c build\\check-no-source-binaries.bat
 fi
 
-tracked_exes="$(git ls-files '*.exe')"
-if [[ -z "${tracked_exes}" ]]; then
-  echo "ok: no tracked .exe artifacts"
+tracked_binaries="$(
+  git ls-files \
+    '*.exe' \
+    '*.dll' \
+    '*.so' \
+    '*.dylib'
+)"
+
+if [[ -z "${tracked_binaries}" ]]; then
+  echo "ok: no tracked binary artifacts (.exe/.dll/.so/.dylib)"
   exit 0
 fi
 
-echo "error: tracked .exe artifacts are not allowed:" >&2
-echo "${tracked_exes}" >&2
+echo "error: tracked binary artifacts are not allowed (.exe/.dll/.so/.dylib):" >&2
+echo "${tracked_binaries}" >&2
 exit 1

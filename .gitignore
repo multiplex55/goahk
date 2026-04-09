@@ -7,6 +7,9 @@
 *.dll
 *.so
 *.dylib
+*.pdb
+*.ilk
+*.lib
 
 # Common build output directories
 /dist/
@@ -22,6 +25,12 @@
 coverage.*
 *.coverprofile
 profile.cov
+
+# Temporary build outputs for local cmd/examples iteration
+/cmd/*/tmp/
+/cmd/*/*.tmp
+/examples/*/tmp/
+/examples/*/*.tmp
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
