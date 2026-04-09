@@ -65,6 +65,15 @@ func (f *fakeListener) Emit(registrationID int) {
 	f.events <- hotkey.ListenerEvent{RegistrationID: registrationID, TriggeredAt: time.Now().UTC()}
 }
 
+func mustProgram(t *testing.T, cfg config.Config) program.Program {
+	t.Helper()
+	p, err := config.ToProgram(cfg)
+	if err != nil {
+		t.Fatalf("ToProgram() error = %v", err)
+	}
+	return p
+}
+
 func TestBootstrap_RegistersCompiledBindings(t *testing.T) {
 	listener := newFakeListener()
 	listener.runFn = func(context.Context) error { return nil }
@@ -74,7 +83,7 @@ func TestBootstrap_RegistersCompiledBindings(t *testing.T) {
 	}}
 
 	b := NewBootstrap()
-	b.LoadConfig = func(context.Context, string) (config.Config, error) { return cfg, nil }
+	b.LoadProgram = func(context.Context, string) (program.Program, error) { return mustProgram(t, cfg), nil }
 	b.NewListener = func(context.Context) (Listener, error) { return listener, nil }
 
 	if err := b.Run(context.Background(), "ignored"); err != nil {
@@ -100,7 +109,7 @@ func TestBootstrap_DispatchExecutesCorrectBindingPlan(t *testing.T) {
 	resultCh := make(chan string, 1)
 
 	b := NewBootstrap()
-	b.LoadConfig = func(context.Context, string) (config.Config, error) { return cfg, nil }
+	b.LoadProgram = func(context.Context, string) (program.Program, error) { return mustProgram(t, cfg), nil }
 	b.BuildRegistry = func(context.Context, program.Program) (*actions.Registry, error) {
 		reg := actions.NewRegistry()
 		_ = reg.Register("test.one", func(actions.ActionContext, actions.Step) error { return nil })
@@ -145,7 +154,7 @@ func TestBootstrap_ShutdownCancellationStopsCleanly(t *testing.T) {
 	listener := newFakeListener()
 	cfg := config.Config{Hotkeys: []config.HotkeyBinding{{ID: "one", Hotkey: "ctrl+1", Steps: []config.Step{{Action: "system.log"}}}}}
 	b := NewBootstrap()
-	b.LoadConfig = func(context.Context, string) (config.Config, error) { return cfg, nil }
+	b.LoadProgram = func(context.Context, string) (program.Program, error) { return mustProgram(t, cfg), nil }
 	b.NewListener = func(context.Context) (Listener, error) { return listener, nil }
 	listener.runFn = func(ctx context.Context) error {
 		<-ctx.Done()
@@ -173,7 +182,7 @@ func TestBootstrap_FailsFastOnUnknownAction(t *testing.T) {
 	calledListener := false
 	calledBuildRegistry := false
 	b := NewBootstrap()
-	b.LoadConfig = func(context.Context, string) (config.Config, error) { return cfg, nil }
+	b.LoadProgram = func(context.Context, string) (program.Program, error) { return mustProgram(t, cfg), nil }
 	b.BuildRegistry = func(context.Context, program.Program) (*actions.Registry, error) {
 		calledBuildRegistry = true
 		return actions.NewRegistry(), nil
@@ -207,7 +216,7 @@ func TestBootstrap_EscBindingWithRuntimeStopExits(t *testing.T) {
 		{ID: "quit", Hotkey: "ctrl+esc", Steps: []config.Step{{Action: "runtime.stop"}}},
 	}}
 	b := NewBootstrap()
-	b.LoadConfig = func(context.Context, string) (config.Config, error) { return cfg, nil }
+	b.LoadProgram = func(context.Context, string) (program.Program, error) { return mustProgram(t, cfg), nil }
 	b.NewListener = func(context.Context) (Listener, error) { return listener, nil }
 	listener.runFn = func(ctx context.Context) error {
 		go func() {
@@ -268,7 +277,7 @@ func TestBootstrap_WiredWindowAndInputActionsDoNotFailMissingService(t *testing.
 
 			resultCh := make(chan actions.ExecutionResult, 1)
 			b := NewBootstrap()
-			b.LoadConfig = func(context.Context, string) (config.Config, error) { return cfg, nil }
+			b.LoadProgram = func(context.Context, string) (program.Program, error) { return mustProgram(t, cfg), nil }
 			b.NewListener = func(context.Context) (Listener, error) { return listener, nil }
 			b.RecordResult = func(_ context.Context, _ string, res actions.ExecutionResult) {
 				select {

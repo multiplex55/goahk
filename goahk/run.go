@@ -20,7 +20,7 @@ type callbackRegistration struct {
 }
 
 func (a *App) Run(ctx context.Context) error {
-	p, cfg, callbacks := a.runtimeArtifacts()
+	p, _, callbacks := a.runtimeArtifacts()
 
 	var registry *actions.Registry
 	if a.validateActions || len(callbacks) > 0 {
@@ -36,8 +36,8 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	bootstrap := runtime.NewBootstrap()
-	bootstrap.LoadConfig = func(context.Context, string) (config.Config, error) {
-		return cfg, nil
+	bootstrap.LoadProgram = func(context.Context, string) (program.Program, error) {
+		return p, nil
 	}
 	bootstrap.BuildRegistry = func(context.Context, program.Program) (*actions.Registry, error) {
 		return buildRegistryWithCallbacks(a.state, callbacks), nil
