@@ -36,23 +36,27 @@ func DispatchHotkeyEvents(
 	shutdown <-chan struct{},
 	events <-chan hotkey.TriggerEvent,
 	plans map[string]actions.Plan,
+	control map[string]RuntimeControlCommand,
 	executor *actions.Executor,
 	base actions.ActionContext,
 	logSink DispatchLogSink,
+	onControl func(runtimeControlEvent),
 ) <-chan DispatchResult {
-	results := make(chan DispatchResult, 16)
 	if logSink == nil {
 		logSink = func(context.Context, DispatchLogEntry) {}
 	}
+	supervisor := NewSupervisor(ctx, executor, base, logSink, onControl)
+	supervisor.Start(4)
+	results := supervisor.Results()
 
 	go func() {
-		defer close(results)
 		logSink(ctx, DispatchLogEntry{Event: "dispatch_startup", KnownCount: len(plans), Timestamp: time.Now().UTC()})
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-shutdown:
+				supervisor.CloseWhenIdle(250 * time.Millisecond)
 				return
 			case ev, ok := <-events:
 				if !ok {
@@ -63,31 +67,39 @@ func DispatchHotkeyEvents(
 					logSink(ctx, DispatchLogEntry{Event: "dispatch_unknown_binding", BindingID: ev.BindingID, Error: "binding plan not found", Timestamp: time.Now().UTC()})
 					continue
 				}
-				actionCtx := base
-				actionCtx.Context = ctx
-				actionCtx.BindingID = ev.BindingID
-				actionCtx.TriggerText = ev.Chord.String()
-				execResult := executor.Execute(actionCtx, plan)
-				envelope := buildDispatchResult(ev.BindingID, plan, execResult)
+				if cmd, isControl := control[ev.BindingID]; isControl {
+					supervisor.SubmitControl(runtimeControlEvent{BindingID: ev.BindingID, Command: cmd, Triggered: ev, Received: time.Now().UTC()})
+					continue
+				}
+				supervisor.SubmitWork(supervisorJob{bindingID: ev.BindingID, trigger: ev, plan: plan})
+			}
+		}
+	}()
+
+	output := make(chan DispatchResult, 16)
+	go func() {
+		defer close(output)
+		for {
+			select {
+			case envelope, ok := <-results:
+				if !ok {
+					return
+				}
 				logSink(ctx, DispatchLogEntry{Event: "dispatch_trigger_result", BindingID: envelope.BindingID, Actions: envelope.Actions, Duration: envelope.Duration, Timestamp: envelope.Timestamp, Error: envelope.Error})
 				if envelope.Error != "" {
-					logSink(ctx, DispatchLogEntry{Event: "dispatch_failure_detail", BindingID: envelope.BindingID, Error: envelope.Error, FailedAction: firstFailedAction(execResult), Timestamp: envelope.Timestamp})
+					logSink(ctx, DispatchLogEntry{Event: "dispatch_failure_detail", BindingID: envelope.BindingID, Error: envelope.Error, FailedAction: firstFailedAction(envelope.Execution), Timestamp: envelope.Timestamp})
 				}
 				select {
-				case results <- envelope:
-				default:
-					select {
-					case results <- envelope:
-					case <-ctx.Done():
-						return
-					case <-shutdown:
-						return
-					}
+				case output <- envelope:
+				case <-ctx.Done():
+					return
+				case <-shutdown:
+					return
 				}
 			}
 		}
 	}()
-	return results
+	return output
 }
 
 func buildDispatchResult(bindingID string, plan actions.Plan, res actions.ExecutionResult) DispatchResult {

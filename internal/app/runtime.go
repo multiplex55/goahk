@@ -33,10 +33,11 @@ func NewRuntime(deps RuntimeDeps) *Runtime {
 }
 
 type RuntimeBinding struct {
-	ID    string
-	Chord hotkey.Chord
-	Plan  actions.Plan
-	Flow  *flow.Definition
+	ID             string
+	Chord          hotkey.Chord
+	Plan           actions.Plan
+	Flow           *flow.Definition
+	ControlCommand string
 }
 
 func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]RuntimeBinding, error) {
@@ -77,6 +78,12 @@ func CompileRuntimeBindingsFromProgram(p program.Program, registry *actions.Regi
 	compiled := make([]RuntimeBinding, 0, len(p.Bindings))
 	for i, b := range p.Bindings {
 		rb := RuntimeBinding{ID: b.ID, Chord: parsed[i].Chord}
+		switch {
+		case strings.EqualFold(parsed[i].Chord.Key, "escape") && parsed[i].Chord.Modifiers == 0:
+			rb.ControlCommand = "stop"
+		case strings.EqualFold(parsed[i].Chord.Key, "escape") && parsed[i].Chord.Modifiers == hotkey.ModShift:
+			rb.ControlCommand = "hard_stop"
+		}
 		if ref := strings.ToLower(strings.TrimSpace(b.Flow)); ref != "" {
 			f, ok := flowsByID[ref]
 			if !ok {
