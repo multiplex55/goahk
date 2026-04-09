@@ -9,10 +9,10 @@ import (
 
 func main() {
 	app := goahk.NewApp()
-	// snippet:start:basic-script-main
-	app.Bind("Ctrl+Alt+B", goahk.SendText("basic script trigger"))
-	// snippet:end:basic-script-main
+	// snippet:start:messagebox-and-exit-main
+	app.Bind("F1", goahk.MessageBox("goahk", "Hello from messagebox-and-exit"))
 	app.Bind("Escape", goahk.Stop())
+	// snippet:end:messagebox-and-exit-main
 
 	if err := app.Run(context.Background()); err != nil {
 		log.Fatal(err)

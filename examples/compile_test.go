@@ -8,39 +8,42 @@ import (
 	"testing"
 )
 
-func TestBasicScriptExampleBuilds(t *testing.T) {
-	t.Parallel()
-	buildPackage(t, "./basic-script")
+var primaryExamples = []string{
+	"./basic-script",
+	"./messagebox-and-exit",
+	"./clipboard-helper",
+	"./window-aware-script",
 }
 
-func TestStandaloneScriptExampleBuilds(t *testing.T) {
+func TestPrimaryExamplesBuild(t *testing.T) {
 	t.Parallel()
-	buildPackage(t, "./standalone-script")
+	for _, pkg := range primaryExamples {
+		pkg := pkg
+		t.Run(strings.TrimPrefix(pkg, "./"), func(t *testing.T) {
+			t.Parallel()
+			buildPackage(t, pkg)
+		})
+	}
 }
 
-func TestListOpenAppsExampleBuilds(t *testing.T) {
+func TestAdditionalExamplesBuild(t *testing.T) {
 	t.Parallel()
-	buildPackage(t, "./list-open-apps")
-}
+	additional := []string{
+		"./standalone-script",
+		"./list-open-apps",
+		"./custom-callback",
+		"./clipboard-transform-paste",
+		"./mixed-actions",
+		"./window-move",
+	}
 
-func TestCustomCallbackExampleBuilds(t *testing.T) {
-	t.Parallel()
-	buildPackage(t, "./custom-callback")
-}
-
-func TestClipboardTransformPasteExampleBuilds(t *testing.T) {
-	t.Parallel()
-	buildPackage(t, "./clipboard-transform-paste")
-}
-
-func TestWindowAwareScriptExampleBuilds(t *testing.T) {
-	t.Parallel()
-	buildPackage(t, "./window-aware-script")
-}
-
-func TestMixedActionsExampleBuilds(t *testing.T) {
-	t.Parallel()
-	buildPackage(t, "./mixed-actions")
+	for _, pkg := range additional {
+		pkg := pkg
+		t.Run(strings.TrimPrefix(pkg, "./"), func(t *testing.T) {
+			t.Parallel()
+			buildPackage(t, pkg)
+		})
+	}
 }
 
 func TestWindowsTargetedCompilationRegressions(t *testing.T) {
@@ -51,6 +54,9 @@ func TestWindowsTargetedCompilationRegressions(t *testing.T) {
 		pkg  string
 	}{
 		{name: "example/basic-script", pkg: "./basic-script"},
+		{name: "example/messagebox-and-exit", pkg: "./messagebox-and-exit"},
+		{name: "example/clipboard-helper", pkg: "./clipboard-helper"},
+		{name: "example/window-aware-script", pkg: "./window-aware-script"},
 		{name: "goahk/goahk", pkg: "../goahk"},
 		{name: "internal/clipboard", pkg: "../internal/clipboard"},
 		{name: "internal/services/messagebox", pkg: "../internal/services/messagebox"},
