@@ -11,12 +11,49 @@ import (
 	"goahk/internal/flow"
 )
 
+type BindingKind string
+
+const (
+	BindingKindPlan     BindingKind = "plan"
+	BindingKindFlow     BindingKind = "flow"
+	BindingKindCallback BindingKind = "callback"
+)
+
+type BindingExecutionPolicy struct {
+	Conditions  flow.ConditionEvaluator
+	CallbackRef string
+}
+
+type ExecutableBinding struct {
+	ID     string
+	Kind   BindingKind
+	Plan   Plan
+	Flow   *flow.Definition
+	Policy BindingExecutionPolicy
+}
+
 type Executor struct {
 	registry *Registry
 }
 
 func NewExecutor(registry *Registry) *Executor {
 	return &Executor{registry: registry}
+}
+
+func (e *Executor) ExecuteBinding(ctx ActionContext, binding ExecutableBinding) ExecutionResult {
+	switch binding.Kind {
+	case BindingKindPlan:
+		return e.Execute(ctx, binding.Plan)
+	case BindingKindFlow:
+		if binding.Flow == nil {
+			return failedBindingExecutionResult("flow", "binding flow definition is missing")
+		}
+		return e.ExecuteFlow(ctx, *binding.Flow, binding.Policy.Conditions)
+	case BindingKindCallback:
+		return e.executeCallbackBinding(ctx, binding)
+	default:
+		return failedBindingExecutionResult(string(binding.Kind), fmt.Sprintf("invalid binding kind %q", binding.Kind))
+	}
 }
 
 func (e *Executor) Execute(ctx ActionContext, plan Plan) ExecutionResult {
@@ -75,6 +112,70 @@ func (e *Executor) ExecuteFlow(ctx ActionContext, def flow.Definition, condition
 		out.Steps = append(out.Steps, convertTrace(tr))
 	}
 	return out
+}
+
+func (e *Executor) executeCallbackBinding(ctx ActionContext, binding ExecutableBinding) ExecutionResult {
+	ctx = ctx.withContext(baseContext(ctx.Context))
+	started := time.Now().UTC()
+	result := ExecutionResult{StartedAt: started, Success: true, Steps: make([]StepResult, 0, 1)}
+
+	if ctx.isStopRequested() {
+		now := time.Now().UTC()
+		result.Success = true
+		result.Steps = append(result.Steps, StepResult{Action: CallbackActionName, Kind: "callback", Status: StepStatusSkipped, StartedAt: now, EndedAt: now})
+		result.EndedAt = now
+		result.Duration = now.Sub(result.StartedAt)
+		return result
+	}
+
+	stepStarted := time.Now().UTC()
+	stepResult := StepResult{Action: CallbackActionName, Kind: "callback", StartedAt: stepStarted}
+	cb, ok := e.registry.ResolveBindingCallback(ctx.BindingID, binding.Policy.CallbackRef)
+	if !ok {
+		err := fmt.Errorf("callback handler not registered")
+		stepResult.Status = StepStatusFailed
+		stepResult.Error = err.Error()
+		stepResult.ErrorChain = []string{err.Error()}
+		result.Success = false
+	} else {
+		err := executeSafely(CallbackActionName, func() error {
+			return cb(NewCallbackContext(&ctx))
+		})
+		if err != nil {
+			stepResult.Status = StepStatusFailed
+			stepResult.Error = err.Error()
+			stepResult.ErrorChain = unwrapErrors(err)
+			result.Success = false
+		} else {
+			stepResult.Status = StepStatusSuccess
+		}
+	}
+	stepResult.EndedAt = time.Now().UTC()
+	stepResult.Duration = stepResult.EndedAt.Sub(stepResult.StartedAt)
+	result.Steps = append(result.Steps, stepResult)
+	result.EndedAt = time.Now().UTC()
+	result.Duration = result.EndedAt.Sub(result.StartedAt)
+	return result
+}
+
+func failedBindingExecutionResult(kind, msg string) ExecutionResult {
+	now := time.Now().UTC()
+	return ExecutionResult{
+		StartedAt: now,
+		EndedAt:   now,
+		Duration:  0,
+		Success:   false,
+		Steps: []StepResult{{
+			Action:     "binding",
+			Kind:       kind,
+			Status:     StepStatusFailed,
+			StartedAt:  now,
+			EndedAt:    now,
+			Duration:   0,
+			Error:      msg,
+			ErrorChain: []string{msg},
+		}},
+	}
 }
 
 func (e *Executor) executeActionStep(ctx ActionContext, step Step) error {

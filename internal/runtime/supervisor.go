@@ -42,11 +42,11 @@ type activeJob struct {
 type supervisorJob struct {
 	bindingID string
 	trigger   hotkey.TriggerEvent
-	plan      actions.Plan
 }
 
 type Supervisor struct {
 	ctx      context.Context
+	bindings map[string]actions.ExecutableBinding
 	executor *actions.Executor
 	base     actions.ActionContext
 	logSink  DispatchLogSink
@@ -65,12 +65,16 @@ type Supervisor struct {
 	closed            atomic.Bool
 }
 
-func NewSupervisor(ctx context.Context, executor *actions.Executor, base actions.ActionContext, logSink DispatchLogSink, onControl func(runtimeControlEvent)) *Supervisor {
+func NewSupervisor(ctx context.Context, bindings map[string]actions.ExecutableBinding, executor *actions.Executor, base actions.ActionContext, logSink DispatchLogSink, onControl func(runtimeControlEvent)) *Supervisor {
 	if logSink == nil {
 		logSink = func(context.Context, DispatchLogEntry) {}
 	}
+	if bindings == nil {
+		bindings = map[string]actions.ExecutableBinding{}
+	}
 	return &Supervisor{
 		ctx:       ctx,
+		bindings:  bindings,
 		executor:  executor,
 		base:      base,
 		logSink:   logSink,
@@ -225,9 +229,23 @@ func (s *Supervisor) runJob(job supervisorJob) {
 	actionCtx.BindingID = job.bindingID
 	actionCtx.TriggerText = job.trigger.Chord.String()
 
-	execResult := s.executor.Execute(actionCtx, job.plan)
-	envelope := buildDispatchResult(job.bindingID, job.plan, execResult)
+	binding, exists := s.bindings[job.bindingID]
+	if !exists {
+		s.logSink(s.ctx, DispatchLogEntry{Event: "dispatch_unknown_binding", BindingID: job.bindingID, Error: "binding descriptor not found", Timestamp: time.Now().UTC()})
+		s.completeJob(key, cancel, jobCtx, job.bindingID, buildDispatchResult(job.bindingID, actions.ExecutableBinding{ID: job.bindingID, Kind: actions.BindingKindPlan}, missingBindingExecutionResult(job.bindingID)))
+		return
+	}
+	if err := validateExecutableBinding(binding); err != nil {
+		s.completeJob(key, cancel, jobCtx, job.bindingID, buildDispatchResult(job.bindingID, binding, invalidBindingExecutionResult(err)))
+		return
+	}
 
+	execResult := s.executor.ExecuteBinding(actionCtx, binding)
+	envelope := buildDispatchResult(job.bindingID, binding, execResult)
+	s.completeJob(key, cancel, jobCtx, job.bindingID, envelope)
+}
+
+func (s *Supervisor) completeJob(key string, cancel context.CancelFunc, jobCtx context.Context, bindingID string, envelope DispatchResult) {
 	if !s.closed.Load() {
 		select {
 		case s.resultsCh <- envelope:
@@ -244,11 +262,21 @@ func (s *Supervisor) runJob(job supervisorJob) {
 	s.mu.Unlock()
 	cancel()
 	if jobCtx.Err() != nil {
-		s.logSink(s.ctx, DispatchLogEntry{Event: "job_canceled", BindingID: job.bindingID, Timestamp: time.Now().UTC()})
+		s.logSink(s.ctx, DispatchLogEntry{Event: "job_canceled", BindingID: bindingID, Timestamp: time.Now().UTC()})
 	}
 	if s.ctx.Err() != nil && remaining == 0 {
 		s.closeResults()
 	}
+}
+
+func missingBindingExecutionResult(bindingID string) actions.ExecutionResult {
+	msg := fmt.Sprintf("binding descriptor not found for %q", bindingID)
+	return actions.ExecutionResult{StartedAt: time.Now().UTC(), EndedAt: time.Now().UTC(), Success: false, Steps: []actions.StepResult{{Action: "binding", Kind: "binding", Status: actions.StepStatusFailed, Error: msg, ErrorChain: []string{msg}, StartedAt: time.Now().UTC(), EndedAt: time.Now().UTC()}}}
+}
+
+func invalidBindingExecutionResult(err error) actions.ExecutionResult {
+	now := time.Now().UTC()
+	return actions.ExecutionResult{StartedAt: now, EndedAt: now, Success: false, Steps: []actions.StepResult{{Action: "binding", Kind: "binding", Status: actions.StepStatusFailed, Error: err.Error(), ErrorChain: []string{err.Error()}, StartedAt: now, EndedAt: now}}}
 }
 
 func (s *Supervisor) activeCount() int {

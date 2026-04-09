@@ -24,14 +24,18 @@ func TestSupervisor_ControlCommandsBypassWorkerBacklog(t *testing.T) {
 	defer cancel()
 
 	var controls atomic.Int32
-	s := NewSupervisor(ctx, exec, actions.ActionContext{}, nil, func(ev runtimeControlEvent) {
+	bindings := map[string]actions.ExecutableBinding{
+		"job1": {ID: "job1", Kind: actions.BindingKindPlan, Plan: actions.Plan{{Name: "test.block"}}},
+		"job2": {ID: "job2", Kind: actions.BindingKindPlan, Plan: actions.Plan{{Name: "test.block"}}},
+	}
+	s := NewSupervisor(ctx, bindings, exec, actions.ActionContext{}, nil, func(ev runtimeControlEvent) {
 		if ev.Command == RuntimeControlStop {
 			controls.Add(1)
 		}
 	})
 	s.Start(1)
-	s.SubmitWork(supervisorJob{bindingID: "job1", trigger: hotkey.TriggerEvent{BindingID: "job1"}, plan: actions.Plan{{Name: "test.block"}}})
-	s.SubmitWork(supervisorJob{bindingID: "job2", trigger: hotkey.TriggerEvent{BindingID: "job2"}, plan: actions.Plan{{Name: "test.block"}}})
+	s.SubmitWork(supervisorJob{bindingID: "job1", trigger: hotkey.TriggerEvent{BindingID: "job1"}})
+	s.SubmitWork(supervisorJob{bindingID: "job2", trigger: hotkey.TriggerEvent{BindingID: "job2"}})
 
 	s.SubmitControl(runtimeControlEvent{BindingID: "quit", Command: RuntimeControlStop, Received: time.Now().UTC()})
 	deadline := time.After(200 * time.Millisecond)

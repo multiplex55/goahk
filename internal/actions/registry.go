@@ -97,6 +97,18 @@ func (r *Registry) BindCallback(bindingID string, callback CallbackHandler) erro
 	return nil
 }
 
+func (r *Registry) ResolveBindingCallback(bindingID, ref string) (CallbackHandler, bool) {
+	if named := strings.TrimSpace(ref); named != "" {
+		if cb, ok := r.callbacks[named]; ok {
+			return cb, true
+		}
+	}
+	if cb, ok := r.bindingCallbacks[strings.TrimSpace(bindingID)]; ok {
+		return cb, true
+	}
+	return nil, false
+}
+
 func (r *Registry) resolve(step Step, ctx ActionContext) (Handler, bool) {
 	if handler, ok := r.Lookup(step.Name); ok {
 		return handler, true
@@ -104,12 +116,7 @@ func (r *Registry) resolve(step Step, ctx ActionContext) (Handler, bool) {
 	if !strings.EqualFold(step.Name, CallbackActionName) {
 		return nil, false
 	}
-	if ref := strings.TrimSpace(step.Params["callback_ref"]); ref != "" {
-		if cb, ok := r.callbacks[ref]; ok {
-			return adaptCallbackHandler(cb), true
-		}
-	}
-	if cb, ok := r.bindingCallbacks[strings.TrimSpace(ctx.BindingID)]; ok {
+	if cb, ok := r.ResolveBindingCallback(ctx.BindingID, step.Params["callback_ref"]); ok {
 		return adaptCallbackHandler(cb), true
 	}
 	return nil, false
