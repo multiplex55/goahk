@@ -202,6 +202,72 @@ func (r *Registry) registerBuiltins() {
 		}
 		return ctx.Services.WindowActivate(ctx.Context, step.Params["matcher"])
 	})
+	r.MustRegister("window.move", func(ctx ActionContext, step Step) error {
+		if ctx.Services.WindowMove == nil {
+			return missingServiceError(step, "window")
+		}
+		target, err := resolveWindowForMatcher(ctx, step)
+		if err != nil {
+			return err
+		}
+		x, err := parseInt(step.Params, "x")
+		if err != nil {
+			return err
+		}
+		y, err := parseInt(step.Params, "y")
+		if err != nil {
+			return err
+		}
+		return ctx.Services.WindowMove(ctx.Context, target.HWND, x, y)
+	})
+	r.MustRegister("window.resize", func(ctx ActionContext, step Step) error {
+		if ctx.Services.WindowResize == nil {
+			return missingServiceError(step, "window")
+		}
+		target, err := resolveWindowForMatcher(ctx, step)
+		if err != nil {
+			return err
+		}
+		width, err := parseInt(step.Params, "width")
+		if err != nil {
+			return err
+		}
+		height, err := parseInt(step.Params, "height")
+		if err != nil {
+			return err
+		}
+		return ctx.Services.WindowResize(ctx.Context, target.HWND, width, height)
+	})
+	r.MustRegister("window.minimize", func(ctx ActionContext, step Step) error {
+		if ctx.Services.WindowMinimize == nil {
+			return missingServiceError(step, "window")
+		}
+		target, err := resolveWindowForMatcher(ctx, step)
+		if err != nil {
+			return err
+		}
+		return ctx.Services.WindowMinimize(ctx.Context, target.HWND)
+	})
+	r.MustRegister("window.maximize", func(ctx ActionContext, step Step) error {
+		if ctx.Services.WindowMaximize == nil {
+			return missingServiceError(step, "window")
+		}
+		target, err := resolveWindowForMatcher(ctx, step)
+		if err != nil {
+			return err
+		}
+		return ctx.Services.WindowMaximize(ctx.Context, target.HWND)
+	})
+	r.MustRegister("window.restore", func(ctx ActionContext, step Step) error {
+		if ctx.Services.WindowRestore == nil {
+			return missingServiceError(step, "window")
+		}
+		target, err := resolveWindowForMatcher(ctx, step)
+		if err != nil {
+			return err
+		}
+		return ctx.Services.WindowRestore(ctx.Context, target.HWND)
+	})
 
 	r.MustRegister("window.copy_active_title_to_clipboard", func(ctx ActionContext, step Step) error {
 		if ctx.Services.ActiveWindowTitle == nil {
@@ -280,6 +346,109 @@ func (r *Registry) registerBuiltins() {
 			return fmt.Errorf("input.send_chord expects a single token")
 		}
 		return ctx.Services.Input.SendChord(ctx.Context, input.Chord{Keys: tokens[0].Keys}, opts)
+	})
+	r.MustRegister("input.mouse_move_absolute", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Input == nil {
+			return missingServiceError(step, "input")
+		}
+		x, err := parseInt(step.Params, "x")
+		if err != nil {
+			return err
+		}
+		y, err := parseInt(step.Params, "y")
+		if err != nil {
+			return err
+		}
+		return ctx.Services.Input.MoveAbsolute(ctx.Context, x, y)
+	})
+	r.MustRegister("input.mouse_move_relative", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Input == nil {
+			return missingServiceError(step, "input")
+		}
+		dx, err := parseInt(step.Params, "dx")
+		if err != nil {
+			return err
+		}
+		dy, err := parseInt(step.Params, "dy")
+		if err != nil {
+			return err
+		}
+		return ctx.Services.Input.MoveRelative(ctx.Context, dx, dy)
+	})
+	r.MustRegister("input.mouse_button_down", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Input == nil {
+			return missingServiceError(step, "input")
+		}
+		return ctx.Services.Input.ButtonDown(ctx.Context, step.Params["button"])
+	})
+	r.MustRegister("input.mouse_button_up", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Input == nil {
+			return missingServiceError(step, "input")
+		}
+		return ctx.Services.Input.ButtonUp(ctx.Context, step.Params["button"])
+	})
+	r.MustRegister("input.mouse_click", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Input == nil {
+			return missingServiceError(step, "input")
+		}
+		return ctx.Services.Input.Click(ctx.Context, step.Params["button"])
+	})
+	r.MustRegister("input.mouse_double_click", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Input == nil {
+			return missingServiceError(step, "input")
+		}
+		return ctx.Services.Input.DoubleClick(ctx.Context, step.Params["button"])
+	})
+	r.MustRegister("input.mouse_wheel", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Input == nil {
+			return missingServiceError(step, "input")
+		}
+		delta, err := parseInt(step.Params, "delta")
+		if err != nil {
+			return err
+		}
+		return ctx.Services.Input.Wheel(ctx.Context, delta)
+	})
+	r.MustRegister("input.mouse_drag", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Input == nil {
+			return missingServiceError(step, "input")
+		}
+		startX, err := parseInt(step.Params, "start_x")
+		if err != nil {
+			return err
+		}
+		startY, err := parseInt(step.Params, "start_y")
+		if err != nil {
+			return err
+		}
+		endX, err := parseInt(step.Params, "end_x")
+		if err != nil {
+			return err
+		}
+		endY, err := parseInt(step.Params, "end_y")
+		if err != nil {
+			return err
+		}
+		return ctx.Services.Input.Drag(ctx.Context, step.Params["button"], startX, startY, endX, endY)
+	})
+	r.MustRegister("input.mouse_get_position", func(ctx ActionContext, step Step) error {
+		if ctx.Services.Input == nil {
+			return missingServiceError(step, "input")
+		}
+		pos, err := ctx.Services.Input.Position(ctx.Context)
+		if err != nil {
+			return err
+		}
+		saveAs := strings.TrimSpace(step.Params["save_as"])
+		if saveAs == "" {
+			return nil
+		}
+		if ctx.Metadata == nil {
+			ctx.Metadata = map[string]string{}
+		}
+		ctx.Metadata[saveAs+"_x"] = strconv.Itoa(pos.X)
+		ctx.Metadata[saveAs+"_y"] = strconv.Itoa(pos.Y)
+		return nil
 	})
 
 	r.MustRegister("uia.find", func(ctx ActionContext, step Step) error {

@@ -122,15 +122,11 @@ func (p *OSProvider) WindowBounds(ctx context.Context, hwnd HWND) (Rect, error) 
 		return Rect{}, ctx.Err()
 	default:
 	}
-	var r rect
-	ret, _, err := procGetWindowRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&r)))
-	if ret == 0 {
-		if err != syscall.Errno(0) {
-			return Rect{}, fmt.Errorf("GetWindowRect(%s): %w", hwnd, err)
-		}
-		return Rect{}, fmt.Errorf("GetWindowRect(%s): failed", hwnd)
+	bounds, err := getWindowBounds(hwnd)
+	if err != nil {
+		return Rect{}, err
 	}
-	return Rect{Left: int(r.Left), Top: int(r.Top), Right: int(r.Right), Bottom: int(r.Bottom)}, nil
+	return *bounds, nil
 }
 
 func (p *OSProvider) MoveWindow(ctx context.Context, hwnd HWND, x, y int) error {
@@ -207,7 +203,24 @@ func (p *OSProvider) readInfo(hwnd, active HWND) (Info, error) {
 	if err != nil {
 		exe = ""
 	}
-	return Info{HWND: hwnd, Title: title, Class: className, PID: pid, Exe: exe, Active: hwnd == active}, nil
+	bounds, err := getWindowBounds(hwnd)
+	if err != nil {
+		bounds = nil
+	}
+	return Info{HWND: hwnd, Title: title, Class: className, PID: pid, Exe: exe, Active: hwnd == active, Rect: bounds}, nil
+}
+
+func getWindowBounds(hwnd HWND) (*Rect, error) {
+	var r rect
+	ret, _, err := procGetWindowRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&r)))
+	if ret == 0 {
+		if err != syscall.Errno(0) {
+			return nil, fmt.Errorf("GetWindowRect(%s): %w", hwnd, err)
+		}
+		return nil, fmt.Errorf("GetWindowRect(%s): failed", hwnd)
+	}
+	bounds := &Rect{Left: int(r.Left), Top: int(r.Top), Right: int(r.Right), Bottom: int(r.Bottom)}
+	return bounds, nil
 }
 
 func getForegroundWindow() (HWND, error) {
