@@ -14,13 +14,23 @@ import (
 )
 
 type Registry struct {
-	handlers map[string]Handler
+	handlers         map[string]Handler
+	callbacks        map[string]CallbackHandler
+	bindingCallbacks map[string]CallbackHandler
 }
 
 var cooldowns sync.Map
 
+const CallbackActionName = "goahk.callback"
+
+type CallbackHandler func(CallbackContext) error
+
 func NewRegistry() *Registry {
-	r := &Registry{handlers: map[string]Handler{}}
+	r := &Registry{
+		handlers:         map[string]Handler{},
+		callbacks:        map[string]CallbackHandler{},
+		bindingCallbacks: map[string]CallbackHandler{},
+	}
 	r.registerBuiltins()
 	return r
 }
@@ -49,6 +59,66 @@ func (r *Registry) MustRegister(name string, handler Handler) {
 func (r *Registry) Lookup(name string) (Handler, bool) {
 	h, ok := r.handlers[name]
 	return h, ok
+}
+
+func (r *Registry) RegisterCallback(name string, callback CallbackHandler) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("callback name is required")
+	}
+	if callback == nil {
+		return fmt.Errorf("callback for %q is nil", name)
+	}
+	if _, exists := r.callbacks[name]; exists {
+		return fmt.Errorf("callback %q already registered", name)
+	}
+	r.callbacks[name] = callback
+	return nil
+}
+
+func (r *Registry) MustRegisterCallback(name string, callback CallbackHandler) {
+	if err := r.RegisterCallback(name, callback); err != nil {
+		panic(err)
+	}
+}
+
+func (r *Registry) BindCallback(bindingID string, callback CallbackHandler) error {
+	bindingID = strings.TrimSpace(bindingID)
+	if bindingID == "" {
+		return fmt.Errorf("binding id is required")
+	}
+	if callback == nil {
+		return fmt.Errorf("binding callback for %q is nil", bindingID)
+	}
+	if _, exists := r.bindingCallbacks[bindingID]; exists {
+		return fmt.Errorf("binding callback %q already registered", bindingID)
+	}
+	r.bindingCallbacks[bindingID] = callback
+	return nil
+}
+
+func (r *Registry) resolve(step Step, ctx ActionContext) (Handler, bool) {
+	if handler, ok := r.Lookup(step.Name); ok {
+		return handler, true
+	}
+	if !strings.EqualFold(step.Name, CallbackActionName) {
+		return nil, false
+	}
+	if ref := strings.TrimSpace(step.Params["callback_ref"]); ref != "" {
+		if cb, ok := r.callbacks[ref]; ok {
+			return adaptCallbackHandler(cb), true
+		}
+	}
+	if cb, ok := r.bindingCallbacks[strings.TrimSpace(ctx.BindingID)]; ok {
+		return adaptCallbackHandler(cb), true
+	}
+	return nil, false
+}
+
+func adaptCallbackHandler(callback CallbackHandler) Handler {
+	return func(actionCtx ActionContext, _ Step) error {
+		return callback(NewCallbackContext(&actionCtx))
+	}
 }
 
 func (r *Registry) registerBuiltins() {

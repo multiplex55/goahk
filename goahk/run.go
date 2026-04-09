@@ -16,8 +16,8 @@ import (
 const callbackActionPlaceholder = "goahk.callback"
 
 type callbackRegistration struct {
-	actionName string
-	fn         ActionFunc
+	ref string
+	fn  ActionFunc
 }
 
 // Run validates configured bindings, then starts the runtime loop.
@@ -60,8 +60,16 @@ func buildRegistryWithCallbacks(state StateStore, callbacks []callbackRegistrati
 	r := actions.NewRegistry()
 	for _, cb := range callbacks {
 		cb := cb
-		r.MustRegister(cb.actionName, func(actionCtx actions.ActionContext, _ actions.Step) error {
-			ctx := newContext(&actionCtx, state)
+		r.MustRegisterCallback(cb.ref, func(callbackCtx actions.CallbackContext) error {
+			ctx := newContext(&actions.ActionContext{
+				Context:     callbackCtx.Context(),
+				Services:    callbackCtx.Window(),
+				Metadata:    callbackCtx.StateBag(),
+				BindingID:   callbackCtx.BindingID(),
+				TriggerText: callbackCtx.TriggerText(),
+				Stop:        func(reason string) { callbackCtx.StopRuntime(reason) },
+				Logger:      callbackCtx.Log(),
+			}, state)
 			err := cb.fn(ctx)
 			syncVarsToActionContext(ctx)
 			return err
@@ -80,14 +88,18 @@ func (a *App) runtimeArtifacts() (program.Program, config.Config, []callbackRegi
 		configSteps := make([]config.Step, 0, len(b.steps))
 		for stepIndex, step := range b.steps {
 			spec := step.stepSpec()
-			actionName := spec.Action
+			params := stringifyStepParams(spec.Params)
 			if cbStep, ok := step.(callbackStep); ok {
-				actionName = callbackActionName(i, stepIndex)
-				callbacks = append(callbacks, callbackRegistration{actionName: actionName, fn: cbStep.fn})
+				ref := callbackActionRef(i, stepIndex)
+				callbacks = append(callbacks, callbackRegistration{ref: ref, fn: cbStep.fn})
+				spec.Action = callbackActionPlaceholder
+				if params == nil {
+					params = map[string]string{}
+				}
+				params["callback_ref"] = ref
 			}
-			spec.Action = actionName
-			programSteps = append(programSteps, spec)
-			configSteps = append(configSteps, config.Step{Action: actionName, Params: stringifyStepParams(spec.Params)})
+			programSteps = append(programSteps, program.StepSpec{Action: spec.Action, Params: mapFromString(params)})
+			configSteps = append(configSteps, config.Step{Action: spec.Action, Params: params})
 		}
 		id := bindingID(i)
 		p.Bindings = append(p.Bindings, program.BindingSpec{ID: id, Hotkey: b.hotkey, Steps: programSteps})
@@ -96,8 +108,23 @@ func (a *App) runtimeArtifacts() (program.Program, config.Config, []callbackRegi
 	return p, cfg, callbacks
 }
 
+func mapFromString(params map[string]string) map[string]any {
+	if len(params) == 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(params))
+	for k, v := range params {
+		out[k] = v
+	}
+	return out
+}
+
+func callbackActionRef(bindingIndex, stepIndex int) string {
+	return fmt.Sprintf("%s.step_%d", bindingID(bindingIndex), stepIndex+1)
+}
+
 func callbackActionName(bindingIndex, stepIndex int) string {
-	return fmt.Sprintf("goahk.callback.%s.step_%d", bindingID(bindingIndex), stepIndex+1)
+	return fmt.Sprintf("%s.%s", actions.CallbackActionName, callbackActionRef(bindingIndex, stepIndex))
 }
 
 func stringifyStepParams(params map[string]any) map[string]string {
