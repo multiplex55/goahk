@@ -24,10 +24,11 @@ type LoggingConfig struct {
 }
 
 type HotkeyBinding struct {
-	ID     string `json:"id"`
-	Hotkey string `json:"hotkey"`
-	Flow   string `json:"flow,omitempty"`
-	Steps  []Step `json:"steps,omitempty"`
+	ID                string `json:"id"`
+	Hotkey            string `json:"hotkey"`
+	Flow              string `json:"flow,omitempty"`
+	Steps             []Step `json:"steps,omitempty"`
+	ConcurrencyPolicy string `json:"concurrencyPolicy,omitempty"`
 }
 
 type Step struct {

@@ -20,6 +20,7 @@ const (
 )
 
 type BindingExecutionPolicy struct {
+	Concurrency string
 	Conditions  flow.ConditionEvaluator
 	CallbackRef string
 }

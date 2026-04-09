@@ -10,9 +10,10 @@ import (
 func TestCompileRuntimeBindingsFromProgram(t *testing.T) {
 	p := program.Program{
 		Bindings: []program.BindingSpec{{
-			ID:     "paste",
-			Hotkey: "ctrl+shift+v",
-			Steps:  []program.StepSpec{{Action: "system.log"}},
+			ID:                "paste",
+			Hotkey:            "ctrl+shift+v",
+			Steps:             []program.StepSpec{{Action: "system.log"}},
+			ConcurrencyPolicy: program.ConcurrencyPolicyQueueOne,
 		}},
 	}
 
@@ -31,5 +32,8 @@ func TestCompileRuntimeBindingsFromProgram(t *testing.T) {
 	}
 	if got := len(bindings[0].Plan); got != 1 {
 		t.Fatalf("plan length = %d, want 1", got)
+	}
+	if got := bindings[0].Policy; got != program.ConcurrencyPolicyQueueOne {
+		t.Fatalf("policy = %q, want %q", got, program.ConcurrencyPolicyQueueOne)
 	}
 }

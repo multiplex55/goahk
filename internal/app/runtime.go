@@ -38,6 +38,7 @@ type RuntimeBinding struct {
 	Plan           actions.Plan
 	Flow           *flow.Definition
 	ControlCommand string
+	Policy         program.ConcurrencyPolicy
 }
 
 func CompileRuntimeBindings(cfg config.Config, registry *actions.Registry) ([]RuntimeBinding, error) {
@@ -77,7 +78,7 @@ func CompileRuntimeBindingsFromProgram(p program.Program, registry *actions.Regi
 
 	compiled := make([]RuntimeBinding, 0, len(p.Bindings))
 	for i, b := range p.Bindings {
-		rb := RuntimeBinding{ID: b.ID, Chord: parsed[i].Chord}
+		rb := RuntimeBinding{ID: b.ID, Chord: parsed[i].Chord, Policy: b.ConcurrencyPolicy}
 		switch {
 		case strings.EqualFold(parsed[i].Chord.Key, "escape") && parsed[i].Chord.Modifiers == 0:
 			rb.ControlCommand = "stop"

@@ -90,10 +90,11 @@ func hotkeyToProgram(idx int, in HotkeyBinding, flowIDs map[string]struct{}) (pr
 	}
 
 	return program.BindingSpec{
-		ID:     in.ID,
-		Hotkey: in.Hotkey,
-		Flow:   in.Flow,
-		Steps:  stepsToProgram(in.Steps),
+		ID:                in.ID,
+		Hotkey:            in.Hotkey,
+		Flow:              in.Flow,
+		Steps:             stepsToProgram(in.Steps),
+		ConcurrencyPolicy: program.ConcurrencyPolicy(in.ConcurrencyPolicy),
 	}, nil
 }
 

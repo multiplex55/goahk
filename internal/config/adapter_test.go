@@ -28,8 +28,9 @@ func TestToProgram_MinimalConfigMapsExpectedProgram(t *testing.T) {
 
 	want := program.Program{
 		Bindings: []program.BindingSpec{{
-			ID:     "open-terminal",
-			Hotkey: "Ctrl+Alt+T",
+			ID:                "open-terminal",
+			Hotkey:            "Ctrl+Alt+T",
+			ConcurrencyPolicy: program.ConcurrencyPolicySerial,
 			Steps: []program.StepSpec{{
 				Action: "input.send_keys",
 				Params: map[string]any{"sequence": "Win+R"},

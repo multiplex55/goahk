@@ -15,6 +15,7 @@ const (
 	ErrCodeStepsRequired      = "binding.steps.required"
 	ErrCodeStepActionRequired = "binding.step.action.required"
 	ErrCodeUnknownFlow        = "binding.flow.unknown"
+	ErrCodeUnknownPolicy      = "binding.policy.unknown"
 )
 
 type ValidationIssue struct {
@@ -96,6 +97,9 @@ func Validate(p Program) error {
 				issues = append(issues, ValidationIssue{Code: ErrCodeStepActionRequired, Path: fmt.Sprintf("%s.steps[%d].action", path, j), Message: "action name is required"})
 			}
 		}
+		if !isAllowedConcurrencyPolicy(b.ConcurrencyPolicy) {
+			issues = append(issues, ValidationIssue{Code: ErrCodeUnknownPolicy, Path: path + ".concurrencyPolicy", Message: fmt.Sprintf("unsupported policy %q", b.ConcurrencyPolicy)})
+		}
 	}
 	if err := hotkey.DetectConflicts(parsed); err != nil {
 		issues = append(issues, ValidationIssue{Code: ErrCodeConflictingHotkeys, Path: "bindings", Message: err.Error()})
@@ -144,7 +148,12 @@ func normalizeFlow(in FlowSpec) FlowSpec {
 }
 
 func normalizeBinding(in BindingSpec) BindingSpec {
-	out := BindingSpec{ID: strings.TrimSpace(in.ID), Hotkey: strings.TrimSpace(in.Hotkey), Flow: strings.TrimSpace(in.Flow)}
+	out := BindingSpec{
+		ID:                strings.TrimSpace(in.ID),
+		Hotkey:            strings.TrimSpace(in.Hotkey),
+		Flow:              strings.TrimSpace(in.Flow),
+		ConcurrencyPolicy: normalizeConcurrencyPolicy(in.ConcurrencyPolicy),
+	}
 	if parsed, err := hotkey.ParseBinding(out.ID, out.Hotkey); err == nil {
 		out.Hotkey = parsed.Chord.String()
 	}
@@ -172,4 +181,21 @@ func normalizeStep(in StepSpec) StepSpec {
 
 func bindingSortKey(b BindingSpec) string {
 	return strings.ToLower(strings.TrimSpace(b.ID))
+}
+
+func normalizeConcurrencyPolicy(in ConcurrencyPolicy) ConcurrencyPolicy {
+	p := ConcurrencyPolicy(strings.ToLower(strings.TrimSpace(string(in))))
+	if p == "" {
+		return DefaultConcurrencyPolicy()
+	}
+	return p
+}
+
+func isAllowedConcurrencyPolicy(p ConcurrencyPolicy) bool {
+	switch p {
+	case ConcurrencyPolicySerial, ConcurrencyPolicyReplace, ConcurrencyPolicyParallel, ConcurrencyPolicyQueueOne, ConcurrencyPolicyDrop:
+		return true
+	default:
+		return false
+	}
 }

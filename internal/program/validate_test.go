@@ -54,3 +54,21 @@ func TestValidateEmptyActionName(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateConcurrencyPolicy_DefaultAndInvalid(t *testing.T) {
+	valid := Program{Bindings: []BindingSpec{{ID: "run", Hotkey: "ctrl+r", Steps: []StepSpec{{Action: "system.log"}}}}}
+	if err := Validate(valid); err != nil {
+		t.Fatalf("Validate() default policy error = %v", err)
+	}
+
+	invalid := Program{Bindings: []BindingSpec{{
+		ID:                "run",
+		Hotkey:            "ctrl+r",
+		Steps:             []StepSpec{{Action: "system.log"}},
+		ConcurrencyPolicy: "burst",
+	}}}
+	err := Validate(invalid)
+	if err == nil || !strings.Contains(err.Error(), ErrCodeUnknownPolicy) {
+		t.Fatalf("Validate() invalid policy error = %v, want %q", err, ErrCodeUnknownPolicy)
+	}
+}
