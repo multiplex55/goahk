@@ -44,7 +44,7 @@ func ToProgram(cfg Config) (program.Program, error) {
 		p.Options.UIASelectors[name] = selectorToProgram(sel)
 	}
 
-	return p, nil
+	return program.Normalize(p), nil
 }
 
 func hotkeyToProgram(idx int, in HotkeyBinding, flowIDs map[string]struct{}) (program.BindingSpec, error) {

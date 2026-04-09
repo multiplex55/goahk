@@ -48,7 +48,7 @@ func TestValidateEmptyActionName(t *testing.T) {
 		t.Fatal("Validate() error = nil, want failure")
 	}
 	msg := err.Error()
-	for _, token := range []string{`binding "run"`, `binding/actions[0]/name`} {
+	for _, token := range []string{ErrCodeStepActionRequired, `bindings[0].steps[0].action`} {
 		if !strings.Contains(msg, token) {
 			t.Fatalf("Validate() error = %q, missing %q", msg, token)
 		}

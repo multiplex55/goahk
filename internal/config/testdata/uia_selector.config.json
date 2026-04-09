@@ -1,0 +1,18 @@
+{
+  "hotkeys": [
+    {
+      "id": "focus",
+      "hotkey": "ctrl+f",
+      "steps": [
+        {"action": "system.log", "params": {"msg": "ok"}}
+      ]
+    }
+  ],
+  "uiaSelectors": {
+    "searchBox": {
+      "automationId": "SearchBox",
+      "name": "Search",
+      "controlType": "Edit"
+    }
+  }
+}

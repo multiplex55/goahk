@@ -1,0 +1,12 @@
+{
+  "hotkeys": [
+    {
+      "id": " paste ",
+      "hotkey": "shift + ctrl + v",
+      "steps": [
+        {"action": "clipboard.read", "params": {"var": "clip"}},
+        {"action": "input.send_text", "params": {"text": "{{clip}}"}}
+      ]
+    }
+  ]
+}

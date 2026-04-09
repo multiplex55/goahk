@@ -1,0 +1,16 @@
+{
+  "Bindings": [
+    {
+      "ID": "paste",
+      "Hotkey": "Ctrl+Shift+V",
+      "Steps": [
+        {"Action": "clipboard.read", "Params": {"var": "clip"}},
+        {"Action": "input.send_text", "Params": {"text": "{{clip}}"}}
+      ]
+    }
+  ],
+  "Options": {
+    "Flows": [],
+    "UIASelectors": {}
+  }
+}
