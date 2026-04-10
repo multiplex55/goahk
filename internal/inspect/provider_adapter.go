@@ -69,25 +69,38 @@ type uiaAdapter interface {
 	GetElementByRef(context.Context, string) (*uiaElement, error)
 	GetParent(context.Context, string) (*uiaElement, error)
 	GetChildren(context.Context, string) ([]*uiaElement, error)
+	GetChildCount(context.Context, string) (int, bool, error)
 }
 
 type providerCore struct {
-	adapter    uiaAdapter
-	mu         sync.RWMutex
-	nodeToRef  map[string]string
-	parentByID map[string]string
+	adapter       uiaAdapter
+	mu            sync.RWMutex
+	nodeToRef     map[string]string
+	parentByID    map[string]string
+	childrenCache *nodeChildrenCache
 }
 
 func newProviderCore(adapter uiaAdapter) *providerCore {
-	return &providerCore{adapter: adapter, nodeToRef: map[string]string{}, parentByID: map[string]string{}}
+	return &providerCore{
+		adapter:       adapter,
+		nodeToRef:     map[string]string{},
+		parentByID:    map[string]string{},
+		childrenCache: newNodeChildrenCache(),
+	}
 }
 
-func (p *providerCore) treeRoot(ctx context.Context, hwnd string) (TreeNodeDTO, error) {
+func (p *providerCore) treeRoot(ctx context.Context, hwnd string, refresh bool) (TreeNodeDTO, error) {
+	if refresh {
+		p.invalidateWindowCache(hwnd)
+	}
+	p.childrenCache.setSelectedWindow(hwnd)
 	root, err := p.adapter.ResolveWindowRoot(ctx, hwnd)
 	if err != nil {
 		return TreeNodeDTO{}, p.wrapErr("ResolveWindowRoot", "", hwnd, err)
 	}
-	return p.cacheNode(root), nil
+	node := p.cacheNode(root)
+	node.Expanded = false
+	return node, nil
 }
 
 func (p *providerCore) focused(ctx context.Context) (TreeNodeDTO, error) {
@@ -111,17 +124,48 @@ func (p *providerCore) underCursor(ctx context.Context) (TreeNodeDTO, error) {
 }
 
 func (p *providerCore) nodeChildren(ctx context.Context, nodeID string) ([]TreeNodeDTO, error) {
+	windowID := p.childrenCache.window()
+	if windowID == "" {
+		return nil, ErrStaleCache
+	}
+	if cached, ok := p.childrenCache.get(windowID, nodeID); ok {
+		return cached, nil
+	}
+
+	children, err := p.loadNodeChildren(ctx, nodeID)
+	if err != nil {
+		if !errors.Is(err, ErrStaleCache) {
+			return nil, err
+		}
+		// Stale node fallback: refresh window root and retry once.
+		p.invalidateWindowCache(windowID)
+		if _, rootErr := p.treeRoot(ctx, windowID, false); rootErr != nil {
+			return nil, rootErr
+		}
+		children, err = p.loadNodeChildren(ctx, nodeID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	p.childrenCache.put(windowID, nodeID, children)
+	return children, nil
+}
+
+func (p *providerCore) loadNodeChildren(ctx context.Context, nodeID string) ([]TreeNodeDTO, error) {
 	ref, ok := p.lookupRef(nodeID)
 	if !ok {
 		return nil, ErrStaleCache
 	}
-	children, err := p.adapter.GetChildren(ctx, ref)
+	rawChildren, err := p.adapter.GetChildren(ctx, ref)
 	if err != nil {
 		return nil, p.wrapErr("GetChildren", nodeID, "", err)
 	}
-	out := make([]TreeNodeDTO, 0, len(children))
-	for _, child := range children {
-		out = append(out, p.cacheNode(child))
+	out := make([]TreeNodeDTO, 0, len(rawChildren))
+	for _, child := range rawChildren {
+		n := p.cacheNode(child)
+		n.Expanded = false
+		n.Cycle = p.hasAncestor(nodeID, n.NodeID)
+		out = append(out, n)
 	}
 	return out, nil
 }
@@ -172,7 +216,12 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 	for _, p := range patterns {
 		names = append(names, p.Action)
 	}
-	return TreeNodeDTO{NodeID: nodeID, Name: el.Name, ControlType: normalizeControlType(el.ControlType, el.LocalizedControlType), ClassName: el.ClassName, Patterns: names}
+	node := TreeNodeDTO{NodeID: nodeID, Name: el.Name, ControlType: normalizeControlType(el.ControlType, el.LocalizedControlType), ClassName: el.ClassName, Patterns: names}
+	if count, ok, err := p.adapter.GetChildCount(context.Background(), el.Ref); err == nil && ok {
+		node.ChildCount = &count
+		node.HasChildren = count > 0
+	}
+	return node
 }
 
 func (p *providerCore) cacheNodeIDOnly(ref string) string {
@@ -193,6 +242,32 @@ func (p *providerCore) parentOf(nodeID string) string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.parentByID[nodeID]
+}
+
+func (p *providerCore) invalidateWindowCache(_ string) {
+	p.mu.Lock()
+	p.nodeToRef = map[string]string{}
+	p.parentByID = map[string]string{}
+	p.mu.Unlock()
+	p.childrenCache.invalidateAll()
+}
+
+func (p *providerCore) hasAncestor(nodeID, ancestorID string) bool {
+	if nodeID == "" || ancestorID == "" {
+		return false
+	}
+	current := nodeID
+	for i := 0; i < 128; i++ {
+		parent := p.parentOf(current)
+		if parent == "" {
+			return false
+		}
+		if parent == ancestorID {
+			return true
+		}
+		current = parent
+	}
+	return true
 }
 
 func (p *providerCore) wrapErr(op, nodeID, hwnd string, err error) error {

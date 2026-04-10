@@ -67,6 +67,8 @@ type TreeNodeSummary struct {
 	IsOffscreen          bool                `json:"isOffscreen"`
 	ChildCount           int                 `json:"childCount,omitempty"`
 	HasChildren          bool                `json:"hasChildren"`
+	Expanded             bool                `json:"expanded,omitempty"`
+	Cycle                bool                `json:"cycle,omitempty"`
 	Patterns             []PatternAction     `json:"patterns,omitempty"`
 	BestSelector         *Selector           `json:"bestSelector,omitempty"`
 	SelectorSuggestions  []SelectorCandidate `json:"selectorSuggestions,omitempty"`

@@ -38,6 +38,8 @@ func TestInspectModels_JSONRoundTrip(t *testing.T) {
 			IsOffscreen:          false,
 			ChildCount:           1,
 			HasChildren:          true,
+			Expanded:             true,
+			Cycle:                false,
 			Patterns:             []PatternAction{{Pattern: "Window", Action: "setFocus", DisplayName: "Set Focus"}},
 			BestSelector:         &Selector{AutomationID: "MainWindow", ControlType: "Window"},
 			SelectorSuggestions: []SelectorCandidate{{
