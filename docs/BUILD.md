@@ -8,7 +8,8 @@ Use these commands exactly (copy/paste ready) so local runs and CI behavior stay
 
 ### Required toolchain/runtime
 
-- Go `1.22` or newer (`go.mod` currently declares `go 1.22`).
+- Minimum supported Go is `1.22.x` (`go.mod` declares `go 1.22.0`).
+- Recommended local development Go is `1.25.x` (latest CI lane).
 - Git (required for clone/setup and optional version metadata in build script).
 - Windows command shell for `build\build.bat` and `build\check-no-source-binaries.bat` (PowerShell is used internally for UTC timestamp normalization).
 
@@ -176,12 +177,13 @@ Platform-specific notes:
 
 This guide is the **single source of truth** for the command set used locally and in CI.
 
-Current CI workflow (`.github/workflows/go.yml`) runs:
+Current CI workflow (`.github/workflows/go.yml`) runs on an explicit Go matrix (`1.22.x` and `1.25.x`) and executes:
 
 ```powershell
 go mod download
 build\check-no-source-binaries.bat
 go build -v ./...
+go vet ./...
 go test -v ./...
 ```
 
@@ -191,6 +193,7 @@ Recommended local pre-PR command sequence (aligned to CI):
 go mod download
 build\check-no-source-binaries.bat
 go build -v ./...
+go vet ./...
 go test -v ./...
 ```
 
