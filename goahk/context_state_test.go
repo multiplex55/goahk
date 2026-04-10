@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"goahk/internal/actions"
-	internalapp "goahk/internal/app"
+	"goahk/internal/runtime"
 )
 
 func TestContextState_PerTriggerVarsIsolationAndSharedAppState(t *testing.T) {
@@ -23,7 +23,7 @@ func TestContextState_PerTriggerVarsIsolationAndSharedAppState(t *testing.T) {
 	registry := buildRegistryWithCallbacks(a.state, callbacks, a.actionLogger())
 	executor := actions.NewExecutor(registry)
 
-	bindings, err := internalapp.CompileRuntimeBindingsFromProgram(program, registry)
+	bindings, err := runtime.CompileRuntimeBindings(program, registry)
 	if err != nil {
 		t.Fatalf("compile runtime bindings: %v", err)
 	}

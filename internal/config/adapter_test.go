@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"goahk/internal/actions"
-	"goahk/internal/app"
 	"goahk/internal/config"
 	"goahk/internal/program"
+	"goahk/internal/runtime"
 )
 
 func TestToProgram_MinimalConfigMapsExpectedProgram(t *testing.T) {
@@ -71,13 +71,13 @@ func TestToProgram_Parity_JSONAndProgramCompileEquivalence(t *testing.T) {
 
 	registry := actions.NewRegistry()
 
-	compiledFromConfig, err := app.CompileRuntimeBindingsFromProgram(fromConfig, registry)
+	compiledFromConfig, err := runtime.CompileRuntimeBindings(fromConfig, registry)
 	if err != nil {
-		t.Fatalf("CompileRuntimeBindingsFromProgram(config) error = %v", err)
+		t.Fatalf("CompileRuntimeBindings(config) error = %v", err)
 	}
-	compiledFromCode, err := app.CompileRuntimeBindingsFromProgram(fromCode, registry)
+	compiledFromCode, err := runtime.CompileRuntimeBindings(fromCode, registry)
 	if err != nil {
-		t.Fatalf("CompileRuntimeBindingsFromProgram(code) error = %v", err)
+		t.Fatalf("CompileRuntimeBindings(code) error = %v", err)
 	}
 
 	if len(compiledFromConfig) != len(compiledFromCode) {
