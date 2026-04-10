@@ -152,3 +152,17 @@ body {
   padding: 4px 6px;
   font-size: 12px;
 }
+
+
+.selector-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.selector-row code {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

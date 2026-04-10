@@ -1,45 +1,8 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import FooterControls from './FooterControls';
 
 describe('FooterControls', () => {
-  afterEach(() => {
-    cleanup();
-    vi.restoreAllMocks();
-  });
-
-  it('copies status text and shows toast feedback', async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText }
-    });
-
-    render(
-      <FooterControls
-        state={{
-          visibleOnly: false,
-          titleOnly: false,
-          activateWindow: false,
-          filter: '',
-          status: 'Ready',
-          path: 'Desktop > Settings'
-        }}
-        onRefresh={vi.fn()}
-        onToggleVisible={vi.fn()}
-        onToggleTitle={vi.fn()}
-        onToggleActivate={vi.fn()}
-        onChangeFilter={vi.fn()}
-      />
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Ready' }));
-    });
-    expect(writeText).toHaveBeenCalledWith('Ready');
-    expect(screen.getByRole('status')).toHaveTextContent('Status copied');
-  });
-
   it('updates control state and dispatches handlers', () => {
     const onRefresh = vi.fn();
     const onToggleVisible = vi.fn();
@@ -53,9 +16,7 @@ describe('FooterControls', () => {
           visibleOnly: false,
           titleOnly: false,
           activateWindow: false,
-          filter: '',
-          status: 'Ready',
-          path: 'Desktop'
+          filter: ''
         }}
         onRefresh={onRefresh}
         onToggleVisible={onToggleVisible}
