@@ -9,7 +9,7 @@ app.Bind("Ctrl+Alt+M",
     goahk.Sleep(40),
     goahk.MouseClick("left"),
 )
-app.Bind("Escape", goahk.Stop())
+app.Bind("Escape", goahk.ControlStop())
 ```
 
 ## Expected runtime log sequence

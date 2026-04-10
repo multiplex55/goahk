@@ -20,7 +20,7 @@ func main() {
 		return ctx.Input.Paste(transformed)
 	}))
 	// snippet:end:clipboard-helper-main
-	app.Bind("Escape", goahk.Stop())
+	app.Bind("Escape", goahk.ControlStop())
 
 	if err := app.Run(context.Background()); err != nil {
 		log.Fatal(err)

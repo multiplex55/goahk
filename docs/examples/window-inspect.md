@@ -12,7 +12,7 @@ app.Bind("Ctrl+Shift+I", goahk.Func(func(ctx *goahk.Context) error {
     ctx.Log("active window", "title", active.Title, "exe", active.Exe)
     return nil
 }))
-app.Bind("Escape", goahk.Stop())
+app.Bind("Escape", goahk.ControlStop())
 ```
 
 ## Expected runtime log sequence

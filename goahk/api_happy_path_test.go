@@ -12,7 +12,7 @@ func TestAPIHappyPath_TinyScriptFlow(t *testing.T) {
 
 	app := NewApp().
 		Bind("1", MessageBox("Quick note", "Pressed 1"), Stop()).
-		Bind("Escape", Stop())
+		Bind("Escape", ControlStop())
 
 	prog := app.toProgram()
 	if got, want := len(prog.Bindings), 2; got != want {

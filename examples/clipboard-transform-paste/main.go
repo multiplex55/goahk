@@ -18,7 +18,7 @@ func main() {
 		replaced := strings.ReplaceAll(text, "foo", "bar")
 		return ctx.Input.Paste(replaced)
 	}))
-	app.Bind("Escape", goahk.Stop())
+	app.Bind("Escape", goahk.ControlStop())
 
 	if err := app.Run(context.Background()); err != nil {
 		log.Fatal(err)

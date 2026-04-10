@@ -169,3 +169,33 @@ func TestUsageReliabilityLinksStayCurrent(t *testing.T) {
 		mustContain(t, string(usage), fmt.Sprintf("docs/examples/%s.md", slug))
 	}
 }
+
+func TestStopGuidanceIsCanonicalAndExplicit(t *testing.T) {
+	t.Parallel()
+
+	readme, err := os.ReadFile(filepath.Join("..", "README.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(README.md) error = %v", err)
+	}
+	usage, err := os.ReadFile(filepath.Join(".", "USAGE.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(USAGE.md) error = %v", err)
+	}
+
+	for _, doc := range []struct {
+		name string
+		text string
+	}{
+		{name: "README.md", text: string(readme)},
+		{name: "docs/USAGE.md", text: string(usage)},
+	} {
+		t.Run(doc.name, func(t *testing.T) {
+			t.Parallel()
+			mustContainAll(t, doc.text,
+				"ControlStop()",
+				"Stop()",
+				"not interchangeable",
+			)
+		})
+	}
+}

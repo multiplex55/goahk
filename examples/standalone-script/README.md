@@ -5,7 +5,7 @@ This example is intended to be compiled and run as a standalone executable.
 ## Behavior
 
 - Press `1` to show a Windows MessageBox (`"You pressed 1"`).
-- Press `Escape` to stop the app and exit the process.
+- Press `Escape` to stop the app and exit the process (control-plane graceful stop).
 
 The app keeps running until the `Escape` keybind is triggered.
 

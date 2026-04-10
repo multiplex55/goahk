@@ -21,7 +21,7 @@ func main() {
 	// snippet:start:basic-script-main
 	app.Bind("Ctrl+Alt+B", goahk.SendText("basic script trigger"))
 	// snippet:end:basic-script-main
-	app.Bind("Escape", goahk.Stop())
+	app.Bind("Escape", goahk.ControlStop())
 
 	if err := app.Run(context.Background()); err != nil {
 		log.Fatal(err)
@@ -42,7 +42,7 @@ Primary example snippets:
 ```go
 // snippet:start:messagebox-and-exit-main
 app.Bind("F1", goahk.MessageBox("goahk", "Hello from messagebox-and-exit"))
-app.Bind("Escape", goahk.Stop())
+app.Bind("Escape", goahk.ControlStop())
 // snippet:end:messagebox-and-exit-main
 ```
 
@@ -98,6 +98,12 @@ app.Bind("Ctrl+Shift+M",
 ```
 
 See: [`examples/mixed-actions/main.go`](examples/mixed-actions/main.go).
+
+## Stop semantics (canonical guidance)
+
+- Use `goahk.ControlStop()` for immediate control-plane responsiveness (for example emergency hotkeys / kill bindings like `Escape`).
+- Use `goahk.Stop()` for normal action-sequence shutdown when stop is part of a workflow.
+- They are **not interchangeable**: `ControlStop()` is a control-plane command, while `Stop()` is a work-plane action step.
 
 ## Compatibility mode (JSON adapter)
 
