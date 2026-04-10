@@ -3,6 +3,7 @@ package inspect
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -70,6 +71,13 @@ type uiaAdapter interface {
 	GetParent(context.Context, string) (*uiaElement, error)
 	GetChildren(context.Context, string) ([]*uiaElement, error)
 	GetChildCount(context.Context, string) (int, bool, error)
+	Invoke(context.Context, string) error
+	Select(context.Context, string) error
+	SetValue(context.Context, string, string) error
+	DoDefaultAction(context.Context, string) error
+	Toggle(context.Context, string) error
+	Expand(context.Context, string) error
+	Collapse(context.Context, string) error
 }
 
 type providerCore struct {
@@ -198,6 +206,162 @@ func (p *providerCore) inspectByNodeID(ctx context.Context, nodeID string) (Insp
 		p.mu.Unlock()
 	}
 	return toInspectElement(nodeID, p.parentOf(nodeID), el), nil
+}
+
+func (p *providerCore) invokePattern(ctx context.Context, req InvokePatternRequest) (InvokePatternResponse, error) {
+	available, err := p.getPatternActions(ctx, req.NodeID)
+	if err != nil {
+		return InvokePatternResponse{}, err
+	}
+	action := strings.TrimSpace(req.Action)
+	if action == "" {
+		return InvokePatternResponse{}, ErrUnsupportedPatternAction
+	}
+	var allowed bool
+	for _, a := range available {
+		if a.Name == action {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return InvokePatternResponse{}, ErrUnsupportedPatternAction
+	}
+
+	switch action {
+	case "invoke":
+		err = p.Invoke(ctx, req.NodeID)
+	case "select":
+		err = p.Select(ctx, req.NodeID)
+	case "setValue":
+		value, ok := valueFromPayload(req.Payload)
+		if !ok {
+			return InvokePatternResponse{}, ErrMissingPatternInput
+		}
+		err = p.SetValue(ctx, req.NodeID, value)
+	case "doDefaultAction":
+		err = p.DoDefaultAction(ctx, req.NodeID)
+	case "toggle":
+		err = p.Toggle(ctx, req.NodeID)
+	case "expand":
+		err = p.Expand(ctx, req.NodeID)
+	case "collapse":
+		err = p.Collapse(ctx, req.NodeID)
+	default:
+		return InvokePatternResponse{}, ErrUnsupportedPatternAction
+	}
+	if err != nil {
+		return InvokePatternResponse{}, p.wrapActionErr(action, req.NodeID, err)
+	}
+	return InvokePatternResponse{NodeID: req.NodeID, Action: action, Invoked: true}, nil
+}
+
+func (p *providerCore) getPatternActions(ctx context.Context, nodeID string) ([]PatternActionDTO, error) {
+	selected, err := p.inspectByNodeID(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	actions := make([]PatternActionDTO, 0, len(selected.Patterns))
+	for _, a := range selected.Patterns {
+		actions = append(actions, PatternActionDTO{Name: a.Action, PayloadSchema: a.PayloadSchema})
+	}
+	return actions, nil
+}
+
+func (p *providerCore) Invoke(ctx context.Context, nodeID string) error {
+	ref, ok := p.lookupRef(nodeID)
+	if !ok {
+		return ErrStaleCache
+	}
+	if err := p.adapter.Invoke(ctx, ref); err != nil {
+		return &ProviderCallError{Op: "Invoke", NodeID: nodeID, Err: err}
+	}
+	return nil
+}
+
+func (p *providerCore) Select(ctx context.Context, nodeID string) error {
+	ref, ok := p.lookupRef(nodeID)
+	if !ok {
+		return ErrStaleCache
+	}
+	if err := p.adapter.Select(ctx, ref); err != nil {
+		return &ProviderCallError{Op: "Select", NodeID: nodeID, Err: err}
+	}
+	return nil
+}
+
+func (p *providerCore) SetValue(ctx context.Context, nodeID, value string) error {
+	ref, ok := p.lookupRef(nodeID)
+	if !ok {
+		return ErrStaleCache
+	}
+	if err := p.adapter.SetValue(ctx, ref, value); err != nil {
+		return &ProviderCallError{Op: "SetValue", NodeID: nodeID, Err: err}
+	}
+	return nil
+}
+
+func (p *providerCore) DoDefaultAction(ctx context.Context, nodeID string) error {
+	ref, ok := p.lookupRef(nodeID)
+	if !ok {
+		return ErrStaleCache
+	}
+	if err := p.adapter.DoDefaultAction(ctx, ref); err != nil {
+		return &ProviderCallError{Op: "DoDefaultAction", NodeID: nodeID, Err: err}
+	}
+	return nil
+}
+
+func (p *providerCore) Toggle(ctx context.Context, nodeID string) error {
+	ref, ok := p.lookupRef(nodeID)
+	if !ok {
+		return ErrStaleCache
+	}
+	if err := p.adapter.Toggle(ctx, ref); err != nil {
+		return &ProviderCallError{Op: "Toggle", NodeID: nodeID, Err: err}
+	}
+	return nil
+}
+
+func (p *providerCore) Expand(ctx context.Context, nodeID string) error {
+	ref, ok := p.lookupRef(nodeID)
+	if !ok {
+		return ErrStaleCache
+	}
+	if err := p.adapter.Expand(ctx, ref); err != nil {
+		return &ProviderCallError{Op: "Expand", NodeID: nodeID, Err: err}
+	}
+	return nil
+}
+
+func (p *providerCore) Collapse(ctx context.Context, nodeID string) error {
+	ref, ok := p.lookupRef(nodeID)
+	if !ok {
+		return ErrStaleCache
+	}
+	if err := p.adapter.Collapse(ctx, ref); err != nil {
+		return &ProviderCallError{Op: "Collapse", NodeID: nodeID, Err: err}
+	}
+	return nil
+}
+
+func valueFromPayload(payload map[string]any) (string, bool) {
+	if payload == nil {
+		return "", false
+	}
+	value, ok := payload["value"]
+	if !ok {
+		return "", false
+	}
+	str, ok := value.(string)
+	return str, ok && strings.TrimSpace(str) != ""
+}
+
+func (p *providerCore) wrapActionErr(action, nodeID string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%w: action=%s node=%s: %v", ErrPatternExecutionFailure, action, nodeID, err)
 }
 
 func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {

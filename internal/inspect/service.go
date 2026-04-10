@@ -10,6 +10,8 @@ var (
 	ErrInvalidNodeID             = errors.New("inspect: invalid node id")
 	ErrStaleCache                = errors.New("inspect: stale cache")
 	ErrUnsupportedPatternAction  = errors.New("inspect: unsupported pattern action")
+	ErrMissingPatternInput       = errors.New("inspect: missing required pattern input")
+	ErrPatternExecutionFailure   = errors.New("inspect: pattern execution failure")
 	ErrProviderActionUnsupported = errors.New("inspect: operation not supported")
 	ErrProviderTransientFailure  = errors.New("inspect: transient failure")
 	ErrTransientFailure          = errors.New("inspect: transient failure")
