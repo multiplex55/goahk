@@ -1,4 +1,5 @@
-import { ChangeEvent } from 'react';
+import { ChangeEvent, useEffect, useState } from 'react';
+import { statusCopySource } from '../copySource';
 
 export type FooterState = {
   visibleOnly: boolean;
@@ -30,6 +31,21 @@ export default function FooterControls({
   onToggleActivate,
   onChangeFilter
 }: FooterControlsProps) {
+  const [toastMessage, setToastMessage] = useState('');
+
+  useEffect(() => {
+    if (!toastMessage) {
+      return;
+    }
+    const timer = window.setTimeout(() => setToastMessage(''), 1800);
+    return () => window.clearTimeout(timer);
+  }, [toastMessage]);
+
+  async function copyToClipboard(value: string, label: string) {
+    await navigator.clipboard.writeText(statusCopySource(value));
+    setToastMessage(`${label} copied`);
+  }
+
   return (
     <footer className="footer-controls">
       <div className="footer-actions">
@@ -53,8 +69,17 @@ export default function FooterControls({
         />
       </div>
       <div className="footer-status">
-        <span>{state.status}</span>
-        <code>{state.path}</code>
+        <button type="button" className="status-copy" onClick={() => copyToClipboard(state.status, 'Status')}>
+          {state.status}
+        </button>
+        <button type="button" className="status-copy" onClick={() => copyToClipboard(state.path, 'Path')}>
+          <code>{state.path}</code>
+        </button>
+        {toastMessage ? (
+          <div className="status-toast" role="status" aria-live="polite">
+            {toastMessage}
+          </div>
+        ) : null}
       </div>
     </footer>
   );
