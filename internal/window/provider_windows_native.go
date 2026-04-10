@@ -23,6 +23,8 @@ var (
 	procGetForegroundWindow        = windowUser32.NewProc("GetForegroundWindow")
 	procSetForegroundWindow        = windowUser32.NewProc("SetForegroundWindow")
 	procIsWindowVisible            = windowUser32.NewProc("IsWindowVisible")
+	procIsIconic                   = windowUser32.NewProc("IsIconic")
+	procIsZoomed                   = windowUser32.NewProc("IsZoomed")
 	procGetWindowTextW             = windowUser32.NewProc("GetWindowTextW")
 	procGetWindowTextLengthW       = windowUser32.NewProc("GetWindowTextLengthW")
 	procGetClassNameW              = windowUser32.NewProc("GetClassNameW")
@@ -238,15 +240,33 @@ func (p *OSProvider) readInfo(hwnd, active HWND) (Info, error) {
 	if err != nil {
 		return Info{}, err
 	}
-	exe, err := getProcessExeBaseName(pid)
-	if err != nil {
-		exe = ""
+	path, pathStatus, pathErr := getProcessImagePath(pid)
+	exe := ""
+	if path != "" {
+		exe = filepath.Base(path)
 	}
 	bounds, err := getWindowBounds(hwnd)
 	if err != nil {
 		bounds = nil
 	}
-	return Info{HWND: hwnd, Title: title, Class: className, PID: pid, Exe: exe, Active: hwnd == active, Rect: bounds}, nil
+	visible, _ := isWindowVisible(hwnd)
+	minimized, _ := isWindowMinimized(hwnd)
+	maximized, _ := isWindowMaximized(hwnd)
+	return Info{
+		HWND:              hwnd,
+		Title:             title,
+		Class:             className,
+		PID:               pid,
+		Exe:               exe,
+		ProcessPath:       path,
+		ProcessPathStatus: pathStatus,
+		ProcessPathError:  pathErr,
+		Active:            hwnd == active,
+		Visible:           boolPtr(visible),
+		Minimized:         boolPtr(minimized),
+		Maximized:         boolPtr(maximized),
+		Rect:              bounds,
+	}, nil
 }
 
 func getWindowBounds(hwnd HWND) (*Rect, error) {
@@ -278,6 +298,28 @@ func isWindowVisible(hwnd HWND) (bool, error) {
 	if ret == 0 {
 		if err != syscall.Errno(0) {
 			return false, fmt.Errorf("IsWindowVisible(%s): %w", hwnd, err)
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
+func isWindowMinimized(hwnd HWND) (bool, error) {
+	ret, _, err := procIsIconic.Call(uintptr(hwnd))
+	if ret == 0 {
+		if err != syscall.Errno(0) {
+			return false, fmt.Errorf("IsIconic(%s): %w", hwnd, err)
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
+func isWindowMaximized(hwnd HWND) (bool, error) {
+	ret, _, err := procIsZoomed.Call(uintptr(hwnd))
+	if ret == 0 {
+		if err != syscall.Errno(0) {
+			return false, fmt.Errorf("IsZoomed(%s): %w", hwnd, err)
 		}
 		return false, nil
 	}
@@ -321,13 +363,13 @@ func getWindowPID(hwnd HWND) (uint32, error) {
 	return pid, nil
 }
 
-func getProcessExeBaseName(pid uint32) (string, error) {
+func getProcessImagePath(pid uint32) (path string, status string, errText string) {
 	h, _, err := procOpenProcess.Call(processQueryLimitedInformation, 0, uintptr(pid))
 	if h == 0 {
 		if err != syscall.Errno(0) {
-			return "", fmt.Errorf("OpenProcess(%d): %w", pid, err)
+			return "", "open_failed", fmt.Sprintf("OpenProcess(%d): %v", pid, err)
 		}
-		return "", fmt.Errorf("OpenProcess(%d): failed", pid)
+		return "", "open_failed", fmt.Sprintf("OpenProcess(%d): failed", pid)
 	}
 	defer procCloseHandle.Call(h)
 
@@ -336,10 +378,14 @@ func getProcessExeBaseName(pid uint32) (string, error) {
 	ret, _, qErr := procQueryFullProcessImageNameW.Call(h, 0, uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&size)))
 	if ret == 0 {
 		if qErr != syscall.Errno(0) {
-			return "", fmt.Errorf("QueryFullProcessImageNameW(%d): %w", pid, qErr)
+			return "", "query_failed", fmt.Sprintf("QueryFullProcessImageNameW(%d): %v", pid, qErr)
 		}
-		return "", fmt.Errorf("QueryFullProcessImageNameW(%d): failed", pid)
+		return "", "query_failed", fmt.Sprintf("QueryFullProcessImageNameW(%d): failed", pid)
 	}
 	full := syscall.UTF16ToString(buf[:size])
-	return filepath.Base(full), nil
+	return full, "ok", ""
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }

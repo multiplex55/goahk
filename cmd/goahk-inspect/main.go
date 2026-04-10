@@ -116,21 +116,13 @@ func runWindow(ctx context.Context, action, format string, out io.Writer, d deps
 		if err != nil {
 			return mapOpError("window active", err)
 		}
-		return emit(out, format, w, func() string {
-			return fmt.Sprintf("HWND: %s\nTitle: %s\nClass: %s\nPID: %d\nExe: %s\nActive: %t", w.HWND, w.Title, w.Class, w.PID, w.Exe, w.Active)
-		})
+		return emit(out, format, w, func() string { return formatWindowText(w) })
 	case "list":
 		ws, err := d.window.List(ctx)
 		if err != nil {
 			return mapOpError("window list", err)
 		}
-		return emit(out, format, ws, func() string {
-			lines := make([]string, 0, len(ws))
-			for _, w := range ws {
-				lines = append(lines, fmt.Sprintf("%s | %s | %s | pid=%d | active=%t", w.HWND, w.Title, w.Class, w.PID, w.Active))
-			}
-			return strings.Join(lines, "\n")
-		})
+		return emit(out, format, ws, func() string { return formatWindowListText(ws) })
 	default:
 		return fmt.Errorf("unknown window subcommand %q", action)
 	}
@@ -139,17 +131,31 @@ func runWindow(ctx context.Context, action, format string, out io.Writer, d deps
 func runUIA(ctx context.Context, action, format string, out io.Writer, args []string, d deps) error {
 	switch action {
 	case "focused":
+		copyBestSelector, parseErr := parseCopyBestSelectorFlag(args)
+		if parseErr != nil {
+			return parseErr
+		}
 		el, err := d.uia.Focused(ctx)
 		if err != nil {
 			return mapOpError("uia focused", err)
 		}
-		return emit(out, format, el, func() string { return uia.FormatElementText(el) })
+		result := uia.BuildInspectResult(el)
+		return emit(out, format, result, func() string {
+			return formatUIAText(result, copyBestSelector)
+		})
 	case "under-cursor":
+		copyBestSelector, parseErr := parseCopyBestSelectorFlag(args)
+		if parseErr != nil {
+			return parseErr
+		}
 		el, err := d.uia.UnderCursor(ctx)
 		if err != nil {
 			return mapOpError("uia under-cursor", err)
 		}
-		return emit(out, format, el, func() string { return uia.FormatElementText(el) })
+		result := uia.BuildInspectResult(el)
+		return emit(out, format, result, func() string {
+			return formatUIAText(result, copyBestSelector)
+		})
 	case "tree":
 		fs := flag.NewFlagSet("uia tree", flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
@@ -204,4 +210,72 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  uia focused")
 	fmt.Fprintln(w, "  uia under-cursor")
 	fmt.Fprintln(w, "  uia tree --active-window [--depth N]")
+	fmt.Fprintln(w, "  uia <focused|under-cursor> [--copy-best-selector]")
+}
+
+func formatWindowText(w window.Info) string {
+	return strings.Join([]string{
+		fmt.Sprintf("HWND: %s", w.HWND),
+		fmt.Sprintf("Title: %s", w.Title),
+		fmt.Sprintf("Class: %s", w.Class),
+		fmt.Sprintf("PID: %d", w.PID),
+		fmt.Sprintf("Exe: %s", emptyOrMissing(w.Exe)),
+		fmt.Sprintf("ProcessPath: %s", emptyOrMissing(w.ProcessPath)),
+		fmt.Sprintf("ProcessPathStatus: %s", emptyOrMissing(w.ProcessPathStatus)),
+		fmt.Sprintf("ProcessPathError: %s", emptyOrMissing(w.ProcessPathError)),
+		fmt.Sprintf("Active: %t", w.Active),
+		fmt.Sprintf("Visible: %s", optionalBool(w.Visible)),
+		fmt.Sprintf("Minimized: %s", optionalBool(w.Minimized)),
+		fmt.Sprintf("Maximized: %s", optionalBool(w.Maximized)),
+		fmt.Sprintf("Rect: %s", formatRect(w.Rect)),
+	}, "\n")
+}
+
+func formatWindowListText(ws []window.Info) string {
+	lines := make([]string, 0, len(ws))
+	for _, w := range ws {
+		lines = append(lines, fmt.Sprintf("%s | %s | %s | pid=%d | active=%t | visible=%s | minimized=%s | maximized=%s | rect=%s | exe=%s | processPath=%s | processPathStatus=%s",
+			w.HWND, w.Title, w.Class, w.PID, w.Active, optionalBool(w.Visible), optionalBool(w.Minimized), optionalBool(w.Maximized), formatRect(w.Rect), emptyOrMissing(w.Exe), emptyOrMissing(w.ProcessPath), emptyOrMissing(w.ProcessPathStatus)))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func parseCopyBestSelectorFlag(args []string) (bool, error) {
+	fs := flag.NewFlagSet("uia inspect", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	copyBestSelector := fs.Bool("copy-best-selector", false, "emit best selector JSON at end for easy copy")
+	if err := fs.Parse(args); err != nil {
+		return false, err
+	}
+	return *copyBestSelector, nil
+}
+
+func formatUIAText(result uia.InspectResult, copyBestSelector bool) string {
+	text := uia.FormatElementText(result.Element)
+	if copyBestSelector && result.BestSelector != nil {
+		raw, _ := json.Marshal(result.BestSelector)
+		text += fmt.Sprintf("\nBestSelectorJSON: %s", string(raw))
+	}
+	return text
+}
+
+func optionalBool(v *bool) string {
+	if v == nil {
+		return "(unknown)"
+	}
+	return fmt.Sprintf("%t", *v)
+}
+
+func formatRect(rect *window.Rect) string {
+	if rect == nil {
+		return "(unknown)"
+	}
+	return fmt.Sprintf("%d,%d,%d,%d", rect.Left, rect.Top, rect.Right, rect.Bottom)
+}
+
+func emptyOrMissing(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "(missing)"
+	}
+	return v
 }

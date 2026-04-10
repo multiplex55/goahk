@@ -14,13 +14,19 @@ func (h HWND) String() string {
 
 // Info describes a top-level window.
 type Info struct {
-	HWND   HWND
-	Title  string
-	Class  string
-	PID    uint32
-	Exe    string
-	Active bool
-	Rect   *Rect
+	HWND              HWND
+	Title             string
+	Class             string
+	PID               uint32
+	Exe               string
+	ProcessPath       string
+	ProcessPathStatus string
+	ProcessPathError  string
+	Active            bool
+	Visible           *bool
+	Minimized         *bool
+	Maximized         *bool
+	Rect              *Rect
 }
 
 // Rect describes a window rectangle in screen coordinates.
@@ -64,21 +70,33 @@ func (i Info) Size() (int, int, bool) {
 
 func (i Info) MarshalJSON() ([]byte, error) {
 	type infoPayload struct {
-		HWND   HWND  `json:"HWND"`
-		Title  string `json:"Title"`
-		Class  string `json:"Class"`
-		PID    uint32 `json:"PID"`
-		Exe    string `json:"Exe"`
-		Active bool   `json:"Active"`
-		Rect   *Rect  `json:"Rect,omitempty"`
+		HWND              HWND   `json:"HWND"`
+		Title             string `json:"Title"`
+		Class             string `json:"Class"`
+		PID               uint32 `json:"PID"`
+		Exe               string `json:"Exe"`
+		ProcessPath       string `json:"ProcessPath,omitempty"`
+		ProcessPathStatus string `json:"ProcessPathStatus,omitempty"`
+		ProcessPathError  string `json:"ProcessPathError,omitempty"`
+		Active            bool   `json:"Active"`
+		Visible           *bool  `json:"Visible,omitempty"`
+		Minimized         *bool  `json:"Minimized,omitempty"`
+		Maximized         *bool  `json:"Maximized,omitempty"`
+		Rect              *Rect  `json:"Rect,omitempty"`
 	}
 	return json.Marshal(infoPayload{
-		HWND:   i.HWND,
-		Title:  i.Title,
-		Class:  i.Class,
-		PID:    i.PID,
-		Exe:    i.Exe,
-		Active: i.Active,
-		Rect:   i.Rect,
+		HWND:              i.HWND,
+		Title:             i.Title,
+		Class:             i.Class,
+		PID:               i.PID,
+		Exe:               i.Exe,
+		ProcessPath:       i.ProcessPath,
+		ProcessPathStatus: i.ProcessPathStatus,
+		ProcessPathError:  i.ProcessPathError,
+		Active:            i.Active,
+		Visible:           i.Visible,
+		Minimized:         i.Minimized,
+		Maximized:         i.Maximized,
+		Rect:              i.Rect,
 	})
 }

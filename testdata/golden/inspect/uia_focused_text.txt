@@ -4,4 +4,6 @@ ControlType: (missing)
 ClassName: (missing)
 AutomationID: (missing)
 FrameworkID: (missing)
-Patterns: (none)
+SupportedPatterns: (none)
+SelectorSuggestions:
+1. {"name":"Search"} | rationale: Name-only selectors are readable but can be ambiguous.

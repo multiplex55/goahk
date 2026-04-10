@@ -1,2 +1,2 @@
-0x2 | Term | ConsoleWindowClass | pid=42 | active=true
-0x3 | Editor | Notepad | pid=73 | active=false
+0x2 | Term | ConsoleWindowClass | pid=42 | active=true | visible=(unknown) | minimized=(unknown) | maximized=(unknown) | rect=(unknown) | exe=WindowsTerminal.exe | processPath=(missing) | processPathStatus=(missing)
+0x3 | Editor | Notepad | pid=73 | active=false | visible=(unknown) | minimized=(unknown) | maximized=(unknown) | rect=(unknown) | exe=notepad.exe | processPath=(missing) | processPathStatus=(missing)

@@ -67,7 +67,7 @@ func TestRun_ParsesJSONFormatWindowAndUIA(t *testing.T) {
 	}{
 		{args: []string{"--format", "json", "window", "active"}, key: "Title"},
 		{args: []string{"--format", "json", "window", "list"}, key: "Title"},
-		{args: []string{"--format", "json", "uia", "under-cursor"}, key: "id"},
+		{args: []string{"--format", "json", "uia", "under-cursor"}, key: "element"},
 	}
 	for _, tc := range cases {
 		var out bytes.Buffer
@@ -80,6 +80,95 @@ func TestRun_ParsesJSONFormatWindowAndUIA(t *testing.T) {
 		}
 		if !strings.Contains(out.String(), tc.key) {
 			t.Fatalf("expected key %q in output %q", tc.key, out.String())
+		}
+	}
+}
+
+func TestRun_WindowActive_PartialProcessDataFallbackFields(t *testing.T) {
+	d := deps{
+		window: windowProviderFunc{
+			active: func(context.Context) (window.Info, error) {
+				return window.Info{
+					HWND:              0x10,
+					Title:             "Partial",
+					Class:             "Widget",
+					PID:               99,
+					ProcessPathStatus: "open_failed",
+					ProcessPathError:  "OpenProcess(99): access denied",
+					Active:            true,
+				}, nil
+			},
+		},
+	}
+	var out bytes.Buffer
+	if err := run(context.Background(), []string{"window", "active"}, &out, &bytes.Buffer{}, d); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	text := out.String()
+	for _, want := range []string{
+		"ProcessPath: (missing)",
+		"ProcessPathStatus: open_failed",
+		"ProcessPathError: OpenProcess(99): access denied",
+		"Visible: (unknown)",
+		"Rect: (unknown)",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("expected %q in output %q", want, text)
+		}
+	}
+}
+
+func TestRun_UIACopyBestSelectorFlag(t *testing.T) {
+	name := "Submit"
+	controlType := "Button"
+	automationID := "submitBtn"
+	d := deps{
+		uia: uiaProviderFunc{
+			under: func(context.Context) (uia.Element, error) {
+				return uia.Element{Name: &name, ControlType: &controlType, AutomationID: &automationID}, nil
+			},
+		},
+	}
+	var out bytes.Buffer
+	if err := run(context.Background(), []string{"uia", "under-cursor", "--copy-best-selector"}, &out, &bytes.Buffer{}, d); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	if !strings.Contains(out.String(), `BestSelectorJSON: {"automationId":"submitBtn"}`) {
+		t.Fatalf("expected best selector in output, got %q", out.String())
+	}
+}
+
+func TestRun_WindowJSON_IncludesGeometryAndStateFieldsWhenAvailable(t *testing.T) {
+	visible := true
+	minimized := false
+	maximized := true
+	d := deps{
+		window: windowProviderFunc{
+			active: func(context.Context) (window.Info, error) {
+				return window.Info{
+					HWND:              0x20,
+					Title:             "Editor",
+					Class:             "Notepad",
+					PID:               777,
+					Exe:               "notepad.exe",
+					ProcessPath:       `C:\\Windows\\System32\\notepad.exe`,
+					ProcessPathStatus: "ok",
+					Visible:           &visible,
+					Minimized:         &minimized,
+					Maximized:         &maximized,
+					Rect:              &window.Rect{Left: 10, Top: 20, Right: 210, Bottom: 320},
+				}, nil
+			},
+		},
+	}
+	var out bytes.Buffer
+	if err := run(context.Background(), []string{"--format", "json", "window", "active"}, &out, &bytes.Buffer{}, d); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	body := out.String()
+	for _, want := range []string{`"Visible": true`, `"Minimized": false`, `"Maximized": true`, `"ProcessPathStatus": "ok"`, `"Rect"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected %q in JSON output %q", want, body)
 		}
 	}
 }

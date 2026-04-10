@@ -1,5 +1,18 @@
 # window-inspect
 
+## CLI inspect quick checks
+
+```bash
+goahk-inspect window active
+goahk-inspect --format json window list
+```
+
+`window active` and `window list` now include parse-friendly geometry/state fields:
+
+- `Rect` (bounds in `left,top,right,bottom` form for text output; object in JSON)
+- `Visible`, `Minimized`, `Maximized`
+- `ProcessPath`, `ProcessPathStatus`, and `ProcessPathError` for permission-safe process path diagnostics.
+
 ## Program snippet
 
 ```go

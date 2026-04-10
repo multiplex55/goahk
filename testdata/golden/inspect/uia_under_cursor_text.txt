@@ -4,4 +4,8 @@ ControlType: Button
 ClassName: (missing)
 AutomationID: (missing)
 FrameworkID: (missing)
-Patterns: Invoke
+SupportedPatterns: Invoke
+SelectorSuggestions:
+1. {"name":"Search","controlType":"Button"} | rationale: Name + ControlType works when AutomationID is absent.
+2. {"name":"Search"} | rationale: Name-only selectors are readable but can be ambiguous.
+3. {"controlType":"Button"} | rationale: ControlType-only selectors are broad and should be a fallback.

@@ -3,4 +3,11 @@ Title: Term
 Class: ConsoleWindowClass
 PID: 42
 Exe: WindowsTerminal.exe
+ProcessPath: (missing)
+ProcessPathStatus: (missing)
+ProcessPathError: (missing)
 Active: true
+Visible: (unknown)
+Minimized: (unknown)
+Maximized: (unknown)
+Rect: (unknown)
