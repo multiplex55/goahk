@@ -161,7 +161,9 @@ Describe 'check-no-source-binaries.bat' {
     }
 
     function New-CheckFixture {
-        param([switch]$TrackExe)
+        param(
+            [string[]]$TrackedFiles = @()
+        )
 
         $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("goahk-check-fixture-{0}" -f ([guid]::NewGuid().ToString('N')))
         New-Item -ItemType Directory -Path $fixtureRoot | Out-Null
@@ -170,9 +172,10 @@ Describe 'check-no-source-binaries.bat' {
 
         Set-Content -Path (Join-Path $fixtureRoot '.gitignore') -Value '' -NoNewline
 
-        if ($TrackExe) {
-            New-Item -ItemType Directory -Path (Join-Path $fixtureRoot 'bin') | Out-Null
-            Set-Content -Path (Join-Path $fixtureRoot 'bin\bad.exe') -Value 'fixture exe' -NoNewline
+        foreach ($relativeFile in $TrackedFiles) {
+            $target = Join-Path $fixtureRoot $relativeFile
+            New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+            Set-Content -Path $target -Value 'fixture binary' -NoNewline
         }
 
         Push-Location $fixtureRoot
@@ -190,7 +193,7 @@ Describe 'check-no-source-binaries.bat' {
         return $fixtureRoot
     }
 
-    It 'returns 0 when no tracked .exe files exist' {
+    It 'returns 0 when no tracked blocked binaries exist' {
         $fixture = New-CheckFixture
         try {
             Push-Location $fixture
@@ -203,15 +206,15 @@ Describe 'check-no-source-binaries.bat' {
             }
 
             $exitCode | Should -Be 0
-            $result | Should -Match 'ok: no tracked \.exe artifacts'
+            $result | Should -Match 'ok: no blocked tracked binaries detected'
         }
         finally {
             Remove-Item -Path $fixture -Recurse -Force
         }
     }
 
-    It 'returns non-zero and prints offending filenames when tracked .exe files exist' {
-        $fixture = New-CheckFixture -TrackExe
+    It 'returns non-zero when blocked binaries exist in default mode' {
+        $fixture = New-CheckFixture -TrackedFiles @('dist\releases\goahk.exe', 'bin\bad.dll')
         try {
             Push-Location $fixture
             try {
@@ -223,10 +226,57 @@ Describe 'check-no-source-binaries.bat' {
             }
 
             $exitCode | Should -Not -Be 0
-            $result | Should -Match 'error: tracked \.exe artifacts are not allowed:'
-            $result | Should -Match 'bin/bad\.exe|bin\\bad\.exe'
+            $result | Should -Match 'error: blocked tracked binaries found'
+            $result | Should -Match 'dist/releases/goahk\.exe|dist\\releases\\goahk\.exe'
+            $result | Should -Match 'bin/bad\.dll|bin\\bad\.dll'
         }
         finally {
+            Remove-Item -Path $fixture -Recurse -Force
+        }
+    }
+
+    It 'allows dist/releases binaries when release mode is enabled' {
+        $fixture = New-CheckFixture -TrackedFiles @('dist\releases\goahk.exe', 'dist\releases\plugin.dll')
+        $previous = [Environment]::GetEnvironmentVariable('GOAHK_ALLOW_RELEASE_ARTIFACTS')
+        try {
+            [Environment]::SetEnvironmentVariable('GOAHK_ALLOW_RELEASE_ARTIFACTS', '1')
+            Push-Location $fixture
+            try {
+                $result = (& cmd.exe /c 'build\check-no-source-binaries.bat' 2>&1) | Out-String
+                $exitCode = $LASTEXITCODE
+            }
+            finally {
+                Pop-Location
+            }
+
+            $exitCode | Should -Be 0
+            $result | Should -Match 'ok: no blocked tracked binaries detected'
+        }
+        finally {
+            [Environment]::SetEnvironmentVariable('GOAHK_ALLOW_RELEASE_ARTIFACTS', $previous)
+            Remove-Item -Path $fixture -Recurse -Force
+        }
+    }
+
+    It 'still blocks binaries outside dist/releases in release mode' {
+        $fixture = New-CheckFixture -TrackedFiles @('dist\releases\goahk.exe', 'bin\bad.so')
+        $previous = [Environment]::GetEnvironmentVariable('GOAHK_ALLOW_RELEASE_ARTIFACTS')
+        try {
+            [Environment]::SetEnvironmentVariable('GOAHK_ALLOW_RELEASE_ARTIFACTS', 'true')
+            Push-Location $fixture
+            try {
+                $result = (& cmd.exe /c 'build\check-no-source-binaries.bat' 2>&1) | Out-String
+                $exitCode = $LASTEXITCODE
+            }
+            finally {
+                Pop-Location
+            }
+
+            $exitCode | Should -Not -Be 0
+            $result | Should -Match 'bin/bad\.so|bin\\bad\.so'
+        }
+        finally {
+            [Environment]::SetEnvironmentVariable('GOAHK_ALLOW_RELEASE_ARTIFACTS', $previous)
             Remove-Item -Path $fixture -Recurse -Force
         }
     }
