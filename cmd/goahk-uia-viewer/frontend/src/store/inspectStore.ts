@@ -50,6 +50,7 @@ export type InspectStoreState = {
   properties: InspectProperty[];
   patterns: InspectPattern[];
   statusText: string;
+  selectorText: string;
   filter: string;
   followCursor: boolean;
   followCursorBusy: boolean;
@@ -86,6 +87,7 @@ export type InspectBindings = {
 
 export type InspectStore = {
   getState: () => InspectStoreState;
+  subscribe: (listener: (state: InspectStoreState) => void) => () => void;
   setFilterInput: (value: string) => void;
   setFollowCursor: (value: boolean) => Promise<void>;
   setVisibleOnly: (value: boolean) => void;
@@ -125,6 +127,7 @@ export function createInspectStore(
     properties: [],
     patterns: [],
     statusText: 'Ready',
+    selectorText: '',
     filter: '',
     followCursor: false,
     followCursorBusy: false,
@@ -146,21 +149,25 @@ export function createInspectStore(
   let nodeSelectionToken = 0;
   let lastAppliedBridgeEventID = 0;
   const childrenLoaded = new Set<string>();
+  const listeners = new Set<(nextState: InspectStoreState) => void>();
 
   const setState = (patch: Partial<InspectStoreState>) => {
     state = { ...state, ...patch };
+    listeners.forEach((listener) => listener(state));
   };
 
   const upsertNode = (node: InspectTreeNode) => {
     const idx = state.treeNodes.findIndex((existing) => existing.nodeID === node.nodeID);
     if (idx === -1) {
       state = { ...state, treeNodes: [...state.treeNodes, node] };
+      listeners.forEach((listener) => listener(state));
       return;
     }
 
     const next = [...state.treeNodes];
     next[idx] = { ...next[idx], ...node };
     state = { ...state, treeNodes: next };
+    listeners.forEach((listener) => listener(state));
   };
 
   const applyFollowCursorEvent = async (event: FollowCursorBridgeEvent) => {
@@ -228,6 +235,7 @@ export function createInspectStore(
       treeNodes: [],
       properties: [],
       patterns: [],
+      selectorText: '',
       errorText: '',
       statusText: 'Loading window...'
     });
@@ -258,6 +266,7 @@ export function createInspectStore(
         loadingWindow: false,
         properties,
         patterns,
+        selectorText: details.bestSelector ?? '',
         selectedPath: details.path ?? state.selectedPath,
         statusText: details.statusText ?? `Selected window ${windowID}`
       });
@@ -268,6 +277,11 @@ export function createInspectStore(
       setState({
         loadingWindow: false,
         errorText: err instanceof Error ? err.message : String(err),
+        selectedNodeID: '',
+        selectedPath: [],
+        properties: [],
+        patterns: [],
+        selectorText: '',
         statusText: 'Failed to load window'
       });
     }
@@ -289,6 +303,7 @@ export function createInspectStore(
       setState({
         properties: details.properties ?? [],
         patterns: details.patterns ?? [],
+        selectorText: details.bestSelector ?? '',
         selectedPath: details.path ?? state.selectedPath,
         statusText: details.statusText ?? `Selected node ${nodeID}`,
         loadingNode: false
@@ -300,6 +315,11 @@ export function createInspectStore(
       setState({
         loadingNode: false,
         errorText: err instanceof Error ? err.message : String(err),
+        selectedNodeID: '',
+        selectedPath: [],
+        properties: [],
+        patterns: [],
+        selectorText: '',
         statusText: 'Failed to select node'
       });
     }
@@ -427,6 +447,12 @@ export function createInspectStore(
 
   return {
     getState: () => state,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     refreshWindows,
     selectWindow,
     selectNode,
