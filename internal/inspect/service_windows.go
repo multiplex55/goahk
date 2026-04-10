@@ -20,7 +20,7 @@ func (p *windowsProvider) ListWindows(context.Context, ListWindowsRequest) (List
 }
 
 func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRequest) (InspectWindowResponse, error) {
-	root, err := p.core.treeRoot(ctx, req.HWND)
+	root, err := p.core.treeRoot(ctx, req.HWND, req.Refresh)
 	if err != nil {
 		return InspectWindowResponse{}, err
 	}
@@ -28,7 +28,7 @@ func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRe
 }
 
 func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootRequest) (GetTreeRootResponse, error) {
-	root, err := p.core.treeRoot(ctx, req.HWND)
+	root, err := p.core.treeRoot(ctx, req.HWND, req.Refresh)
 	if err != nil {
 		return GetTreeRootResponse{}, err
 	}
@@ -111,6 +111,7 @@ func (p *windowsProvider) ToggleFollowCursor(context.Context, ToggleFollowCursor
 }
 
 func (p *windowsProvider) RefreshWindows(context.Context, RefreshWindowsRequest) (RefreshWindowsResponse, error) {
+	p.core.invalidateWindowCache("")
 	return RefreshWindowsResponse{}, ErrProviderActionUnsupported
 }
 
@@ -138,4 +139,7 @@ func (unsupportedUIAAdapter) GetParent(context.Context, string) (*uiaElement, er
 }
 func (unsupportedUIAAdapter) GetChildren(context.Context, string) ([]*uiaElement, error) {
 	return nil, ErrProviderActionUnsupported
+}
+func (unsupportedUIAAdapter) GetChildCount(context.Context, string) (int, bool, error) {
+	return 0, false, nil
 }

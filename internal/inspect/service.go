@@ -86,7 +86,8 @@ type InspectWindowResponse struct {
 }
 
 type GetTreeRootRequest struct {
-	HWND string `json:"hwnd"`
+	HWND    string `json:"hwnd"`
+	Refresh bool   `json:"refresh,omitempty"`
 }
 
 type TreeNodeDTO struct {
@@ -95,6 +96,10 @@ type TreeNodeDTO struct {
 	ControlType string   `json:"controlType,omitempty"`
 	ClassName   string   `json:"className,omitempty"`
 	Patterns    []string `json:"patterns,omitempty"`
+	ChildCount  *int     `json:"childCount,omitempty"`
+	HasChildren bool     `json:"hasChildren,omitempty"`
+	Expanded    bool     `json:"expanded,omitempty"`
+	Cycle       bool     `json:"cycle,omitempty"`
 }
 
 type GetTreeRootResponse struct {
