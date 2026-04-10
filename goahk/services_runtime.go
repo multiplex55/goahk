@@ -17,16 +17,13 @@ func (s runtimeService) Stop() {
 	actions.RequestRuntimeStop(s.ctx.actionCtx, "runtime.stop")
 }
 
-func (s runtimeService) Sleep(duration time.Duration) {
+func (s runtimeService) Sleep(duration time.Duration) bool {
 	if duration <= 0 {
-		return
+		return true
 	}
 	if s.ctx == nil {
 		time.Sleep(duration)
-		return
+		return true
 	}
-	select {
-	case <-s.ctx.Context().Done():
-	case <-time.After(duration):
-	}
+	return s.ctx.Sleep(duration)
 }

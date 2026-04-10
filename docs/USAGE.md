@@ -48,6 +48,7 @@ The callback receives `*goahk.Context`, exposing typed runtime APIs:
 - `ctx.Window` (`Active`, `List`, `Activate`, `Title`)
 - `ctx.Process` (`Launch`, `Open`)
 - `ctx.Runtime` (`Stop`, `Sleep`)
+- callback helpers: `ctx.Err()`, `ctx.Sleep(...)`, `ctx.Log(...)`, `ctx.Logger()`, `ctx.Binding()`, `ctx.Trigger()`
 
 ## 3) Declarative and callback can be mixed
 
@@ -105,7 +106,7 @@ app := goahk.NewApp().
 	On("Ctrl+Shift+R").Replace().Do(
 		goahk.Func(func(ctx *goahk.Context) error {
 			for i := 0; i < 30; i++ {
-				if !ctx.Runtime.Sleep(100 * time.Millisecond) {
+				if !ctx.Sleep(100 * time.Millisecond) {
 					return ctx.Err()
 				}
 			}
