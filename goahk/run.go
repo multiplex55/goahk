@@ -2,18 +2,32 @@ package goahk
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	stdruntime "runtime"
 	"strings"
 
 	"goahk/internal/actions"
-	internalapp "goahk/internal/app"
 	"goahk/internal/config"
 	"goahk/internal/program"
 	"goahk/internal/runtime"
 )
 
 const callbackActionPlaceholder = "goahk.callback"
+
+var ErrUnsupportedPlatform = errors.New("goahk: runtime execution is unsupported on this platform")
+
+type unsupportedPlatformError struct {
+	goos string
+}
+
+func (e unsupportedPlatformError) Error() string {
+	return fmt.Sprintf("%s (goos=%s, require=windows)", ErrUnsupportedPlatform.Error(), e.goos)
+}
+
+func (e unsupportedPlatformError) Unwrap() error {
+	return ErrUnsupportedPlatform
+}
 
 type callbackRegistration struct {
 	ref string
@@ -36,14 +50,14 @@ func (a *App) Run(ctx context.Context) error {
 		registry = buildRegistryWithCallbacks(a.state, callbacks, logger)
 	}
 
-	if _, err := internalapp.CompileRuntimeBindingsFromProgram(p, registry); err != nil {
+	if _, err := runtime.CompileRuntimeBindings(p, registry); err != nil {
 		logger.Error("goahk.compile_runtime_bindings_failed", map[string]any{"error": err.Error()})
 		return fmt.Errorf("compile app program: %w", err)
 	}
 
 	if stdruntime.GOOS != "windows" {
 		logger.Info("goahk.runtime_not_started", map[string]any{"reason": "non_windows", "goos": stdruntime.GOOS})
-		return nil
+		return unsupportedPlatformError{goos: stdruntime.GOOS}
 	}
 
 	bootstrap := runtime.NewBootstrap()

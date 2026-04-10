@@ -1,5 +1,8 @@
 # goahk practical usage guide
 
+> Platform support: runtime execution is Windows-only for v1.
+> On Linux/macOS, `App.Run(...)` returns `goahk.ErrUnsupportedPlatform`.
+
 ## 1) Code-first quick start (primary)
 
 Use `goahk.NewApp()` and declare each hotkey in Go.
@@ -166,6 +169,9 @@ go run ./cmd/goahk -config .\config.json
 ```
 
 Use config mode when you need to preserve existing JSON assets; prefer code-first for all new authoring.
+
+Internally, both code-first and config compatibility paths compile through the same canonical entrypoint:
+`internal/runtime.CompileRuntimeBindings(program.Program, *actions.Registry)`.
 
 ## 10) Compatibility matrix
 

@@ -31,8 +31,11 @@ To keep v1 narrow and reliable, these are explicit non-goals:
 ## Program model core + adapters
 
 - **Core model:** hotkey bindings and action steps compiled into runtime bindings.
+- **Canonical compiler entrypoint:** `internal/runtime.CompileRuntimeBindings(program.Program, *actions.Registry)`.
 - **Primary adapter:** code-first API (`goahk.NewApp`, `Bind`, `Run`).
 - **Compatibility adapter:** JSON config loader used by `cmd/goahk`.
+- **Legacy adapters:** `internal/app.CompileRuntimeBindingsFromProgram` and `internal/app.CompileRuntimeBindings`
+  are compatibility shims that delegate to the canonical runtime compiler.
 
 This keeps runtime dispatch independent from how programs are authored, while preserving existing JSON workflows.
 
@@ -115,3 +118,8 @@ If any stage fails, the runtime cleans up already-initialized resources in rever
 ## Shutdown lifecycle
 
 Shutdown is context-driven. Callers cancel the run context (for example, from OS signal handling). The runtime exits the message loop and closes registered runtime resources in reverse initialization order.
+
+## Platform support statement
+
+Runtime execution (`App.Run` and `cmd/goahk`) is supported on Windows only in v1.
+On non-Windows platforms, runtime startup returns an explicit unsupported-platform error instead of a silent no-op.

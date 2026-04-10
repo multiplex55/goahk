@@ -84,7 +84,7 @@ func TestRuntimeControlHotkeys_EscapeGracefulVsShiftEscapeHardStop(t *testing.T)
 	p := program.Program{Bindings: []program.BindingSpec{
 		{ID: "esc", Hotkey: "esc", Steps: []program.StepSpec{{Action: "system.log"}}},
 		{ID: "hard", Hotkey: "shift+esc", Steps: []program.StepSpec{{Action: "system.log"}}},
-	}}
+	}, Options: program.Options{EnableImplicitEscapeControls: true}}
 	compiled, err := CompileRuntimeBindings(p, actions.NewRegistry())
 	if err != nil {
 		t.Fatalf("CompileRuntimeBindings() error = %v", err)

@@ -2,6 +2,8 @@ package goahk
 
 import (
 	"context"
+	"errors"
+	stdruntime "runtime"
 	"strings"
 	"testing"
 )
@@ -29,7 +31,12 @@ func TestAPIHappyPath_TinyScriptFlow(t *testing.T) {
 		t.Fatalf("binding[0] step[1] action = %q, want %q", got, want)
 	}
 	if err := app.Run(context.Background()); err != nil {
-		t.Fatalf("Run() error = %v, want nil", err)
+		if stdruntime.GOOS == "windows" {
+			t.Fatalf("Run() error = %v, want nil", err)
+		}
+		if !errors.Is(err, ErrUnsupportedPlatform) {
+			t.Fatalf("Run() error = %v, want ErrUnsupportedPlatform on non-windows", err)
+		}
 	}
 }
 
