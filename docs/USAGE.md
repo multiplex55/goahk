@@ -45,7 +45,7 @@ The callback receives `*goahk.Context`, exposing typed runtime APIs:
 
 - `ctx.Clipboard` (`ReadText`, `WriteText`, `AppendText`, `PrependText`)
 - `ctx.Input` (`SendText`, `SendKeys`, `SendChord`, `Paste`)
-- `ctx.Window` (`Active`, `List`, `Activate`, `Title`)
+- `ctx.Window` (`Active`, `List`, `Activate`, `ActivateMatch`, `Bounds`, `Move`, `MoveBy`, `Resize`, `ResizeBy`, `Center`, `Minimize`, `Maximize`, `Restore`, `Title`)
 - `ctx.Process` (`Launch`, `Open`)
 - `ctx.Runtime` (`Stop`, `Sleep`)
 - callback helpers: `ctx.Err()`, `ctx.Sleep(...)`, `ctx.Log(...)`, `ctx.Logger()`, `ctx.Binding()`, `ctx.Trigger()`
@@ -70,6 +70,14 @@ if err := ctx.Window.Move(hwnd, 0, 0); err != nil {
         return nil
     }
     return err
+}
+```
+
+Structured window matcher helpers can be used instead of matcher DSL strings:
+
+```go
+if err := ctx.Window.ActivateMatch(goahk.MatchTitleContains("code")); err != nil {
+	return err
 }
 ```
 

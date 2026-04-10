@@ -80,6 +80,7 @@ func NewBootstrap() Bootstrap {
 				return window.Enumerate(ctx, windowProvider)
 			},
 			WindowBounds:   windowProvider.WindowBounds,
+			WindowWorkArea: windowProvider.WorkAreaForWindow,
 			WindowMove:     windowProvider.MoveWindow,
 			WindowResize:   windowProvider.ResizeWindow,
 			WindowMinimize: windowProvider.MinimizeWindow,

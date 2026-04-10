@@ -9,10 +9,13 @@ app.Bind("Alt+Shift+Left", goahk.Func(func(ctx *goahk.Context) error {
     if err != nil {
         return err
     }
-    if err := ctx.Window.Move(active.HWND, 0, 0); err != nil {
+    if err := ctx.Window.Center(active.HWND); err != nil {
         return err
     }
-    return ctx.Window.Resize(active.HWND, 960, 1080)
+    if err := ctx.Window.ResizeBy(active.HWND, -300, 0); err != nil {
+        return err
+    }
+    return ctx.Window.MoveBy(active.HWND, -40, 0)
 }))
 app.Bind("Escape", goahk.ControlStop())
 ```

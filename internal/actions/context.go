@@ -46,6 +46,7 @@ type Services struct {
 	ActiveWindowTitle func(context.Context) (string, error)
 	WindowList        func(context.Context) ([]window.Info, error)
 	WindowBounds      func(context.Context, window.HWND) (window.Rect, error)
+	WindowWorkArea    func(context.Context, window.HWND) (window.Rect, error)
 	WindowMove        func(context.Context, window.HWND, int, int) error
 	WindowResize      func(context.Context, window.HWND, int, int) error
 	WindowMinimize    func(context.Context, window.HWND) error

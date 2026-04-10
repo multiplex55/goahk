@@ -30,6 +30,8 @@ var (
 	procGetWindowRect              = windowUser32.NewProc("GetWindowRect")
 	procSetWindowPos               = windowUser32.NewProc("SetWindowPos")
 	procShowWindow                 = windowUser32.NewProc("ShowWindow")
+	procMonitorFromWindow          = windowUser32.NewProc("MonitorFromWindow")
+	procGetMonitorInfoW            = windowUser32.NewProc("GetMonitorInfoW")
 	procOpenProcess                = windowKernel32.NewProc("OpenProcess")
 	procCloseHandle                = windowKernel32.NewProc("CloseHandle")
 	procQueryFullProcessImageNameW = windowKernel32.NewProc("QueryFullProcessImageNameW")
@@ -37,12 +39,13 @@ var (
 )
 
 const (
-	swpNoZOrder = 0x0004
-	swpNoSize   = 0x0001
-	swpNoMove   = 0x0002
-	swMinimize  = 6
-	swMaximize  = 3
-	swRestore   = 9
+	swpNoZOrder             = 0x0004
+	swpNoSize               = 0x0001
+	swpNoMove               = 0x0002
+	swMinimize              = 6
+	swMaximize              = 3
+	swRestore               = 9
+	monitorDefaultToNearest = 0x00000002
 )
 
 type rect struct {
@@ -50,6 +53,13 @@ type rect struct {
 	Top    int32
 	Right  int32
 	Bottom int32
+}
+
+type monitorInfo struct {
+	CbSize    uint32
+	RcMonitor rect
+	RcWork    rect
+	DwFlags   uint32
 }
 
 type OSProvider struct{}
@@ -127,6 +137,35 @@ func (p *OSProvider) WindowBounds(ctx context.Context, hwnd HWND) (Rect, error) 
 		return Rect{}, err
 	}
 	return *bounds, nil
+}
+
+func (p *OSProvider) WorkAreaForWindow(ctx context.Context, hwnd HWND) (Rect, error) {
+	select {
+	case <-ctx.Done():
+		return Rect{}, ctx.Err()
+	default:
+	}
+	monitor, _, monitorErr := procMonitorFromWindow.Call(uintptr(hwnd), uintptr(monitorDefaultToNearest))
+	if monitor == 0 {
+		if monitorErr != syscall.Errno(0) {
+			return Rect{}, fmt.Errorf("MonitorFromWindow(%s): %w", hwnd, monitorErr)
+		}
+		return Rect{}, fmt.Errorf("MonitorFromWindow(%s): failed", hwnd)
+	}
+	info := monitorInfo{CbSize: uint32(unsafe.Sizeof(monitorInfo{}))}
+	ret, _, err := procGetMonitorInfoW.Call(monitor, uintptr(unsafe.Pointer(&info)))
+	if ret == 0 {
+		if err != syscall.Errno(0) {
+			return Rect{}, fmt.Errorf("GetMonitorInfoW(%s): %w", hwnd, err)
+		}
+		return Rect{}, fmt.Errorf("GetMonitorInfoW(%s): failed", hwnd)
+	}
+	return Rect{
+		Left:   int(info.RcWork.Left),
+		Top:    int(info.RcWork.Top),
+		Right:  int(info.RcWork.Right),
+		Bottom: int(info.RcWork.Bottom),
+	}, nil
 }
 
 func (p *OSProvider) MoveWindow(ctx context.Context, hwnd HWND, x, y int) error {

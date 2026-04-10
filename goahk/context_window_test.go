@@ -20,6 +20,9 @@ func TestContextWindow_WrappersDelegateToServices(t *testing.T) {
 			activated = matcher
 			return nil
 		},
+		WindowMinimize:    func(context.Context, window.HWND) error { return nil },
+		WindowMaximize:    func(context.Context, window.HWND) error { return nil },
+		WindowRestore:     func(context.Context, window.HWND) error { return nil },
 		ActiveWindowTitle: func(context.Context) (string, error) { return "active-title", nil },
 	}}, newAppState())
 
@@ -40,11 +43,23 @@ func TestContextWindow_WrappersDelegateToServices(t *testing.T) {
 	if err := ctx.Window.Activate("notepad"); err != nil {
 		t.Fatalf("Activate err = %v, want nil", err)
 	}
+	if err := ctx.Window.ActivateMatch(MatchTitleContains("pad")); err != nil {
+		t.Fatalf("ActivateMatch err = %v, want nil", err)
+	}
 	title, err := ctx.Window.Title()
 	if err != nil {
 		t.Fatalf("Title err = %v, want nil", err)
 	}
-	if title != "active-title" || activated != "notepad" {
+	if err := ctx.Window.Minimize(1); err != nil {
+		t.Fatalf("Minimize err = %v, want nil", err)
+	}
+	if err := ctx.Window.Maximize(1); err != nil {
+		t.Fatalf("Maximize err = %v, want nil", err)
+	}
+	if err := ctx.Window.Restore(1); err != nil {
+		t.Fatalf("Restore err = %v, want nil", err)
+	}
+	if title != "active-title" || activated != "title:pad" {
 		t.Fatalf("Title/Activate = (%q, %q)", title, activated)
 	}
 }
@@ -63,6 +78,9 @@ func TestContextWindow_MissingServiceReturnsSentinelErrors(t *testing.T) {
 	if err := ctx.Window.Activate("notepad"); !errors.Is(err, ErrWindowServiceUnavailable) {
 		t.Fatalf("Activate err = %v, want ErrWindowServiceUnavailable", err)
 	}
+	if err := ctx.Window.ActivateMatch(MatchTitleContains("notepad")); !errors.Is(err, ErrWindowServiceUnavailable) {
+		t.Fatalf("ActivateMatch err = %v, want ErrWindowServiceUnavailable", err)
+	}
 	if _, err := ctx.Window.Bounds(1); !errors.Is(err, ErrWindowServiceUnavailable) {
 		t.Fatalf("Bounds err = %v, want ErrWindowServiceUnavailable", err)
 	}
@@ -71,6 +89,24 @@ func TestContextWindow_MissingServiceReturnsSentinelErrors(t *testing.T) {
 	}
 	if err := ctx.Window.Resize(1, 10, 10); !errors.Is(err, ErrWindowServiceUnavailable) {
 		t.Fatalf("Resize err = %v, want ErrWindowServiceUnavailable", err)
+	}
+	if err := ctx.Window.MoveBy(1, 10, 10); !errors.Is(err, ErrWindowServiceUnavailable) {
+		t.Fatalf("MoveBy err = %v, want ErrWindowServiceUnavailable", err)
+	}
+	if err := ctx.Window.ResizeBy(1, 10, 10); !errors.Is(err, ErrWindowServiceUnavailable) {
+		t.Fatalf("ResizeBy err = %v, want ErrWindowServiceUnavailable", err)
+	}
+	if err := ctx.Window.Center(1); !errors.Is(err, ErrWindowServiceUnavailable) {
+		t.Fatalf("Center err = %v, want ErrWindowServiceUnavailable", err)
+	}
+	if err := ctx.Window.Minimize(1); !errors.Is(err, ErrWindowServiceUnavailable) {
+		t.Fatalf("Minimize err = %v, want ErrWindowServiceUnavailable", err)
+	}
+	if err := ctx.Window.Maximize(1); !errors.Is(err, ErrWindowServiceUnavailable) {
+		t.Fatalf("Maximize err = %v, want ErrWindowServiceUnavailable", err)
+	}
+	if err := ctx.Window.Restore(1); !errors.Is(err, ErrWindowServiceUnavailable) {
+		t.Fatalf("Restore err = %v, want ErrWindowServiceUnavailable", err)
 	}
 	if _, err := ctx.Window.Title(); !errors.Is(err, ErrWindowServiceUnavailable) {
 		t.Fatalf("Title err = %v, want ErrWindowServiceUnavailable", err)
