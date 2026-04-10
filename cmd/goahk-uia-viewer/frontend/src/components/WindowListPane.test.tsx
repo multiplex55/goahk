@@ -17,7 +17,7 @@ describe('WindowListPane', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: 'Windows' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Windows and Controls' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Calculator/ }));
     expect(onSelectWindow).toHaveBeenCalledWith('2');
   });

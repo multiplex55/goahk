@@ -2,16 +2,24 @@ import { useState } from 'react';
 import { propertyCopySource } from '../copySource';
 import { PropertyItem } from '../types';
 
+export type NotifyFn = (message: string, variant?: 'success' | 'error') => void;
+
 type PropertyGridProps = {
   properties: PropertyItem[];
+  onNotify?: NotifyFn;
 };
 
-export default function PropertyGrid({ properties }: PropertyGridProps) {
+export default function PropertyGrid({ properties, onNotify }: PropertyGridProps) {
   const [selectedName, setSelectedName] = useState<string | null>(null);
 
   async function copyProperty(property: PropertyItem) {
-    const source = propertyCopySource(property.name, property.value);
-    await navigator.clipboard.writeText(source);
+    try {
+      const source = propertyCopySource(property.name, property.value);
+      await navigator.clipboard.writeText(source);
+      onNotify?.(`Copied ${property.name}`, 'success');
+    } catch {
+      onNotify?.(`Failed to copy ${property.name}`, 'error');
+    }
   }
 
   return (
@@ -30,7 +38,7 @@ export default function PropertyGrid({ properties }: PropertyGridProps) {
               type="button"
               className="copy-button"
               aria-label={`Copy ${property.name}`}
-              onClick={() => copyProperty(property)}
+              onClick={() => void copyProperty(property)}
             >
               ⧉
             </button>

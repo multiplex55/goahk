@@ -1,40 +1,55 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import PatternPanel from './PatternPanel';
 
 describe('PatternPanel', () => {
-  it('dispatches action on button click and row double-click', () => {
-    const onInvokePattern = vi.fn();
+  afterEach(() => cleanup());
+  it('disables unsupported actions and sends payload for supported payload actions', async () => {
+    const onInvokePattern = vi.fn().mockResolvedValue(undefined);
+    const onNotify = vi.fn();
+    render(
+      <PatternPanel
+        actions={[
+          { id: 'invoke', label: 'Invoke', supported: true },
+          { id: 'set-value', label: 'SetValue', supported: true, requiresInput: true },
+          { id: 'select', label: 'Select', supported: false }
+        ]}
+        onInvokePattern={onInvokePattern}
+        onNotify={onNotify}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Select' })).toBeDisabled();
+
+    const setValueButton = screen.getByRole('button', { name: 'SetValue' });
+    expect(setValueButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('SetValue payload'), { target: { value: 'new text' } });
+    expect(setValueButton).toBeEnabled();
+
+    await act(async () => {
+      fireEvent.click(setValueButton);
+    });
+    expect(onInvokePattern).toHaveBeenCalledWith('set-value', 'new text');
+    expect(onNotify).toHaveBeenCalledWith('SetValue succeeded', 'success');
+  });
+
+  it('shows error notification when action execution fails', async () => {
+    const onInvokePattern = vi.fn().mockRejectedValue(new Error('boom'));
+    const onNotify = vi.fn();
+
     render(
       <PatternPanel
         actions={[{ id: 'invoke', label: 'Invoke', supported: true }]}
         onInvokePattern={onInvokePattern}
+        onNotify={onNotify}
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Invoke' }));
-    fireEvent.doubleClick(screen.getByText('Invoke').closest('.pattern-row')!);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Invoke' }));
+    });
 
-    expect(onInvokePattern).toHaveBeenNthCalledWith(1, 'invoke');
-    expect(onInvokePattern).toHaveBeenNthCalledWith(2, 'invoke');
-  });
-
-  it('requires payload input for SetValue before enabling action', () => {
-    const onInvokePattern = vi.fn();
-    render(
-      <PatternPanel
-        actions={[{ id: 'set-value', label: 'SetValue', supported: true, requiresInput: true }]}
-        onInvokePattern={onInvokePattern}
-      />
-    );
-
-    const button = screen.getByRole('button', { name: 'SetValue' });
-    expect(button).toBeDisabled();
-
-    fireEvent.change(screen.getByLabelText('SetValue payload'), { target: { value: 'new text' } });
-    expect(button).toBeEnabled();
-
-    fireEvent.click(button);
-    expect(onInvokePattern).toHaveBeenCalledWith('set-value', 'new text');
+    expect(onNotify).toHaveBeenCalledWith('Invoke failed', 'error');
   });
 });

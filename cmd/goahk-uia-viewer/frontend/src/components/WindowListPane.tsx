@@ -9,7 +9,7 @@ type WindowListPaneProps = {
 export default function WindowListPane({ windows, selectedWindowId, onSelectWindow }: WindowListPaneProps) {
   return (
     <section className="pane" aria-label="window list pane">
-      <h2>Windows</h2>
+      <h2>Windows and Controls</h2>
       <ul className="list">
         {windows.map((window) => (
           <li key={window.id}>

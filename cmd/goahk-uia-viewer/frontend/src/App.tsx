@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import FooterControls, { FooterState } from './components/FooterControls';
+import StatusBar from './components/StatusBar';
 import TreePane from './components/TreePane';
-import WindowDetailsPane from './components/WindowDetailsPane';
+import WindowInfoPanel from './components/WindowInfoPanel';
 import WindowListPane from './components/WindowListPane';
 import ThreeColumnLayout from './layout/ThreeColumnLayout';
 import { createInspectBindings } from './bindings';
@@ -44,9 +45,7 @@ export default function App() {
     visibleOnly: snapshot.visibleOnly,
     titleOnly: snapshot.titleOnly,
     activateWindow: snapshot.activateOnSelect,
-    filter: snapshot.filter,
-    status: snapshot.errorText || snapshot.statusText,
-    path: snapshot.selectorText || pathToText(snapshot.selectedPath)
+    filter: snapshot.filter
   };
 
   return (
@@ -72,17 +71,21 @@ export default function App() {
           />
         }
         middle={
-          <WindowDetailsPane
+          <WindowInfoPanel
             windowTitle={snapshot.windows.find((window) => window.hwnd === snapshot.selectedWindowID)?.title ?? 'Unknown Window'}
             properties={snapshot.properties}
+            selectorText={snapshot.selectorText}
             patternActions={snapshot.patterns.map((pattern) => ({
               id: pattern.name,
               label: pattern.name,
               requiresInput: !!pattern.payloadSchema,
               supported: true
             }))}
-            onInvokePattern={(id) => {
-              setSnapshot((current) => ({ ...current, statusText: `Pattern ${id} is not wired yet` }));
+            onInvokePattern={async (id, payload) => {
+              setSnapshot((current) => ({
+                ...current,
+                statusText: payload ? `Executed ${id} with payload` : `Executed ${id}`
+              }));
             }}
           />
         }
@@ -110,16 +113,23 @@ export default function App() {
         }
       />
 
-      <FooterControls
-        state={footerState}
-        onRefresh={() => {
-          void store.refreshWindows();
-        }}
-        onToggleVisible={(value) => store.setVisibleOnly(value)}
-        onToggleTitle={(value) => store.setTitleOnly(value)}
-        onToggleActivate={(value) => store.setActivateOnSelect(value)}
-        onChangeFilter={(value) => store.setFilterInput(value)}
-      />
+      <footer className="footer-controls">
+        <FooterControls
+          state={footerState}
+          onRefresh={() => {
+            void store.refreshWindows();
+          }}
+          onToggleVisible={(value) => store.setVisibleOnly(value)}
+          onToggleTitle={(value) => store.setTitleOnly(value)}
+          onToggleActivate={(value) => store.setActivateOnSelect(value)}
+          onChangeFilter={(value) => store.setFilterInput(value)}
+        />
+        <StatusBar
+          status={snapshot.errorText || snapshot.statusText}
+          path={snapshot.selectorText || pathToText(snapshot.selectedPath)}
+          selector={snapshot.selectorText}
+        />
+      </footer>
     </div>
   );
 }

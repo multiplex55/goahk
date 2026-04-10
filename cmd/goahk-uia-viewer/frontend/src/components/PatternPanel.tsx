@@ -1,27 +1,34 @@
 import { useState } from 'react';
 import { PatternAction } from '../types';
+import { NotifyFn } from './PropertyGrid';
 
 type PatternPanelProps = {
   actions: PatternAction[];
-  onInvokePattern: (id: string, payload?: string) => void;
+  onInvokePattern: (id: string, payload?: string) => Promise<void> | void;
+  onNotify?: NotifyFn;
 };
 
-export default function PatternPanel({ actions, onInvokePattern }: PatternPanelProps) {
+export default function PatternPanel({ actions, onInvokePattern, onNotify }: PatternPanelProps) {
   const [payloadByActionId, setPayloadByActionId] = useState<Record<string, string>>({});
 
-  function handleInvoke(action: PatternAction) {
+  async function handleInvoke(action: PatternAction) {
     if (!action.supported) {
       return;
     }
-    if (action.requiresInput) {
-      const payload = payloadByActionId[action.id]?.trim();
-      if (!payload) {
-        return;
+    try {
+      if (action.requiresInput) {
+        const payload = payloadByActionId[action.id]?.trim();
+        if (!payload) {
+          return;
+        }
+        await onInvokePattern(action.id, payload);
+      } else {
+        await onInvokePattern(action.id);
       }
-      onInvokePattern(action.id, payload);
-      return;
+      onNotify?.(`${action.label} succeeded`, 'success');
+    } catch {
+      onNotify?.(`${action.label} failed`, 'error');
     }
-    onInvokePattern(action.id);
   }
 
   return (
@@ -32,12 +39,8 @@ export default function PatternPanel({ actions, onInvokePattern }: PatternPanelP
           const payload = payloadByActionId[action.id] ?? '';
           const disabled = action.supported === false || (action.requiresInput && payload.trim().length === 0);
           return (
-            <div
-              key={action.id}
-              className={`pattern-row ${disabled ? 'disabled' : ''}`.trim()}
-              onDoubleClick={() => handleInvoke(action)}
-            >
-              <button type="button" disabled={disabled} onClick={() => handleInvoke(action)}>
+            <div key={action.id} className={`pattern-row ${disabled ? 'disabled' : ''}`.trim()}>
+              <button type="button" disabled={disabled} onClick={() => void handleInvoke(action)}>
                 {action.label}
               </button>
               {action.requiresInput ? (
