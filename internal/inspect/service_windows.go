@@ -91,19 +91,15 @@ func (p *windowsProvider) CopyBestSelector(ctx context.Context, req CopyBestSele
 }
 
 func (p *windowsProvider) GetPatternActions(ctx context.Context, req GetPatternActionsRequest) (GetPatternActionsResponse, error) {
-	selected, err := p.core.inspectByNodeID(ctx, req.NodeID)
+	actions, err := p.core.getPatternActions(ctx, req.NodeID)
 	if err != nil {
 		return GetPatternActionsResponse{}, err
-	}
-	actions := make([]PatternActionDTO, 0, len(selected.Patterns))
-	for _, a := range selected.Patterns {
-		actions = append(actions, PatternActionDTO{Name: a.Action, PayloadSchema: a.PayloadSchema})
 	}
 	return GetPatternActionsResponse{NodeID: req.NodeID, Actions: actions}, nil
 }
 
-func (p *windowsProvider) InvokePattern(context.Context, InvokePatternRequest) (InvokePatternResponse, error) {
-	return InvokePatternResponse{}, ErrProviderActionUnsupported
+func (p *windowsProvider) InvokePattern(ctx context.Context, req InvokePatternRequest) (InvokePatternResponse, error) {
+	return p.core.invokePattern(ctx, req)
 }
 
 func (p *windowsProvider) ToggleFollowCursor(context.Context, ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error) {
@@ -142,4 +138,25 @@ func (unsupportedUIAAdapter) GetChildren(context.Context, string) ([]*uiaElement
 }
 func (unsupportedUIAAdapter) GetChildCount(context.Context, string) (int, bool, error) {
 	return 0, false, nil
+}
+func (unsupportedUIAAdapter) Invoke(context.Context, string) error {
+	return ErrProviderActionUnsupported
+}
+func (unsupportedUIAAdapter) Select(context.Context, string) error {
+	return ErrProviderActionUnsupported
+}
+func (unsupportedUIAAdapter) SetValue(context.Context, string, string) error {
+	return ErrProviderActionUnsupported
+}
+func (unsupportedUIAAdapter) DoDefaultAction(context.Context, string) error {
+	return ErrProviderActionUnsupported
+}
+func (unsupportedUIAAdapter) Toggle(context.Context, string) error {
+	return ErrProviderActionUnsupported
+}
+func (unsupportedUIAAdapter) Expand(context.Context, string) error {
+	return ErrProviderActionUnsupported
+}
+func (unsupportedUIAAdapter) Collapse(context.Context, string) error {
+	return ErrProviderActionUnsupported
 }

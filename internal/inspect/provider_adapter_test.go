@@ -3,6 +3,8 @@ package inspect
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -19,6 +21,13 @@ type fakeAdapter struct {
 	focusErr          error
 	pointErr          error
 	getChildrenErr    map[string]error
+	invokeErr         error
+	selectErr         error
+	setValueErr       error
+	invokeCount       int
+	selectCount       int
+	setValueCount     int
+	lastSetValue      string
 }
 
 func (f *fakeAdapter) ResolveWindowRoot(context.Context, string) (*uiaElement, error) {
@@ -33,7 +42,12 @@ func (f *fakeAdapter) GetCursorPosition(context.Context) (int, int, error) {
 func (f *fakeAdapter) ElementFromPoint(context.Context, int, int) (*uiaElement, error) {
 	return f.under, f.pointErr
 }
-func (f *fakeAdapter) GetElementByRef(context.Context, string) (*uiaElement, error) {
+func (f *fakeAdapter) GetElementByRef(_ context.Context, ref string) (*uiaElement, error) {
+	if f.byRef != nil {
+		if el, ok := f.byRef[ref]; ok {
+			return el, nil
+		}
+	}
 	return nil, errors.New("not implemented")
 }
 func (f *fakeAdapter) GetParent(context.Context, string) (*uiaElement, error) {
@@ -61,6 +75,25 @@ func (f *fakeAdapter) GetChildCount(_ context.Context, ref string) (int, bool, e
 	count, ok := f.childCount[ref]
 	return count, ok, nil
 }
+func (f *fakeAdapter) Invoke(context.Context, string) error {
+	f.invokeCount++
+	return f.invokeErr
+}
+func (f *fakeAdapter) Select(context.Context, string) error {
+	f.selectCount++
+	return f.selectErr
+}
+func (f *fakeAdapter) SetValue(_ context.Context, _ string, value string) error {
+	f.setValueCount++
+	f.lastSetValue = value
+	return f.setValueErr
+}
+func (f *fakeAdapter) DoDefaultAction(context.Context, string) error {
+	return ErrProviderActionUnsupported
+}
+func (f *fakeAdapter) Toggle(context.Context, string) error   { return ErrProviderActionUnsupported }
+func (f *fakeAdapter) Expand(context.Context, string) error   { return ErrProviderActionUnsupported }
+func (f *fakeAdapter) Collapse(context.Context, string) error { return ErrProviderActionUnsupported }
 
 func TestProviderAdapter_PropertyMappingAndNormalization(t *testing.T) {
 	help := "h"
@@ -223,5 +256,115 @@ func TestProviderAdapter_EdgeCases(t *testing.T) {
 		if !errors.As(err, &callErr) {
 			t.Fatalf("expected ProviderCallError, got %T", err)
 		}
+	}
+}
+
+func TestProviderAdapter_InvokePatternDispatcher(t *testing.T) {
+	t.Parallel()
+
+	setup := func(patterns []string) (*providerCore, *fakeAdapter, string) {
+		adapter := &fakeAdapter{
+			root:  &uiaElement{Ref: "root", Name: "Root"},
+			kids:  map[string][]*uiaElement{},
+			byRef: map[string]*uiaElement{"root": {Ref: "root", SupportedPatterns: patterns}},
+		}
+		core := newProviderCore(adapter)
+		root, _ := core.treeRoot(context.Background(), "0x1", false)
+		return core, adapter, root.NodeID
+	}
+
+	t.Run("valid routing per action", func(t *testing.T) {
+		core, adapter, nodeID := setup([]string{"Invoke", "SelectionItem", "Value"})
+		_, err := core.invokePattern(context.Background(), InvokePatternRequest{NodeID: nodeID, Action: "invoke"})
+		if err != nil {
+			t.Fatalf("invoke route failed: %v", err)
+		}
+		_, err = core.invokePattern(context.Background(), InvokePatternRequest{NodeID: nodeID, Action: "select"})
+		if err != nil {
+			t.Fatalf("select route failed: %v", err)
+		}
+		_, err = core.invokePattern(context.Background(), InvokePatternRequest{
+			NodeID:  nodeID,
+			Action:  "setValue",
+			Payload: map[string]any{"value": "hello"},
+		})
+		if err != nil {
+			t.Fatalf("setValue route failed: %v", err)
+		}
+		if adapter.invokeCount != 1 || adapter.selectCount != 1 || adapter.setValueCount != 1 {
+			t.Fatalf("unexpected call counts invoke=%d select=%d setValue=%d", adapter.invokeCount, adapter.selectCount, adapter.setValueCount)
+		}
+		if adapter.lastSetValue != "hello" {
+			t.Fatalf("expected propagated value, got %q", adapter.lastSetValue)
+		}
+	})
+
+	t.Run("unknown action rejected", func(t *testing.T) {
+		core, _, nodeID := setup([]string{"Invoke"})
+		_, err := core.invokePattern(context.Background(), InvokePatternRequest{NodeID: nodeID, Action: "unknown"})
+		if !errors.Is(err, ErrUnsupportedPatternAction) {
+			t.Fatalf("expected unsupported action, got %v", err)
+		}
+	})
+
+	t.Run("input required for set value", func(t *testing.T) {
+		core, _, nodeID := setup([]string{"Value"})
+		_, err := core.invokePattern(context.Background(), InvokePatternRequest{NodeID: nodeID, Action: "setValue"})
+		if !errors.Is(err, ErrMissingPatternInput) {
+			t.Fatalf("expected missing input, got %v", err)
+		}
+	})
+}
+
+func TestProviderAdapter_InvokePatternCapabilityGating(t *testing.T) {
+	t.Parallel()
+
+	t.Run("actions disabled when unsupported", func(t *testing.T) {
+		adapter := &fakeAdapter{
+			root:  &uiaElement{Ref: "root", Name: "Root"},
+			byRef: map[string]*uiaElement{"root": {Ref: "root", SupportedPatterns: []string{}}},
+		}
+		core := newProviderCore(adapter)
+		root, _ := core.treeRoot(context.Background(), "0x1", false)
+		_, err := core.invokePattern(context.Background(), InvokePatternRequest{NodeID: root.NodeID, Action: "invoke"})
+		if !errors.Is(err, ErrUnsupportedPatternAction) {
+			t.Fatalf("expected unsupported action, got %v", err)
+		}
+	})
+
+	t.Run("supported action invokes correct provider method", func(t *testing.T) {
+		adapter := &fakeAdapter{
+			root:  &uiaElement{Ref: "root", Name: "Root"},
+			byRef: map[string]*uiaElement{"root": {Ref: "root", SupportedPatterns: []string{"SelectionItem"}}},
+		}
+		core := newProviderCore(adapter)
+		root, _ := core.treeRoot(context.Background(), "0x1", false)
+		_, err := core.invokePattern(context.Background(), InvokePatternRequest{NodeID: root.NodeID, Action: "select"})
+		if err != nil {
+			t.Fatalf("select failed: %v", err)
+		}
+		if adapter.selectCount != 1 || adapter.invokeCount != 0 || adapter.setValueCount != 0 {
+			t.Fatalf("unexpected adapter calls invoke=%d select=%d setValue=%d", adapter.invokeCount, adapter.selectCount, adapter.setValueCount)
+		}
+	})
+}
+
+func TestProviderAdapter_InvokePatternFailureModes(t *testing.T) {
+	t.Parallel()
+
+	adapter := &fakeAdapter{
+		root:      &uiaElement{Ref: "root", Name: "Root"},
+		byRef:     map[string]*uiaElement{"root": {Ref: "root", SupportedPatterns: []string{"Invoke"}}},
+		invokeErr: fmt.Errorf("com invoke failed"),
+	}
+	core := newProviderCore(adapter)
+	root, _ := core.treeRoot(context.Background(), "0x1", false)
+
+	_, err := core.invokePattern(context.Background(), InvokePatternRequest{NodeID: root.NodeID, Action: "invoke"})
+	if !errors.Is(err, ErrPatternExecutionFailure) {
+		t.Fatalf("expected execution failure wrapper, got %v", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "action=invoke") {
+		t.Fatalf("expected action context in error, got %v", err)
 	}
 }
