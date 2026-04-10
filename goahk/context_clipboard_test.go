@@ -2,6 +2,7 @@ package goahk
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"goahk/internal/actions"
@@ -45,11 +46,36 @@ func TestContextClipboard_WrappersDelegateToService(t *testing.T) {
 	if err != nil || got != "start" {
 		t.Fatalf("ReadText() = (%q, %v), want (start, nil)", got, err)
 	}
-	_ = ctx.Clipboard.WriteText("a")
-	_ = ctx.Clipboard.AppendText("b")
-	_ = ctx.Clipboard.PrependText("z")
+	if err := ctx.Clipboard.WriteText("a"); err != nil {
+		t.Fatalf("WriteText err = %v, want nil", err)
+	}
+	if err := ctx.Clipboard.AppendText("b"); err != nil {
+		t.Fatalf("AppendText err = %v, want nil", err)
+	}
+	if err := ctx.Clipboard.PrependText("z"); err != nil {
+		t.Fatalf("PrependText err = %v, want nil", err)
+	}
 
 	if clip.text != "zab" {
 		t.Fatalf("clipboard final text = %q, want zab", clip.text)
+	}
+}
+
+func TestContextClipboard_MissingServiceReturnsSentinelErrors(t *testing.T) {
+	t.Parallel()
+
+	ctx := newContext(nil, newAppState())
+
+	if _, err := ctx.Clipboard.ReadText(); !errors.Is(err, ErrClipboardServiceUnavailable) {
+		t.Fatalf("ReadText err = %v, want ErrClipboardServiceUnavailable", err)
+	}
+	if err := ctx.Clipboard.WriteText("a"); !errors.Is(err, ErrClipboardServiceUnavailable) {
+		t.Fatalf("WriteText err = %v, want ErrClipboardServiceUnavailable", err)
+	}
+	if err := ctx.Clipboard.AppendText("b"); !errors.Is(err, ErrClipboardServiceUnavailable) {
+		t.Fatalf("AppendText err = %v, want ErrClipboardServiceUnavailable", err)
+	}
+	if err := ctx.Clipboard.PrependText("z"); !errors.Is(err, ErrClipboardServiceUnavailable) {
+		t.Fatalf("PrependText err = %v, want ErrClipboardServiceUnavailable", err)
 	}
 }

@@ -50,6 +50,38 @@ The callback receives `*goahk.Context`, exposing typed runtime APIs:
 - `ctx.Runtime` (`Stop`, `Sleep`)
 - callback helpers: `ctx.Err()`, `ctx.Sleep(...)`, `ctx.Log(...)`, `ctx.Logger()`, `ctx.Binding()`, `ctx.Trigger()`
 
+
+## 2.1) Service availability and error behavior
+
+Callback-facing wrappers now return explicit sentinel errors when an underlying runtime service is unavailable (for example in tests or partially wired contexts).
+
+Sentinel errors:
+
+- `goahk.ErrWindowServiceUnavailable`
+- `goahk.ErrInputServiceUnavailable`
+- `goahk.ErrClipboardServiceUnavailable`
+
+These errors are wrapped with operation context, so `errors.Is` still works:
+
+```go
+if err := ctx.Window.Move(hwnd, 0, 0); err != nil {
+    if errors.Is(err, goahk.ErrWindowServiceUnavailable) {
+        ctx.Log("window service missing", "op", "move")
+        return nil
+    }
+    return err
+}
+```
+
+Behavior change examples:
+
+- Before: `ctx.Window.List()` could return `(nil, nil)` when the service was missing.
+- After: `ctx.Window.List()` returns an error wrapping `ErrWindowServiceUnavailable`.
+- Before: `ctx.Input.SendText("x")` could return `nil` when input was missing.
+- After: it returns an error wrapping `ErrInputServiceUnavailable`.
+- Before: `ctx.Clipboard.ReadText()` could return `("", nil)` when clipboard was missing.
+- After: it returns an error wrapping `ErrClipboardServiceUnavailable`.
+
 ## 3) Declarative and callback can be mixed
 
 Built-in action helpers and callbacks can appear in the same `Bind(...)` call.
