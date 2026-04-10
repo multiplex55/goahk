@@ -148,6 +148,18 @@ Thread-safety guidance:
 - `ctx.AppState` is safe for concurrent access (`Get` / `Set` / `LoadOrStore` are synchronized), and is the right place for shared counters/flags/cache values.
 - If you store composite values that require read-modify-write semantics across multiple operations, keep updates in one callback section or encode as single string values with `LoadOrStore`/`Set` boundaries.
 
+## Toolchain expectations
+
+- Minimum supported Go version: **1.22.x** (matches `go.mod`).
+- Recommended local development version: **1.25.x** (same as the latest CI lane).
+- CI validates both minimum and latest supported lanes, and rejects ambiguous `stable` toolchain configuration.
+
+Quick check:
+
+```powershell
+go version
+```
+
 ## Documentation index
 
 - ADRs: [`docs/adr/`](docs/adr/)

@@ -1,5 +1,5 @@
 module goahk
 
-go 1.25.0
+go 1.22.0
 
-require golang.org/x/sys v0.43.0
+require golang.org/x/sys v0.30.0
