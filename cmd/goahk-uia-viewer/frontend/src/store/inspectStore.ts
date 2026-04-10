@@ -14,7 +14,9 @@ export type InspectTreeNode = {
 export type InspectWindow = {
   hwnd: string;
   title: string;
+  processName?: string;
   className?: string;
+  processID?: number;
 };
 
 export type InspectWindowRequest = {
@@ -62,14 +64,17 @@ export type InspectStoreState = {
 };
 
 type NodeDetailsResponse = {
+  windowInfo?: InspectWindow;
   properties: InspectProperty[];
   patterns: InspectPattern[];
   statusText?: string;
+  bestSelector?: string;
+  path?: InspectTreeNode[];
 };
 
 export type InspectBindings = {
   RefreshWindows(req: { filter: string; visibleOnly: boolean; titleOnly: boolean }): Promise<{ windows: InspectWindow[] }>;
-  InspectWindow(req: InspectWindowRequest): Promise<{ rootNodeID?: string }>;
+  InspectWindow(req: InspectWindowRequest): Promise<{ window?: InspectWindow; rootNodeID?: string }>;
   GetTreeRoot(req: { hwnd: string; refresh?: boolean }): Promise<{ root: InspectTreeNode }>;
   GetNodeChildren(req: { nodeID: string }): Promise<{ parentNodeID: string; children: InspectTreeNode[] }>;
   SelectNode(req: { nodeID: string }): Promise<{ selected: InspectTreeNode }>;
@@ -253,6 +258,7 @@ export function createInspectStore(
         loadingWindow: false,
         properties,
         patterns,
+        selectedPath: details.path ?? state.selectedPath,
         statusText: details.statusText ?? `Selected window ${windowID}`
       });
     } catch (err) {
@@ -283,6 +289,7 @@ export function createInspectStore(
       setState({
         properties: details.properties ?? [],
         patterns: details.patterns ?? [],
+        selectedPath: details.path ?? state.selectedPath,
         statusText: details.statusText ?? `Selected node ${nodeID}`,
         loadingNode: false
       });

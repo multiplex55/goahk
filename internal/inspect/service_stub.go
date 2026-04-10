@@ -31,6 +31,10 @@ func (unsupportedProvider) SelectNode(context.Context, SelectNodeRequest) (Selec
 	return SelectNodeResponse{}, ErrProviderActionUnsupported
 }
 
+func (unsupportedProvider) GetNodeDetails(context.Context, GetNodeDetailsRequest) (GetNodeDetailsResponse, error) {
+	return GetNodeDetailsResponse{}, ErrProviderActionUnsupported
+}
+
 func (unsupportedProvider) GetFocusedElement(context.Context, GetFocusedElementRequest) (GetFocusedElementResponse, error) {
 	return GetFocusedElementResponse{}, ErrProviderActionUnsupported
 }
@@ -57,6 +61,10 @@ func (unsupportedProvider) GetPatternActions(context.Context, GetPatternActionsR
 
 func (unsupportedProvider) InvokePattern(context.Context, InvokePatternRequest) (InvokePatternResponse, error) {
 	return InvokePatternResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) ActivateWindow(context.Context, ActivateWindowRequest) (ActivateWindowResponse, error) {
+	return ActivateWindowResponse{}, ErrProviderActionUnsupported
 }
 
 func (unsupportedProvider) ToggleFollowCursor(context.Context, ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error) {

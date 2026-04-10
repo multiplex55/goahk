@@ -23,6 +23,7 @@ type Service interface {
 	GetTreeRoot(context.Context, GetTreeRootRequest) (GetTreeRootResponse, error)
 	GetNodeChildren(context.Context, GetNodeChildrenRequest) (GetNodeChildrenResponse, error)
 	SelectNode(context.Context, SelectNodeRequest) (SelectNodeResponse, error)
+	GetNodeDetails(context.Context, GetNodeDetailsRequest) (GetNodeDetailsResponse, error)
 	GetFocusedElement(context.Context, GetFocusedElementRequest) (GetFocusedElementResponse, error)
 	GetElementUnderCursor(context.Context, GetElementUnderCursorRequest) (GetElementUnderCursorResponse, error)
 	HighlightNode(context.Context, HighlightNodeRequest) (HighlightNodeResponse, error)
@@ -30,6 +31,7 @@ type Service interface {
 	CopyBestSelector(context.Context, CopyBestSelectorRequest) (CopyBestSelectorResponse, error)
 	GetPatternActions(context.Context, GetPatternActionsRequest) (GetPatternActionsResponse, error)
 	InvokePattern(context.Context, InvokePatternRequest) (InvokePatternResponse, error)
+	ActivateWindow(context.Context, ActivateWindowRequest) (ActivateWindowResponse, error)
 	ToggleFollowCursor(context.Context, ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error)
 	RefreshWindows(context.Context, RefreshWindowsRequest) (RefreshWindowsResponse, error)
 }
@@ -40,6 +42,7 @@ type WindowsProvider interface {
 	GetTreeRoot(context.Context, GetTreeRootRequest) (GetTreeRootResponse, error)
 	GetNodeChildren(context.Context, GetNodeChildrenRequest) (GetNodeChildrenResponse, error)
 	SelectNode(context.Context, SelectNodeRequest) (SelectNodeResponse, error)
+	GetNodeDetails(context.Context, GetNodeDetailsRequest) (GetNodeDetailsResponse, error)
 	GetFocusedElement(context.Context, GetFocusedElementRequest) (GetFocusedElementResponse, error)
 	GetElementUnderCursor(context.Context, GetElementUnderCursorRequest) (GetElementUnderCursorResponse, error)
 	HighlightNode(context.Context, HighlightNodeRequest) (HighlightNodeResponse, error)
@@ -47,6 +50,7 @@ type WindowsProvider interface {
 	CopyBestSelector(context.Context, CopyBestSelectorRequest) (CopyBestSelectorResponse, error)
 	GetPatternActions(context.Context, GetPatternActionsRequest) (GetPatternActionsResponse, error)
 	InvokePattern(context.Context, InvokePatternRequest) (InvokePatternResponse, error)
+	ActivateWindow(context.Context, ActivateWindowRequest) (ActivateWindowResponse, error)
 	ToggleFollowCursor(context.Context, ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error)
 	RefreshWindows(context.Context, RefreshWindowsRequest) (RefreshWindowsResponse, error)
 }
@@ -69,9 +73,11 @@ type ListWindowsRequest struct {
 }
 
 type WindowSummary struct {
-	HWND      string `json:"hwnd"`
-	Title     string `json:"title"`
-	ClassName string `json:"className,omitempty"`
+	HWND        string `json:"hwnd"`
+	Title       string `json:"title"`
+	ProcessName string `json:"processName,omitempty"`
+	ClassName   string `json:"className,omitempty"`
+	ProcessID   int    `json:"processID,omitempty"`
 }
 
 type ListWindowsResponse struct {
@@ -95,15 +101,16 @@ type GetTreeRootRequest struct {
 }
 
 type TreeNodeDTO struct {
-	NodeID      string   `json:"nodeID"`
-	Name        string   `json:"name,omitempty"`
-	ControlType string   `json:"controlType,omitempty"`
-	ClassName   string   `json:"className,omitempty"`
-	Patterns    []string `json:"patterns,omitempty"`
-	ChildCount  *int     `json:"childCount,omitempty"`
-	HasChildren bool     `json:"hasChildren,omitempty"`
-	Expanded    bool     `json:"expanded,omitempty"`
-	Cycle       bool     `json:"cycle,omitempty"`
+	NodeID       string   `json:"nodeID"`
+	Name         string   `json:"name,omitempty"`
+	ControlType  string   `json:"controlType,omitempty"`
+	ClassName    string   `json:"className,omitempty"`
+	HasChildren  bool     `json:"hasChildren"`
+	ParentNodeID string   `json:"parentNodeID,omitempty"`
+	Patterns     []string `json:"patterns,omitempty"`
+	ChildCount   *int     `json:"childCount,omitempty"`
+	Expanded     bool     `json:"expanded,omitempty"`
+	Cycle        bool     `json:"cycle,omitempty"`
 }
 
 type GetTreeRootResponse struct {
@@ -124,6 +131,24 @@ type SelectNodeRequest struct {
 }
 type SelectNodeResponse struct {
 	Selected TreeNodeDTO `json:"selected"`
+}
+
+type GetNodeDetailsRequest struct {
+	NodeID string `json:"nodeID"`
+}
+
+type PropertyDTO struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type GetNodeDetailsResponse struct {
+	WindowInfo   WindowSummary      `json:"windowInfo"`
+	Properties   []PropertyDTO      `json:"properties"`
+	Patterns     []PatternActionDTO `json:"patterns"`
+	StatusText   string             `json:"statusText,omitempty"`
+	BestSelector string             `json:"bestSelector,omitempty"`
+	Path         []TreeNodeDTO      `json:"path,omitempty"`
 }
 
 type GetFocusedElementRequest struct{}
@@ -182,6 +207,14 @@ type InvokePatternResponse struct {
 	Result  string `json:"result,omitempty"`
 }
 
+type ActivateWindowRequest struct {
+	HWND string `json:"hwnd"`
+}
+
+type ActivateWindowResponse struct {
+	Activated bool `json:"activated"`
+}
+
 type ToggleFollowCursorRequest struct {
 	Enabled bool `json:"enabled"`
 }
@@ -189,7 +222,11 @@ type ToggleFollowCursorResponse struct {
 	Enabled bool `json:"enabled"`
 }
 
-type RefreshWindowsRequest struct{}
+type RefreshWindowsRequest struct {
+	Filter      string `json:"filter,omitempty"`
+	VisibleOnly bool   `json:"visibleOnly"`
+	TitleOnly   bool   `json:"titleOnly"`
+}
 type RefreshWindowsResponse struct {
 	Windows []WindowSummary `json:"windows"`
 }
@@ -228,6 +265,14 @@ func (s service) SelectNode(ctx context.Context, req SelectNodeRequest) (SelectN
 		return SelectNodeResponse{}, ErrInvalidNodeID
 	}
 	resp, err := s.provider.SelectNode(ctx, req)
+	return resp, mapProviderError(err)
+}
+
+func (s service) GetNodeDetails(ctx context.Context, req GetNodeDetailsRequest) (GetNodeDetailsResponse, error) {
+	if req.NodeID == "" {
+		return GetNodeDetailsResponse{}, ErrInvalidNodeID
+	}
+	resp, err := s.provider.GetNodeDetails(ctx, req)
 	return resp, mapProviderError(err)
 }
 
@@ -275,6 +320,14 @@ func (s service) InvokePattern(ctx context.Context, req InvokePatternRequest) (I
 		return InvokePatternResponse{}, ErrInvalidNodeID
 	}
 	resp, err := s.provider.InvokePattern(ctx, req)
+	return resp, mapProviderError(err)
+}
+
+func (s service) ActivateWindow(ctx context.Context, req ActivateWindowRequest) (ActivateWindowResponse, error) {
+	if req.HWND == "" {
+		return ActivateWindowResponse{}, ErrInvalidNodeID
+	}
+	resp, err := s.provider.ActivateWindow(ctx, req)
 	return resp, mapProviderError(err)
 }
 

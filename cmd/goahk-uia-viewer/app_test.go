@@ -36,6 +36,9 @@ func (f *fakeInspectService) GetNodeChildren(context.Context, inspect.GetNodeChi
 func (f *fakeInspectService) SelectNode(context.Context, inspect.SelectNodeRequest) (inspect.SelectNodeResponse, error) {
 	return inspect.SelectNodeResponse{}, nil
 }
+func (f *fakeInspectService) GetNodeDetails(context.Context, inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
+	return inspect.GetNodeDetailsResponse{}, nil
+}
 func (f *fakeInspectService) GetFocusedElement(context.Context, inspect.GetFocusedElementRequest) (inspect.GetFocusedElementResponse, error) {
 	return inspect.GetFocusedElementResponse{}, nil
 }
@@ -66,6 +69,9 @@ func (f *fakeInspectService) GetPatternActions(context.Context, inspect.GetPatte
 }
 func (f *fakeInspectService) InvokePattern(context.Context, inspect.InvokePatternRequest) (inspect.InvokePatternResponse, error) {
 	return inspect.InvokePatternResponse{}, nil
+}
+func (f *fakeInspectService) ActivateWindow(context.Context, inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
+	return inspect.ActivateWindowResponse{}, nil
 }
 func (f *fakeInspectService) ToggleFollowCursor(context.Context, inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
 	return inspect.ToggleFollowCursorResponse{}, nil

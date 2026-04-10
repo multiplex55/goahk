@@ -90,6 +90,10 @@ func (a *ViewerApp) SelectNode(ctx context.Context, req inspect.SelectNodeReques
 	return a.service.SelectNode(ctx, req)
 }
 
+func (a *ViewerApp) GetNodeDetails(ctx context.Context, req inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
+	return a.service.GetNodeDetails(ctx, req)
+}
+
 func (a *ViewerApp) GetFocusedElement(ctx context.Context, req inspect.GetFocusedElementRequest) (inspect.GetFocusedElementResponse, error) {
 	return a.service.GetFocusedElement(ctx, req)
 }
@@ -116,6 +120,10 @@ func (a *ViewerApp) GetPatternActions(ctx context.Context, req inspect.GetPatter
 
 func (a *ViewerApp) InvokePattern(ctx context.Context, req inspect.InvokePatternRequest) (inspect.InvokePatternResponse, error) {
 	return a.service.InvokePattern(ctx, req)
+}
+
+func (a *ViewerApp) ActivateWindow(ctx context.Context, req inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
+	return a.service.ActivateWindow(ctx, req)
 }
 
 func (a *ViewerApp) ToggleFollowCursor(ctx context.Context, req inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
