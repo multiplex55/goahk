@@ -103,6 +103,12 @@ Complete runnable example:
 go run ./examples/mixed-actions
 ```
 
+## 3.1) Stop semantics (canonical guidance)
+
+- `goahk.ControlStop()` is for immediate/emergency/control-plane responsiveness (hotkeys, kill bindings).
+- `goahk.Stop()` is for normal action-sequence shutdown.
+- They are **not interchangeable**.
+
 ## 4) State model: `Vars` vs shared `AppState`
 
 ### `ctx.Vars` (per-trigger)

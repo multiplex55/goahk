@@ -14,7 +14,7 @@ app.Bind("Alt+Shift+Left", goahk.Func(func(ctx *goahk.Context) error {
     }
     return ctx.Window.Resize(active.HWND, 960, 1080)
 }))
-app.Bind("Escape", goahk.Stop())
+app.Bind("Escape", goahk.ControlStop())
 ```
 
 ## Expected runtime log sequence

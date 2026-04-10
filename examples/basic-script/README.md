@@ -6,4 +6,4 @@ Minimal hotkey binding example.
 
 - Start script.
 - Press `Ctrl+Alt+B` to type `basic script trigger` into the focused input.
-- Press `Escape` to stop the app.
+- Press `Escape` to stop the app (control-plane graceful stop).

@@ -30,7 +30,7 @@ func main() {
 		}
 	}))
 	// snippet:end:window-aware-script-main
-	app.Bind("Escape", goahk.Stop())
+	app.Bind("Escape", goahk.ControlStop())
 
 	if err := app.Run(context.Background()); err != nil {
 		log.Fatal(err)

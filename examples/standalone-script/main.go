@@ -14,7 +14,7 @@ func main() {
 	app.Bind("1", goahk.MessageBox("goahk", "You pressed 1"))
 	// Press "2" to snapshot open applications into metadata key "open_apps".
 	app.Bind("2", goahk.ListOpenApplications("open_apps"), goahk.Log("Captured open app inventory to metadata.open_apps"))
-	app.Bind("Escape", goahk.Stop())
+	app.Bind("Escape", goahk.ControlStop())
 
 	if err := app.Run(context.Background()); err != nil {
 		log.Fatal(err)

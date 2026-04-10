@@ -4,7 +4,7 @@ import "fmt"
 
 func ExampleNewApp() {
 	app := NewApp()
-	app.Bind("Escape", Stop())
+	app.Bind("Escape", ControlStop())
 	fmt.Println("configured")
 	// Output: configured
 }
@@ -12,7 +12,7 @@ func ExampleNewApp() {
 func ExampleApp_Bind() {
 	app := NewApp().
 		Bind("1", MessageBox("Hotkey pressed", "You hit 1"), Stop()).
-		Bind("Escape", Stop())
+		Bind("Escape", ControlStop())
 
 	fmt.Println(len(app.toProgram().Bindings))
 	// Output: 2
@@ -21,7 +21,7 @@ func ExampleApp_Bind() {
 func Example_messageBoxAndStop() {
 	app := NewApp().
 		Bind("F1", MessageBox("Heads up", "Task completed"), Stop()).
-		Bind("Escape", Stop())
+		Bind("Escape", ControlStop())
 
 	fmt.Println(app.toProgram().Bindings[0].Steps[0].Action)
 	// Output: system.message_box

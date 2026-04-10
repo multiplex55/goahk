@@ -16,7 +16,7 @@ func main() {
 		}
 		return ctx.Clipboard.WriteText("callback captured: " + text)
 	}))
-	app.Bind("Escape", goahk.Stop())
+	app.Bind("Escape", goahk.ControlStop())
 
 	if err := app.Run(context.Background()); err != nil {
 		log.Fatal(err)

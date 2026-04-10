@@ -26,7 +26,7 @@ func TestScriptModeSnippetCompilesAndRuns(t *testing.T) {
 
 	app := goahk.NewApp()
 	app.Bind("1", goahk.MessageBox("goahk", "Hello from hotkey 1"))
-	app.Bind("Escape", goahk.Stop())
+	app.Bind("Escape", goahk.ControlStop())
 
 	assertRunResultForPlatform(t, app.Run(context.Background()))
 }

@@ -8,4 +8,4 @@ Window-aware action routing based on active app metadata.
 - In code editors, types an editor comment.
 - In browsers, types `https://github.com/`.
 - In other apps, types the active window title.
-- Press `Escape` to stop the app.
+- Press `Escape` to stop the app (control-plane graceful stop).

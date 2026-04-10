@@ -124,13 +124,32 @@ func Log(message string) Action {
 	return Action{name: "system.log", params: map[string]string{"message": message}}
 }
 
-// Stop requests runtime shutdown after the current action step completes.
-// Remaining steps in the same binding are skipped.
+// Stop requests normal runtime shutdown from the work/action plane.
+//
+// Behavioral guarantees:
+//   - The current action step is allowed to complete.
+//   - Remaining steps in the same binding are skipped.
+//   - The stop request is delivered through normal action-sequence semantics.
+//
+// Recommended use:
+//   - Use Stop at the end of a workflow/action sequence when shutdown is part of
+//     normal business logic.
+//   - Do not use Stop for emergency/hotkey control bindings; use ControlStop for
+//     control-plane responsiveness.
 func Stop() Action {
 	return Action{name: "runtime.stop", params: map[string]string{}}
 }
 
 // ControlStop marks a binding as an explicit runtime control-plane graceful stop command.
+//
+// Behavioral guarantees:
+//   - The binding is compiled as a control command, not a normal action pipeline.
+//   - Dispatch handles it on the control plane for responsive stop intent handling.
+//
+// Recommended use:
+//   - Emergency/kill hotkeys and other operator control bindings (for example
+//     Escape-based stop chords).
+//   - Use Stop (not ControlStop) when shutdown is part of an action workflow.
 func ControlStop() Action {
 	return Action{name: "runtime.control_stop", params: map[string]string{}}
 }
