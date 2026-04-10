@@ -37,9 +37,16 @@ type WindowAPI interface {
 	Active() (window.Info, error)
 	List() ([]window.Info, error)
 	Activate(matcher string) error
+	ActivateMatch(matcher window.Matcher) error
 	Bounds(hwnd window.HWND) (window.Rect, error)
 	Move(hwnd window.HWND, x, y int) error
+	MoveBy(hwnd window.HWND, dx, dy int) error
 	Resize(hwnd window.HWND, width, height int) error
+	ResizeBy(hwnd window.HWND, dw, dh int) error
+	Center(hwnd window.HWND) error
+	Minimize(hwnd window.HWND) error
+	Maximize(hwnd window.HWND) error
+	Restore(hwnd window.HWND) error
 	Title() (string, error)
 }
 

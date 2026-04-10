@@ -12,6 +12,9 @@ func main() {
 	app := goahk.NewApp()
 	// snippet:start:window-aware-script-main
 	app.Bind("Ctrl+Shift+W", goahk.Func(func(ctx *goahk.Context) error {
+		if err := ctx.Window.ActivateMatch(goahk.MatchTitleContains("code")); err != nil {
+			return err
+		}
 		active, err := ctx.Window.Active()
 		if err != nil {
 			return err
