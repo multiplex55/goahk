@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"goahk/internal/inspect"
+
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type followCursorEvent struct {
@@ -51,6 +53,17 @@ func NewViewerApp(service inspect.Service) *ViewerApp {
 		return out
 	}
 	return app
+}
+
+func (a *ViewerApp) OnStartup(ctx context.Context) {
+	a.SetEventEmitter(func(name string, payload any) {
+		wailsRuntime.EventsEmit(ctx, name, payload)
+	})
+}
+
+func (a *ViewerApp) OnShutdown(ctx context.Context) {
+	_, _ = a.ToggleFollowCursor(ctx, inspect.ToggleFollowCursorRequest{Enabled: false})
+	a.SetEventEmitter(nil)
 }
 
 func (a *ViewerApp) SetEventEmitter(emitter func(name string, payload any)) {
