@@ -2,10 +2,25 @@ package goahk_test
 
 import (
 	"context"
+	"errors"
+	stdruntime "runtime"
 	"testing"
 
 	"goahk/goahk"
 )
+
+func assertRunResultForPlatform(t *testing.T, err error) {
+	t.Helper()
+	if stdruntime.GOOS == "windows" {
+		if err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		return
+	}
+	if !errors.Is(err, goahk.ErrUnsupportedPlatform) {
+		t.Fatalf("Run() error = %v, want unsupported platform on non-windows", err)
+	}
+}
 
 func TestScriptModeSnippetCompilesAndRuns(t *testing.T) {
 
@@ -13,9 +28,7 @@ func TestScriptModeSnippetCompilesAndRuns(t *testing.T) {
 	app.Bind("1", goahk.MessageBox("goahk", "Hello from hotkey 1"))
 	app.Bind("Escape", goahk.Stop())
 
-	if err := app.Run(context.Background()); err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
+	assertRunResultForPlatform(t, app.Run(context.Background()))
 }
 
 func TestConfigMappingSnippetCompilesAndRuns(t *testing.T) {
@@ -25,9 +38,7 @@ func TestConfigMappingSnippetCompilesAndRuns(t *testing.T) {
 		goahk.MessageBox("goahk", "Hello from Ctrl+Alt+H"),
 	)
 
-	if err := app.Run(context.Background()); err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
+	assertRunResultForPlatform(t, app.Run(context.Background()))
 }
 
 func TestSnippetComposesActionsAndCallbackStep(t *testing.T) {
@@ -43,9 +54,7 @@ func TestSnippetComposesActionsAndCallbackStep(t *testing.T) {
 		goahk.ClipboardWrite("done"),
 	)
 
-	if err := app.Run(context.Background()); err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
+	assertRunResultForPlatform(t, app.Run(context.Background()))
 }
 
 func TestSnippetComposesWindowAndInputStepsWithCallback(t *testing.T) {
@@ -61,7 +70,5 @@ func TestSnippetComposesWindowAndInputStepsWithCallback(t *testing.T) {
 		goahk.SendKeys("ctrl+v {enter}"),
 	)
 
-	if err := app.Run(context.Background()); err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
+	assertRunResultForPlatform(t, app.Run(context.Background()))
 }
