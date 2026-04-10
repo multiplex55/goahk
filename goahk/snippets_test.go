@@ -8,7 +8,6 @@ import (
 )
 
 func TestScriptModeSnippetCompilesAndRuns(t *testing.T) {
-	t.Parallel()
 
 	app := goahk.NewApp()
 	app.Bind("1", goahk.MessageBox("goahk", "Hello from hotkey 1"))
@@ -20,7 +19,6 @@ func TestScriptModeSnippetCompilesAndRuns(t *testing.T) {
 }
 
 func TestConfigMappingSnippetCompilesAndRuns(t *testing.T) {
-	t.Parallel()
 
 	app := goahk.NewApp()
 	app.Bind("Ctrl+Alt+H",
@@ -33,7 +31,6 @@ func TestConfigMappingSnippetCompilesAndRuns(t *testing.T) {
 }
 
 func TestSnippetComposesActionsAndCallbackStep(t *testing.T) {
-	t.Parallel()
 
 	app := goahk.NewApp()
 	app.Bind("Ctrl+Shift+C",
@@ -52,7 +49,6 @@ func TestSnippetComposesActionsAndCallbackStep(t *testing.T) {
 }
 
 func TestSnippetComposesWindowAndInputStepsWithCallback(t *testing.T) {
-	t.Parallel()
 
 	app := goahk.NewApp()
 	app.Bind("Ctrl+Shift+T",
