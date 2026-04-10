@@ -93,7 +93,36 @@ go run ./examples/mixed-actions
 - Window-aware logic by active title/process: `go run ./examples/window-aware-script`
 - Built-in + callback + built-in pipeline: `go run ./examples/mixed-actions`
 
-## 6) Logging with `WithLogger`
+## 6) Per-binding execution policy
+
+Each binding defaults to `serial` concurrency. Use fluent policy helpers to change it:
+
+```go
+app := goahk.NewApp().
+	On("Ctrl+Shift+R").Replace().Do(
+		goahk.Func(func(ctx *goahk.Context) error {
+			for i := 0; i < 30; i++ {
+				if !ctx.Runtime.Sleep(100 * time.Millisecond) {
+					return ctx.Err()
+				}
+			}
+			return nil
+		}),
+	).
+	On("Ctrl+Shift+Q").QueueOne().Do(goahk.Log("queued"))
+```
+
+Helpers:
+
+- `.Serial()` (default)
+- `.Replace()`
+- `.QueueOne()`
+- `.Parallel()`
+- `.Drop()`
+
+You can also call `.WithPolicy("replace")` directly; unknown policy names fail fast during `Run()`.
+
+## 7) Logging with `WithLogger`
 
 `WithLogger` attaches a structured runtime logger to all runtime paths. The logger receives:
 
@@ -117,7 +146,7 @@ func main() {
 }
 ```
 
-## 7) Runtime reliability scenario docs
+## 8) Runtime reliability scenario docs
 
 Operational scenario references (config snippets + expected logs + cancellation notes):
 
@@ -128,7 +157,7 @@ Operational scenario references (config snippets + expected logs + cancellation 
 - [`docs/examples/long-running-task-with-replace-policy.md`](./examples/long-running-task-with-replace-policy.md)
 - [`docs/examples/emergency-stop.md`](./examples/emergency-stop.md)
 
-## 8) Config mode compatibility adapter (`cmd/goahk`)
+## 9) Config mode compatibility adapter (`cmd/goahk`)
 
 JSON config mode remains supported for existing deployments/tooling.
 
@@ -138,7 +167,7 @@ go run ./cmd/goahk -config .\config.json
 
 Use config mode when you need to preserve existing JSON assets; prefer code-first for all new authoring.
 
-## 9) Compatibility matrix
+## 10) Compatibility matrix
 
 Guaranteed equivalent behavior between:
 
@@ -155,13 +184,13 @@ Guaranteed equivalent behavior between:
 
 Not guaranteed equivalent: arbitrary Go callbacks (`goahk.Func`) and other purely code-level logic.
 
-## 10) Migration boundaries
+## 11) Migration boundaries
 
 - New projects should prefer code-first.
 - Existing JSON config flows continue to work through the compatibility runner.
 - Migration can be incremental per hotkey/flow; parity expectations are limited to features represented in both surfaces.
 
-## 11) See also
+## 12) See also
 
 - Project overview: [`README.md`](../README.md)
 - Architecture: [`docs/architecture.md`](./architecture.md)

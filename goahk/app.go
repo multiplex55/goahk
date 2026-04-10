@@ -16,8 +16,9 @@ type App struct {
 }
 
 type bindingSpec struct {
-	hotkey string
-	steps  []stepSpecProvider
+	hotkey            string
+	steps             []stepSpecProvider
+	concurrencyPolicy program.ConcurrencyPolicy
 }
 
 // NewApp creates a script app configured through fluent Bind/On calls.
@@ -41,7 +42,12 @@ func (a *App) toProgram() program.Program {
 		for _, step := range b.steps {
 			steps = append(steps, step.stepSpec())
 		}
-		out.Bindings = append(out.Bindings, program.BindingSpec{ID: bindingID(i), Hotkey: b.hotkey, Steps: steps})
+		out.Bindings = append(out.Bindings, program.BindingSpec{
+			ID:                bindingID(i),
+			Hotkey:            b.hotkey,
+			Steps:             steps,
+			ConcurrencyPolicy: b.concurrencyPolicy,
+		})
 	}
 	return program.Normalize(out)
 }

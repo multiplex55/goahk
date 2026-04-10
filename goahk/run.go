@@ -134,8 +134,18 @@ func (a *App) runtimeArtifacts() (program.Program, config.Config, []callbackRegi
 			configSteps = append(configSteps, config.Step{Action: spec.Action, Params: params})
 		}
 		id := bindingID(i)
-		p.Bindings = append(p.Bindings, program.BindingSpec{ID: id, Hotkey: b.hotkey, Steps: programSteps})
-		cfg.Hotkeys = append(cfg.Hotkeys, config.HotkeyBinding{ID: id, Hotkey: b.hotkey, Steps: configSteps})
+		p.Bindings = append(p.Bindings, program.BindingSpec{
+			ID:                id,
+			Hotkey:            b.hotkey,
+			Steps:             programSteps,
+			ConcurrencyPolicy: b.concurrencyPolicy,
+		})
+		cfg.Hotkeys = append(cfg.Hotkeys, config.HotkeyBinding{
+			ID:                id,
+			Hotkey:            b.hotkey,
+			Steps:             configSteps,
+			ConcurrencyPolicy: string(b.concurrencyPolicy),
+		})
 	}
 	return p, cfg, callbacks
 }

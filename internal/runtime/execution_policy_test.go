@@ -9,6 +9,7 @@ import (
 
 	"goahk/internal/actions"
 	"goahk/internal/hotkey"
+	"goahk/internal/program"
 )
 
 func TestSupervisorExecutionPolicies(t *testing.T) {
@@ -107,5 +108,20 @@ func TestSupervisorExecutionPolicies(t *testing.T) {
 				t.Fatalf("missing policy log %q in %#v", tc.wantPolicyEvent, logs)
 			}
 		})
+	}
+}
+
+func TestBuildExecutableBindings_MapsConcurrencyPolicyAndDefaultsSerial(t *testing.T) {
+	compiled := []RuntimeBinding{
+		{ID: "explicit", Plan: actions.Plan{{Name: "test.action"}}, Policy: program.ConcurrencyPolicyReplace},
+		{ID: "default", Plan: actions.Plan{{Name: "test.action"}}},
+	}
+
+	descriptors := buildExecutableBindings(compiled)
+	if got := descriptors["explicit"].Policy.Concurrency; got != "replace" {
+		t.Fatalf("explicit policy = %q, want replace", got)
+	}
+	if got := descriptors["default"].Policy.Concurrency; got != "serial" {
+		t.Fatalf("default policy = %q, want serial", got)
 	}
 }
