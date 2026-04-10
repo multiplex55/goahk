@@ -2,16 +2,59 @@ package main
 
 import (
 	"context"
+	"errors"
+	"sync"
+	"time"
 
 	"goahk/internal/inspect"
 )
 
+type followCursorEvent struct {
+	EventID  int64               `json:"eventID"`
+	WindowID string              `json:"windowID,omitempty"`
+	Element  inspect.TreeNodeDTO `json:"element"`
+}
+
 type ViewerApp struct {
 	service inspect.Service
+
+	emitEvent func(name string, payload any)
+
+	followMu       sync.Mutex
+	followEnabled  bool
+	followCtx      context.Context
+	followCancel   context.CancelFunc
+	followDone     chan struct{}
+	followTicker   func() <-chan time.Time
+	followInterval time.Duration
+	followEventID  int64
+	lastNodeID     string
 }
 
 func NewViewerApp(service inspect.Service) *ViewerApp {
-	return &ViewerApp{service: service}
+	app := &ViewerApp{service: service, followInterval: 120 * time.Millisecond}
+	app.followTicker = func() <-chan time.Time {
+		ticker := time.NewTicker(app.followInterval)
+		out := make(chan time.Time)
+		go func() {
+			defer close(out)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-app.followCtx.Done():
+					return
+				case t := <-ticker.C:
+					out <- t
+				}
+			}
+		}()
+		return out
+	}
+	return app
+}
+
+func (a *ViewerApp) SetEventEmitter(emitter func(name string, payload any)) {
+	a.emitEvent = emitter
 }
 
 func (a *ViewerApp) ListWindows(ctx context.Context, req inspect.ListWindowsRequest) (inspect.ListWindowsResponse, error) {
@@ -63,7 +106,84 @@ func (a *ViewerApp) InvokePattern(ctx context.Context, req inspect.InvokePattern
 }
 
 func (a *ViewerApp) ToggleFollowCursor(ctx context.Context, req inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
-	return a.service.ToggleFollowCursor(ctx, req)
+	a.followMu.Lock()
+	alreadyEnabled := a.followEnabled
+	if req.Enabled == alreadyEnabled {
+		a.followMu.Unlock()
+		return inspect.ToggleFollowCursorResponse{Enabled: req.Enabled}, nil
+	}
+
+	if req.Enabled {
+		a.followCtx, a.followCancel = context.WithCancel(context.Background())
+		a.followDone = make(chan struct{})
+		a.followEnabled = true
+		a.lastNodeID = ""
+		followCtx := a.followCtx
+		followDone := a.followDone
+		a.followMu.Unlock()
+		go a.runFollowCursorLoop(followCtx, followDone)
+		return inspect.ToggleFollowCursorResponse{Enabled: true}, nil
+	}
+
+	cancel := a.followCancel
+	done := a.followDone
+	a.followCancel = nil
+	a.followDone = nil
+	a.followEnabled = false
+	a.followMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return inspect.ToggleFollowCursorResponse{Enabled: false}, ctx.Err()
+		}
+	}
+
+	return inspect.ToggleFollowCursorResponse{Enabled: false}, nil
+}
+
+func (a *ViewerApp) runFollowCursorLoop(loopCtx context.Context, done chan struct{}) {
+	defer close(done)
+	ticks := a.followTicker()
+	for {
+		select {
+		case <-loopCtx.Done():
+			return
+		case <-ticks:
+			resp, err := a.service.GetElementUnderCursor(loopCtx, inspect.GetElementUnderCursorRequest{})
+			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return
+				}
+				a.emit("inspect:follow-cursor-error", map[string]string{"message": err.Error()})
+				continue
+			}
+			nodeID := resp.Element.NodeID
+			if nodeID == "" {
+				continue
+			}
+			a.followMu.Lock()
+			if nodeID == a.lastNodeID {
+				a.followMu.Unlock()
+				continue
+			}
+			a.lastNodeID = nodeID
+			a.followEventID++
+			eventID := a.followEventID
+			a.followMu.Unlock()
+			a.emit("inspect:follow-cursor", followCursorEvent{EventID: eventID, Element: resp.Element})
+		}
+	}
+}
+
+func (a *ViewerApp) emit(name string, payload any) {
+	if a.emitEvent != nil {
+		a.emitEvent(name, payload)
+	}
 }
 
 func (a *ViewerApp) RefreshWindows(ctx context.Context, req inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {

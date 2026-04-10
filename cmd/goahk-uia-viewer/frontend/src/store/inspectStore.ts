@@ -17,16 +17,36 @@ export type InspectWindow = {
   className?: string;
 };
 
+export type FollowCursorBridgeEvent = {
+  type: 'follow-cursor';
+  eventID?: number;
+  windowID?: string;
+  element: InspectTreeNode;
+  path?: InspectTreeNode[];
+};
+
+export type SelectionBridgeEvent = {
+  type: 'selection-changed';
+  eventID?: number;
+  windowID?: string;
+  selectedNodeID: string;
+  path?: InspectTreeNode[];
+};
+
+export type InspectBridgeEvent = FollowCursorBridgeEvent | SelectionBridgeEvent;
+
 export type InspectStoreState = {
   windows: InspectWindow[];
   selectedWindowID: string;
   selectedNodeID: string;
+  selectedPath: InspectTreeNode[];
   treeNodes: InspectTreeNode[];
   properties: InspectProperty[];
   patterns: InspectPattern[];
   statusText: string;
   filter: string;
   followCursor: boolean;
+  followCursorBusy: boolean;
   visibleOnly: boolean;
   titleOnly: boolean;
   activateOnSelect: boolean;
@@ -51,13 +71,14 @@ export type InspectBindings = {
   SelectNode(req: { nodeID: string }): Promise<{ selected: InspectTreeNode }>;
   GetNodeDetails(req: { nodeID: string }): Promise<NodeDetailsResponse>;
   HighlightNode(req: { nodeID: string }): Promise<{ highlighted: boolean }>;
+  ToggleFollowCursor?(req: { enabled: boolean }): Promise<{ enabled: boolean }>;
   ActivateWindow?(req: { hwnd: string }): Promise<{ activated: boolean }>;
 };
 
 export type InspectStore = {
   getState: () => InspectStoreState;
   setFilterInput: (value: string) => void;
-  setFollowCursor: (value: boolean) => void;
+  setFollowCursor: (value: boolean) => Promise<void>;
   setVisibleOnly: (value: boolean) => void;
   setTitleOnly: (value: boolean) => void;
   setActivateOnSelect: (value: boolean) => void;
@@ -65,17 +86,24 @@ export type InspectStore = {
   selectWindow: (windowID: string) => Promise<void>;
   selectNode: (nodeID: string) => Promise<void>;
   expandNode: (nodeID: string) => Promise<void>;
+  applyBridgeEvent: (event: InspectBridgeEvent) => void;
+  selectNextWindow: () => Promise<void>;
+  selectPreviousWindow: () => Promise<void>;
+  selectNextTreeNode: () => Promise<void>;
+  selectPreviousTreeNode: () => Promise<void>;
 };
 
 export function createInspectStore(
   bindings: InspectBindings,
   opts?: {
     debounceMs?: number;
+    followCursorDebounceMs?: number;
     schedule?: (cb: () => void, delay: number) => ReturnType<typeof setTimeout>;
     cancel?: (timer: ReturnType<typeof setTimeout>) => void;
   }
 ): InspectStore {
   const debounceMs = opts?.debounceMs ?? 200;
+  const followCursorDebounceMs = opts?.followCursorDebounceMs ?? 80;
   const schedule = opts?.schedule ?? ((cb, delay) => setTimeout(cb, delay));
   const cancel = opts?.cancel ?? clearTimeout;
 
@@ -83,12 +111,14 @@ export function createInspectStore(
     windows: [],
     selectedWindowID: '',
     selectedNodeID: '',
+    selectedPath: [],
     treeNodes: [],
     properties: [],
     patterns: [],
     statusText: 'Ready',
     filter: '',
     followCursor: false,
+    followCursorBusy: false,
     visibleOnly: true,
     titleOnly: false,
     activateOnSelect: false,
@@ -100,9 +130,12 @@ export function createInspectStore(
   };
 
   let pendingFilterTimer: ReturnType<typeof setTimeout> | undefined;
+  let pendingFollowEventTimer: ReturnType<typeof setTimeout> | undefined;
+  let pendingFollowEvent: FollowCursorBridgeEvent | undefined;
   let windowsToken = 0;
   let windowSelectionToken = 0;
   let nodeSelectionToken = 0;
+  let lastAppliedBridgeEventID = 0;
   const childrenLoaded = new Set<string>();
 
   const setState = (patch: Partial<InspectStoreState>) => {
@@ -119,6 +152,26 @@ export function createInspectStore(
     const next = [...state.treeNodes];
     next[idx] = { ...next[idx], ...node };
     state = { ...state, treeNodes: next };
+  };
+
+  const applyFollowCursorEvent = async (event: FollowCursorBridgeEvent) => {
+    if (event.windowID && state.selectedWindowID && event.windowID !== state.selectedWindowID) {
+      return;
+    }
+    if (event.eventID && event.eventID <= lastAppliedBridgeEventID) {
+      return;
+    }
+
+    upsertNode(event.element);
+    const selectedNodeID = event.element.nodeID;
+    setState({
+      selectedNodeID,
+      selectedPath: event.path ?? [],
+      statusText: `Following cursor: ${event.element.name || selectedNodeID}`
+    });
+
+    lastAppliedBridgeEventID = event.eventID ?? lastAppliedBridgeEventID;
+    await selectNode(selectedNodeID);
   };
 
   const refreshWindows = async () => {
@@ -162,6 +215,7 @@ export function createInspectStore(
       selectedWindowID: windowID,
       loadingWindow: true,
       selectedNodeID: '',
+      selectedPath: [],
       treeNodes: [],
       properties: [],
       patterns: [],
@@ -180,7 +234,7 @@ export function createInspectStore(
       upsertNode(rootNode);
 
       const selectedNodeID = inspectResp.rootNodeID || rootNode.nodeID;
-      setState({ selectedNodeID });
+      setState({ selectedNodeID, selectedPath: [rootNode] });
 
       const details = await bindings.GetNodeDetails({ nodeID: selectedNodeID });
       const patterns = details.patterns ?? [];
@@ -216,10 +270,7 @@ export function createInspectStore(
     try {
       const selectedResp = await bindings.SelectNode({ nodeID });
       upsertNode(selectedResp.selected);
-      const [details] = await Promise.all([
-        bindings.GetNodeDetails({ nodeID }),
-        bindings.HighlightNode({ nodeID })
-      ]);
+      const [details] = await Promise.all([bindings.GetNodeDetails({ nodeID }), bindings.HighlightNode({ nodeID })]);
 
       if (token !== nodeSelectionToken) {
         return;
@@ -292,6 +343,77 @@ export function createInspectStore(
     }, debounceMs);
   };
 
+  const setFollowCursor = async (value: boolean) => {
+    setState({ followCursorBusy: true, errorText: '' });
+    try {
+      if (bindings.ToggleFollowCursor) {
+        const resp = await bindings.ToggleFollowCursor({ enabled: value });
+        setState({ followCursor: resp.enabled, followCursorBusy: false, statusText: resp.enabled ? 'Follow cursor enabled' : 'Follow cursor disabled' });
+      } else {
+        setState({ followCursor: value, followCursorBusy: false });
+      }
+    } catch (err) {
+      setState({
+        followCursorBusy: false,
+        errorText: err instanceof Error ? err.message : String(err),
+        statusText: 'Failed to toggle follow cursor'
+      });
+    }
+  };
+
+  const applyBridgeEvent = (event: InspectBridgeEvent) => {
+    if (event.type === 'selection-changed') {
+      if (event.windowID && state.selectedWindowID && event.windowID !== state.selectedWindowID) {
+        return;
+      }
+      if (event.eventID && event.eventID <= lastAppliedBridgeEventID) {
+        return;
+      }
+
+      lastAppliedBridgeEventID = event.eventID ?? lastAppliedBridgeEventID;
+      setState({ selectedNodeID: event.selectedNodeID, selectedPath: event.path ?? state.selectedPath, statusText: `Selected ${event.selectedNodeID}` });
+      return;
+    }
+
+    pendingFollowEvent = event;
+    if (pendingFollowEventTimer) {
+      return;
+    }
+
+    pendingFollowEventTimer = schedule(() => {
+      pendingFollowEventTimer = undefined;
+      const nextEvent = pendingFollowEvent;
+      pendingFollowEvent = undefined;
+      if (nextEvent) {
+        void applyFollowCursorEvent(nextEvent);
+      }
+    }, followCursorDebounceMs);
+  };
+
+  const selectWindowByDelta = async (delta: number) => {
+    if (!state.windows.length) {
+      return;
+    }
+    const currentIndex = Math.max(0, state.windows.findIndex((window) => window.hwnd === state.selectedWindowID));
+    const nextIndex = Math.min(state.windows.length - 1, Math.max(0, currentIndex + delta));
+    const nextWindow = state.windows[nextIndex];
+    if (nextWindow && nextWindow.hwnd !== state.selectedWindowID) {
+      await selectWindow(nextWindow.hwnd);
+    }
+  };
+
+  const selectTreeNodeByDelta = async (delta: number) => {
+    if (!state.treeNodes.length) {
+      return;
+    }
+    const currentIndex = Math.max(0, state.treeNodes.findIndex((node) => node.nodeID === state.selectedNodeID));
+    const nextIndex = Math.min(state.treeNodes.length - 1, Math.max(0, currentIndex + delta));
+    const nextNode = state.treeNodes[nextIndex];
+    if (nextNode && nextNode.nodeID !== state.selectedNodeID) {
+      await selectNode(nextNode.nodeID);
+    }
+  };
+
   return {
     getState: () => state,
     refreshWindows,
@@ -299,9 +421,14 @@ export function createInspectStore(
     selectNode,
     expandNode,
     setFilterInput,
-    setFollowCursor: (value) => setState({ followCursor: value }),
+    setFollowCursor,
     setVisibleOnly: (value) => setState({ visibleOnly: value }),
     setTitleOnly: (value) => setState({ titleOnly: value }),
-    setActivateOnSelect: (value) => setState({ activateOnSelect: value })
+    setActivateOnSelect: (value) => setState({ activateOnSelect: value }),
+    applyBridgeEvent,
+    selectNextWindow: () => selectWindowByDelta(1),
+    selectPreviousWindow: () => selectWindowByDelta(-1),
+    selectNextTreeNode: () => selectTreeNodeByDelta(1),
+    selectPreviousTreeNode: () => selectTreeNodeByDelta(-1)
   };
 }
