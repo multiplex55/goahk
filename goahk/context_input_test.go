@@ -2,6 +2,7 @@ package goahk
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"goahk/internal/actions"
@@ -72,19 +73,45 @@ func TestContextInput_WrappersDelegateToService(t *testing.T) {
 	clip := &fakeClipboard{}
 	ctx := newContext(&actions.ActionContext{Context: context.Background(), Services: actions.Services{Input: in, Clipboard: clip}}, newAppState())
 
-	_ = ctx.Input.SendText("hello")
-	_ = ctx.Input.SendKeys("a", "b")
-	_ = ctx.Input.SendChord("ctrl", "s")
-	_ = ctx.Input.MouseMoveAbsolute(1, 2)
-	_ = ctx.Input.MouseMoveRelative(3, 4)
-	_, _ = ctx.Input.MousePosition()
-	_ = ctx.Input.MouseButtonDown("left")
-	_ = ctx.Input.MouseButtonUp("left")
-	_ = ctx.Input.MouseClick("left")
-	_ = ctx.Input.MouseDoubleClick("left")
-	_ = ctx.Input.MouseWheel(120)
-	_ = ctx.Input.MouseDrag("left", 1, 2, 3, 4)
-	_ = ctx.Input.Paste("paste-me")
+	if err := ctx.Input.SendText("hello"); err != nil {
+		t.Fatalf("SendText err = %v, want nil", err)
+	}
+	if err := ctx.Input.SendKeys("a", "b"); err != nil {
+		t.Fatalf("SendKeys err = %v, want nil", err)
+	}
+	if err := ctx.Input.SendChord("ctrl", "s"); err != nil {
+		t.Fatalf("SendChord err = %v, want nil", err)
+	}
+	if err := ctx.Input.MouseMoveAbsolute(1, 2); err != nil {
+		t.Fatalf("MouseMoveAbsolute err = %v, want nil", err)
+	}
+	if err := ctx.Input.MouseMoveRelative(3, 4); err != nil {
+		t.Fatalf("MouseMoveRelative err = %v, want nil", err)
+	}
+	if _, err := ctx.Input.MousePosition(); err != nil {
+		t.Fatalf("MousePosition err = %v, want nil", err)
+	}
+	if err := ctx.Input.MouseButtonDown("left"); err != nil {
+		t.Fatalf("MouseButtonDown err = %v, want nil", err)
+	}
+	if err := ctx.Input.MouseButtonUp("left"); err != nil {
+		t.Fatalf("MouseButtonUp err = %v, want nil", err)
+	}
+	if err := ctx.Input.MouseClick("left"); err != nil {
+		t.Fatalf("MouseClick err = %v, want nil", err)
+	}
+	if err := ctx.Input.MouseDoubleClick("left"); err != nil {
+		t.Fatalf("MouseDoubleClick err = %v, want nil", err)
+	}
+	if err := ctx.Input.MouseWheel(120); err != nil {
+		t.Fatalf("MouseWheel err = %v, want nil", err)
+	}
+	if err := ctx.Input.MouseDrag("left", 1, 2, 3, 4); err != nil {
+		t.Fatalf("MouseDrag err = %v, want nil", err)
+	}
+	if err := ctx.Input.Paste("paste-me"); err != nil {
+		t.Fatalf("Paste err = %v, want nil", err)
+	}
 
 	if len(in.texts) != 1 || in.texts[0] != "hello" {
 		t.Fatalf("SendText calls = %#v", in.texts)
@@ -100,5 +127,43 @@ func TestContextInput_WrappersDelegateToService(t *testing.T) {
 	}
 	if clip.text != "paste-me" {
 		t.Fatalf("Paste clipboard text = %q, want paste-me", clip.text)
+	}
+}
+
+func TestContextInput_MissingServiceReturnsSentinelErrors(t *testing.T) {
+	t.Parallel()
+
+	ctx := newContext(nil, newAppState())
+
+	assertInputErr := func(err error, method string) {
+		t.Helper()
+		if !errors.Is(err, ErrInputServiceUnavailable) {
+			t.Fatalf("%s err = %v, want ErrInputServiceUnavailable", method, err)
+		}
+	}
+
+	assertInputErr(ctx.Input.SendText("hello"), "SendText")
+	assertInputErr(ctx.Input.SendKeys("a"), "SendKeys")
+	assertInputErr(ctx.Input.SendChord("ctrl", "s"), "SendChord")
+	assertInputErr(ctx.Input.MouseMoveAbsolute(1, 2), "MouseMoveAbsolute")
+	assertInputErr(ctx.Input.MouseMoveRelative(1, 2), "MouseMoveRelative")
+	if _, err := ctx.Input.MousePosition(); !errors.Is(err, ErrInputServiceUnavailable) {
+		t.Fatalf("MousePosition err = %v, want ErrInputServiceUnavailable", err)
+	}
+	assertInputErr(ctx.Input.MouseButtonDown("left"), "MouseButtonDown")
+	assertInputErr(ctx.Input.MouseButtonUp("left"), "MouseButtonUp")
+	assertInputErr(ctx.Input.MouseClick("left"), "MouseClick")
+	assertInputErr(ctx.Input.MouseDoubleClick("left"), "MouseDoubleClick")
+	assertInputErr(ctx.Input.MouseWheel(120), "MouseWheel")
+	assertInputErr(ctx.Input.MouseDrag("left", 1, 2, 3, 4), "MouseDrag")
+	assertInputErr(ctx.Input.Paste("text"), "Paste")
+}
+
+func TestInputPaste_WhenClipboardUnavailableReturnsClipboardError(t *testing.T) {
+	t.Parallel()
+
+	ctx := newContext(&actions.ActionContext{Context: context.Background(), Services: actions.Services{Input: &fakeInput{}}}, newAppState())
+	if err := ctx.Input.Paste("value"); !errors.Is(err, ErrClipboardServiceUnavailable) {
+		t.Fatalf("Paste err = %v, want ErrClipboardServiceUnavailable", err)
 	}
 }
