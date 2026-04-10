@@ -10,6 +10,21 @@ import (
 	"time"
 )
 
+type fakeWindowsBackend struct {
+	sendTextErr  error
+	sendChordErr error
+}
+
+func (f fakeWindowsBackend) sendText(context.Context, string) error       { return f.sendTextErr }
+func (f fakeWindowsBackend) sendChord(context.Context, []string) error    { return f.sendChordErr }
+func (f fakeWindowsBackend) moveAbsolute(context.Context, int, int) error { return nil }
+func (f fakeWindowsBackend) moveRelative(context.Context, int, int) error { return nil }
+func (f fakeWindowsBackend) position(context.Context) (MousePosition, error) {
+	return MousePosition{}, nil
+}
+func (f fakeWindowsBackend) mouseButton(context.Context, string, string) error { return nil }
+func (f fakeWindowsBackend) wheel(context.Context, int) error                  { return nil }
+
 func TestWindowsServiceContract_ArgumentValidation(t *testing.T) {
 	t.Parallel()
 
@@ -37,7 +52,7 @@ func TestWindowsServiceContract_ArgumentValidation(t *testing.T) {
 		},
 	}
 
-	svc := windowsService{}
+	svc := windowsService{backend: fakeWindowsBackend{}}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
@@ -52,15 +67,9 @@ func TestWindowsServiceContract_ArgumentValidation(t *testing.T) {
 func TestWindowsServiceContract_SendErrorMapping(t *testing.T) {
 	t.Parallel()
 
-	orig := platformSendKeys
-	t.Cleanup(func() { platformSendKeys = orig })
-
 	backendErr := errors.New("backend exploded")
-	platformSendKeys = func(context.Context, string, bool) error {
-		return backendErr
-	}
-
-	err := windowsService{}.SendText(context.Background(), "hello", SendOptions{})
+	svc := windowsService{backend: fakeWindowsBackend{sendTextErr: backendErr}}
+	err := svc.SendText(context.Background(), "hello", SendOptions{})
 	if !errors.Is(err, ErrSendKeysFailed) {
 		t.Fatalf("expected ErrSendKeysFailed, got %v", err)
 	}
@@ -72,14 +81,8 @@ func TestWindowsServiceContract_SendErrorMapping(t *testing.T) {
 func TestWindowsServiceContract_ContextErrorsPassThrough(t *testing.T) {
 	t.Parallel()
 
-	orig := platformSendKeys
-	t.Cleanup(func() { platformSendKeys = orig })
-
-	platformSendKeys = func(context.Context, string, bool) error {
-		return context.Canceled
-	}
-
-	err := windowsService{}.SendKeys(context.Background(), Sequence{Tokens: []Token{{Keys: []string{"ctrl", "c"}}}}, SendOptions{})
+	svc := windowsService{backend: fakeWindowsBackend{sendChordErr: context.Canceled}}
+	err := svc.SendKeys(context.Background(), Sequence{Tokens: []Token{{Keys: []string{"ctrl", "c"}}}}, SendOptions{})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
