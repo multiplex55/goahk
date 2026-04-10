@@ -5,20 +5,42 @@ package inspect
 
 import (
 	"context"
+	"errors"
 	"testing"
+
+	"goahk/internal/window"
 )
 
-func TestWindowsProvider_InspectWindow_DoesNotRefreshCache(t *testing.T) {
+type fakeWindowAdapter struct {
+	windows      []window.Info
+	enumerateErr error
+	activateErr  error
+	activated    []window.HWND
+}
+
+func (f *fakeWindowAdapter) EnumerateWindows(context.Context) ([]window.Info, error) {
+	if f.enumerateErr != nil {
+		return nil, f.enumerateErr
+	}
+	return append([]window.Info(nil), f.windows...), nil
+}
+
+func (f *fakeWindowAdapter) ActivateWindow(_ context.Context, hwnd window.HWND) error {
+	if f.activateErr != nil {
+		return f.activateErr
+	}
+	f.activated = append(f.activated, hwnd)
+	return nil
+}
+
+func TestWindowsProvider_InspectAndTreeCacheBehavior(t *testing.T) {
 	adapter := &fakeAdapter{
 		root: &uiaElement{Ref: "root", Name: "Root"},
 		kids: map[string][]*uiaElement{
 			"root": {{Ref: "c1", ParentRef: "root", Name: "Child"}},
 		},
 	}
-	provider := &windowsProvider{
-		core:       newProviderCore(adapter),
-		highlights: newHighlightController(newNativeHighlightOverlay()),
-	}
+	provider := newWindowsProviderWithDeps(adapter, &fakeWindowAdapter{}).(*windowsProvider)
 
 	rootResp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Refresh: false})
 	if err != nil {
@@ -27,7 +49,6 @@ func TestWindowsProvider_InspectWindow_DoesNotRefreshCache(t *testing.T) {
 	if _, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: rootResp.Root.NodeID}); err != nil {
 		t.Fatalf("GetNodeChildren initial load failed: %v", err)
 	}
-
 	if _, err := provider.InspectWindow(context.Background(), InspectWindowRequest{HWND: "0x1"}); err != nil {
 		t.Fatalf("InspectWindow failed: %v", err)
 	}
@@ -37,27 +58,7 @@ func TestWindowsProvider_InspectWindow_DoesNotRefreshCache(t *testing.T) {
 	if got := adapter.childrenCallCount["root"]; got != 1 {
 		t.Fatalf("expected cached children after InspectWindow (refresh=false path), calls=%d", got)
 	}
-}
 
-func TestWindowsProvider_GetTreeRoot_RefreshInvalidatesCache(t *testing.T) {
-	adapter := &fakeAdapter{
-		root: &uiaElement{Ref: "root", Name: "Root"},
-		kids: map[string][]*uiaElement{
-			"root": {{Ref: "c1", ParentRef: "root", Name: "Child"}},
-		},
-	}
-	provider := &windowsProvider{
-		core:       newProviderCore(adapter),
-		highlights: newHighlightController(newNativeHighlightOverlay()),
-	}
-
-	rootResp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Refresh: false})
-	if err != nil {
-		t.Fatalf("GetTreeRoot setup failed: %v", err)
-	}
-	if _, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: rootResp.Root.NodeID}); err != nil {
-		t.Fatalf("GetNodeChildren initial load failed: %v", err)
-	}
 	if _, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Refresh: true}); err != nil {
 		t.Fatalf("GetTreeRoot refresh failed: %v", err)
 	}
@@ -66,5 +67,198 @@ func TestWindowsProvider_GetTreeRoot_RefreshInvalidatesCache(t *testing.T) {
 	}
 	if got := adapter.childrenCallCount["root"]; got != 2 {
 		t.Fatalf("expected children to reload after refresh invalidates cache, calls=%d", got)
+	}
+}
+
+func TestWindowsProvider_WindowListingAndRefreshFilters(t *testing.T) {
+	visible := true
+	hidden := false
+	windows := []window.Info{
+		{HWND: 0x1, Title: "Notepad", Class: "Notepad", Exe: "notepad.exe", PID: 100, Visible: &visible},
+		{HWND: 0x2, Title: "", Class: "Chrome_WidgetWin", Exe: "chrome.exe", PID: 200, Visible: &hidden},
+		{HWND: 0x3, Title: "Terminal", Class: "CASCADIA_HOSTING_WINDOW_CLASS", Exe: "WindowsTerminal.exe", PID: 300, Visible: nil},
+	}
+	provider := newWindowsProviderWithDeps(&fakeAdapter{}, &fakeWindowAdapter{windows: windows}).(*windowsProvider)
+
+	tests := []struct {
+		name     string
+		listReq  *ListWindowsRequest
+		freshReq *RefreshWindowsRequest
+		wantHWND []string
+	}{
+		{name: "list all", listReq: &ListWindowsRequest{}, wantHWND: []string{"0x2", "0x1", "0x3"}},
+		{name: "list title contains", listReq: &ListWindowsRequest{TitleContains: "note"}, wantHWND: []string{"0x1"}},
+		{name: "list class filter", listReq: &ListWindowsRequest{ClassName: "widget"}, wantHWND: []string{"0x2"}},
+		{name: "refresh no filter", freshReq: &RefreshWindowsRequest{}, wantHWND: []string{"0x2", "0x1", "0x3"}},
+		{name: "refresh visible only keeps nil visible", freshReq: &RefreshWindowsRequest{VisibleOnly: true}, wantHWND: []string{"0x1", "0x3"}},
+		{name: "refresh title-only", freshReq: &RefreshWindowsRequest{Filter: "term", TitleOnly: true}, wantHWND: []string{"0x3"}},
+		{name: "refresh broad filter checks class/exe/hwnd", freshReq: &RefreshWindowsRequest{Filter: "chrome"}, wantHWND: []string{"0x2"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []WindowSummary
+			var err error
+			if tc.listReq != nil {
+				var resp ListWindowsResponse
+				resp, err = provider.ListWindows(context.Background(), *tc.listReq)
+				got = resp.Windows
+			} else {
+				var resp RefreshWindowsResponse
+				resp, err = provider.RefreshWindows(context.Background(), *tc.freshReq)
+				got = resp.Windows
+			}
+			if err != nil {
+				t.Fatalf("call failed: %v", err)
+			}
+			if len(got) != len(tc.wantHWND) {
+				t.Fatalf("expected %d windows, got %d: %+v", len(tc.wantHWND), len(got), got)
+			}
+			for i := range tc.wantHWND {
+				if got[i].HWND != tc.wantHWND[i] {
+					t.Fatalf("index %d expected hwnd %s, got %s", i, tc.wantHWND[i], got[i].HWND)
+				}
+			}
+		})
+	}
+}
+
+func TestWindowsProvider_NodeAndPatternMethods(t *testing.T) {
+	adapter := &fakeAdapter{
+		root: &uiaElement{Ref: "root", Name: "Root", SupportedPatterns: []string{"Invoke"}},
+		byRef: map[string]*uiaElement{
+			"root": {Ref: "root", Name: "Root", ControlType: "Button", ClassName: "Btn", AutomationID: "ok", SupportedPatterns: []string{"Invoke", "Value"}},
+		},
+	}
+	provider := newWindowsProviderWithDeps(adapter, &fakeWindowAdapter{}).(*windowsProvider)
+	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"})
+	if err != nil {
+		t.Fatalf("GetTreeRoot: %v", err)
+	}
+	nodeID := root.Root.NodeID
+
+	tests := []struct {
+		name string
+		fn   func(context.Context) error
+	}{
+		{name: "SelectNode", fn: func(ctx context.Context) error {
+			resp, err := provider.SelectNode(ctx, SelectNodeRequest{NodeID: nodeID})
+			if err == nil && resp.Selected.NodeID == "" {
+				return errors.New("missing selected node")
+			}
+			return err
+		}},
+		{name: "GetNodeDetails", fn: func(ctx context.Context) error {
+			resp, err := provider.GetNodeDetails(ctx, GetNodeDetailsRequest{NodeID: nodeID})
+			if err == nil && (len(resp.Properties) == 0 || len(resp.Patterns) == 0) {
+				return errors.New("missing node details")
+			}
+			return err
+		}},
+		{name: "GetPatternActions", fn: func(ctx context.Context) error {
+			resp, err := provider.GetPatternActions(ctx, GetPatternActionsRequest{NodeID: nodeID})
+			if err == nil && len(resp.Actions) == 0 {
+				return errors.New("missing actions")
+			}
+			return err
+		}},
+		{name: "InvokePattern", fn: func(ctx context.Context) error {
+			_, err := provider.InvokePattern(ctx, InvokePatternRequest{NodeID: nodeID, Action: "invoke"})
+			return err
+		}},
+		{name: "CopyBestSelector", fn: func(ctx context.Context) error {
+			resp, err := provider.CopyBestSelector(ctx, CopyBestSelectorRequest{NodeID: nodeID})
+			if err == nil && resp.Selector == "" {
+				return errors.New("missing selector")
+			}
+			return err
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.fn(context.Background()); err != nil {
+				t.Fatalf("%s failed: %v", tc.name, err)
+			}
+		})
+	}
+
+	invalidNodeTests := []struct {
+		name string
+		fn   func(context.Context) error
+	}{
+		{name: "GetNodeChildren invalid", fn: func(ctx context.Context) error {
+			_, err := provider.GetNodeChildren(ctx, GetNodeChildrenRequest{NodeID: "node:missing"})
+			return err
+		}},
+		{name: "GetNodeDetails invalid", fn: func(ctx context.Context) error {
+			_, err := provider.GetNodeDetails(ctx, GetNodeDetailsRequest{NodeID: "node:missing"})
+			return err
+		}},
+		{name: "SelectNode invalid", fn: func(ctx context.Context) error {
+			_, err := provider.SelectNode(ctx, SelectNodeRequest{NodeID: "node:missing"})
+			return err
+		}},
+	}
+	for _, tc := range invalidNodeTests {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.fn(context.Background()); !errors.Is(err, ErrStaleCache) {
+				t.Fatalf("expected stale cache for invalid node id, got %v", err)
+			}
+		})
+	}
+}
+
+func TestWindowsProvider_ActivateAndFollowCursor(t *testing.T) {
+	adapter := &fakeAdapter{
+		root:    &uiaElement{Ref: "root", Name: "Root"},
+		under:   &uiaElement{Ref: "under", Name: "Under Cursor"},
+		cursorX: 10,
+		cursorY: 10,
+	}
+	windows := &fakeWindowAdapter{}
+	provider := newWindowsProviderWithDeps(adapter, windows).(*windowsProvider)
+
+	if _, err := provider.ToggleFollowCursor(context.Background(), ToggleFollowCursorRequest{Enabled: true}); err != nil {
+		t.Fatalf("enable follow cursor: %v", err)
+	}
+	resp, err := provider.GetElementUnderCursor(context.Background(), GetElementUnderCursorRequest{})
+	if err != nil {
+		t.Fatalf("GetElementUnderCursor: %v", err)
+	}
+	if resp.Element.NodeID == "" {
+		t.Fatalf("expected cursor element node id")
+	}
+	provider.followMu.RLock()
+	if provider.focusedUnderCursor.NodeID == "" {
+		t.Fatalf("expected focused-under-cursor state to be updated")
+	}
+	provider.followMu.RUnlock()
+
+	disableResp, err := provider.ToggleFollowCursor(context.Background(), ToggleFollowCursorRequest{Enabled: false})
+	if err != nil {
+		t.Fatalf("disable follow cursor: %v", err)
+	}
+	if disableResp.Enabled {
+		t.Fatalf("expected disabled response")
+	}
+
+	if _, err := provider.ActivateWindow(context.Background(), ActivateWindowRequest{HWND: "0x2A"}); err != nil {
+		t.Fatalf("ActivateWindow valid: %v", err)
+	}
+	if len(windows.activated) != 1 || windows.activated[0] != window.HWND(0x2A) {
+		t.Fatalf("expected activated hwnd 0x2A, got %+v", windows.activated)
+	}
+	if _, err := provider.ActivateWindow(context.Background(), ActivateWindowRequest{HWND: "nope"}); !errors.Is(err, ErrInvalidNodeID) {
+		t.Fatalf("expected invalid node id for invalid hwnd, got %v", err)
+	}
+}
+
+func TestWindowsProvider_MethodErrorsPropagate(t *testing.T) {
+	provider := newWindowsProviderWithDeps(&fakeAdapter{}, &fakeWindowAdapter{enumerateErr: errors.New("enumerate failed")}).(*windowsProvider)
+	if _, err := provider.ListWindows(context.Background(), ListWindowsRequest{}); err == nil {
+		t.Fatalf("expected list windows error")
+	}
+	if _, err := provider.RefreshWindows(context.Background(), RefreshWindowsRequest{}); err == nil {
+		t.Fatalf("expected refresh windows error")
 	}
 }

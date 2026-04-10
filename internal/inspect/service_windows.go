@@ -3,22 +3,67 @@
 
 package inspect
 
-import "context"
+import (
+	"context"
+	"errors"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+
+	"goahk/internal/window"
+)
+
+type windowAdapter interface {
+	EnumerateWindows(context.Context) ([]window.Info, error)
+	ActivateWindow(context.Context, window.HWND) error
+}
 
 type windowsProvider struct {
 	core       *providerCore
 	highlights *highlightController
+	windows    windowAdapter
+
+	followMu            sync.RWMutex
+	followCursorEnabled bool
+	focusedUnderCursor  TreeNodeDTO
 }
 
 func newWindowsProvider() WindowsProvider {
+	return newWindowsProviderWithDeps(newUnsupportedUIAAdapter(), window.NewOSProvider())
+}
+
+func newWindowsProviderWithDeps(adapter uiaAdapter, windows windowAdapter) WindowsProvider {
+	if adapter == nil {
+		adapter = newUnsupportedUIAAdapter()
+	}
+	if windows == nil {
+		windows = window.NewOSProvider()
+	}
 	return &windowsProvider{
-		core:       newProviderCore(newUnsupportedUIAAdapter()),
+		core:       newProviderCore(adapter),
 		highlights: newHighlightController(newNativeHighlightOverlay()),
+		windows:    windows,
 	}
 }
 
-func (p *windowsProvider) ListWindows(context.Context, ListWindowsRequest) (ListWindowsResponse, error) {
-	return ListWindowsResponse{}, ErrProviderActionUnsupported
+func (p *windowsProvider) ListWindows(ctx context.Context, req ListWindowsRequest) (ListWindowsResponse, error) {
+	infos, err := p.windows.EnumerateWindows(ctx)
+	if err != nil {
+		return ListWindowsResponse{}, err
+	}
+	filter := strings.TrimSpace(req.TitleContains)
+	className := strings.TrimSpace(req.ClassName)
+	windows := summarizeAndFilterWindows(infos, func(info window.Info) bool {
+		if filter != "" && !containsFold(info.Title, filter) {
+			return false
+		}
+		if className != "" && !containsFold(info.Class, className) {
+			return false
+		}
+		return true
+	})
+	return ListWindowsResponse{Windows: windows}, nil
 }
 
 func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRequest) (InspectWindowResponse, error) {
@@ -104,6 +149,11 @@ func (p *windowsProvider) GetElementUnderCursor(ctx context.Context, req GetElem
 	if err != nil {
 		return GetElementUnderCursorResponse{}, err
 	}
+	p.followMu.Lock()
+	if p.followCursorEnabled {
+		p.focusedUnderCursor = el
+	}
+	p.followMu.Unlock()
 	return GetElementUnderCursorResponse{Element: el}, nil
 }
 
@@ -154,18 +204,91 @@ func (p *windowsProvider) InvokePattern(ctx context.Context, req InvokePatternRe
 	return p.core.invokePattern(ctx, req)
 }
 
-func (p *windowsProvider) ToggleFollowCursor(context.Context, ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error) {
-	return ToggleFollowCursorResponse{}, ErrProviderActionUnsupported
+func (p *windowsProvider) ToggleFollowCursor(_ context.Context, req ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error) {
+	p.followMu.Lock()
+	p.followCursorEnabled = req.Enabled
+	if !req.Enabled {
+		p.focusedUnderCursor = TreeNodeDTO{}
+	}
+	p.followMu.Unlock()
+	return ToggleFollowCursorResponse{Enabled: req.Enabled}, nil
 }
 
-func (p *windowsProvider) ActivateWindow(context.Context, ActivateWindowRequest) (ActivateWindowResponse, error) {
-	return ActivateWindowResponse{}, ErrProviderActionUnsupported
+func (p *windowsProvider) ActivateWindow(ctx context.Context, req ActivateWindowRequest) (ActivateWindowResponse, error) {
+	hwnd, err := parseHWND(req.HWND)
+	if err != nil {
+		return ActivateWindowResponse{}, err
+	}
+	if err := p.windows.ActivateWindow(ctx, hwnd); err != nil {
+		return ActivateWindowResponse{}, err
+	}
+	return ActivateWindowResponse{Activated: true}, nil
 }
 
-func (p *windowsProvider) RefreshWindows(ctx context.Context, _ RefreshWindowsRequest) (RefreshWindowsResponse, error) {
+func (p *windowsProvider) RefreshWindows(ctx context.Context, req RefreshWindowsRequest) (RefreshWindowsResponse, error) {
 	_ = p.highlights.Clear(ctx)
 	p.core.invalidateWindowCache("")
-	return RefreshWindowsResponse{}, ErrProviderActionUnsupported
+
+	infos, err := p.windows.EnumerateWindows(ctx)
+	if err != nil {
+		return RefreshWindowsResponse{}, err
+	}
+	filter := strings.TrimSpace(req.Filter)
+	windows := summarizeAndFilterWindows(infos, func(info window.Info) bool {
+		if req.VisibleOnly && info.Visible != nil && !*info.Visible {
+			return false
+		}
+		if filter == "" {
+			return true
+		}
+		if req.TitleOnly {
+			return containsFold(info.Title, filter)
+		}
+		if containsFold(info.Title, filter) || containsFold(info.Class, filter) || containsFold(info.Exe, filter) || containsFold(info.HWND.String(), filter) {
+			return true
+		}
+		return false
+	})
+	return RefreshWindowsResponse{Windows: windows}, nil
+}
+
+func summarizeAndFilterWindows(infos []window.Info, keep func(window.Info) bool) []WindowSummary {
+	out := make([]WindowSummary, 0, len(infos))
+	for _, info := range infos {
+		if keep != nil && !keep(info) {
+			continue
+		}
+		out = append(out, WindowSummary{
+			HWND:        info.HWND.String(),
+			Title:       info.Title,
+			ProcessName: info.Exe,
+			ClassName:   info.Class,
+			ProcessID:   int(info.PID),
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Title == out[j].Title {
+			return out[i].HWND < out[j].HWND
+		}
+		return out[i].Title < out[j].Title
+	})
+	return out
+}
+
+func containsFold(haystack, needle string) bool {
+	if needle == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(strings.TrimSpace(haystack)), strings.ToLower(strings.TrimSpace(needle)))
+}
+
+func parseHWND(raw string) (window.HWND, error) {
+	norm := strings.TrimSpace(raw)
+	v, err := strconv.ParseUint(norm, 0, 64)
+	if err != nil {
+		return 0, errors.Join(ErrInvalidNodeID, err)
+	}
+	return window.HWND(v), nil
 }
 
 type unsupportedUIAAdapter struct{}
