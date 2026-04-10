@@ -3,16 +3,18 @@
 
 package inspect
 
-import (
-	"context"
-)
+import "context"
 
 type windowsProvider struct {
-	core *providerCore
+	core       *providerCore
+	highlights *highlightController
 }
 
 func newWindowsProvider() WindowsProvider {
-	return &windowsProvider{core: newProviderCore(newUnsupportedUIAAdapter())}
+	return &windowsProvider{
+		core:       newProviderCore(newUnsupportedUIAAdapter()),
+		highlights: newHighlightController(newNativeHighlightOverlay()),
+	}
 }
 
 func (p *windowsProvider) ListWindows(context.Context, ListWindowsRequest) (ListWindowsResponse, error) {
@@ -28,10 +30,14 @@ func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRe
 }
 
 func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootRequest) (GetTreeRootResponse, error) {
+	if req.Refresh {
+		_ = p.highlights.Clear(ctx)
+	}
 	root, err := p.core.treeRoot(ctx, req.HWND, req.Refresh)
 	if err != nil {
 		return GetTreeRootResponse{}, err
 	}
+	_ = p.highlights.ClearOnWindowSwitch(ctx, req.HWND)
 	return GetTreeRootResponse{Root: root}, nil
 }
 
@@ -46,8 +52,10 @@ func (p *windowsProvider) GetNodeChildren(ctx context.Context, req GetNodeChildr
 func (p *windowsProvider) SelectNode(ctx context.Context, req SelectNodeRequest) (SelectNodeResponse, error) {
 	selected, err := p.core.inspectByNodeID(ctx, req.NodeID)
 	if err != nil {
+		_ = p.highlights.Clear(ctx)
 		return SelectNodeResponse{}, err
 	}
+	_ = p.highlights.ClearOnDeselection(ctx, selected)
 	return SelectNodeResponse{Selected: TreeNodeDTO{NodeID: selected.NodeID, Name: selected.Name, ControlType: selected.ControlType, ClassName: selected.ClassName}}, nil
 }
 
@@ -67,12 +75,24 @@ func (p *windowsProvider) GetElementUnderCursor(ctx context.Context, req GetElem
 	return GetElementUnderCursorResponse{Element: el}, nil
 }
 
-func (p *windowsProvider) HighlightNode(context.Context, HighlightNodeRequest) (HighlightNodeResponse, error) {
-	return HighlightNodeResponse{}, ErrProviderActionUnsupported
+func (p *windowsProvider) HighlightNode(ctx context.Context, req HighlightNodeRequest) (HighlightNodeResponse, error) {
+	selected, err := p.core.inspectByNodeID(ctx, req.NodeID)
+	if err != nil {
+		_ = p.highlights.Clear(ctx)
+		return HighlightNodeResponse{}, err
+	}
+	highlighted, err := p.highlights.ShowNode(ctx, req.NodeID, selected, p.core.childrenCache.window())
+	if err != nil {
+		return HighlightNodeResponse{}, err
+	}
+	return HighlightNodeResponse{Highlighted: highlighted}, nil
 }
 
-func (p *windowsProvider) ClearHighlight(context.Context, ClearHighlightRequest) (ClearHighlightResponse, error) {
-	return ClearHighlightResponse{}, ErrProviderActionUnsupported
+func (p *windowsProvider) ClearHighlight(ctx context.Context, _ ClearHighlightRequest) (ClearHighlightResponse, error) {
+	if err := p.highlights.Clear(ctx); err != nil {
+		return ClearHighlightResponse{}, err
+	}
+	return ClearHighlightResponse{Cleared: true}, nil
 }
 
 func (p *windowsProvider) CopyBestSelector(ctx context.Context, req CopyBestSelectorRequest) (CopyBestSelectorResponse, error) {
@@ -106,7 +126,8 @@ func (p *windowsProvider) ToggleFollowCursor(context.Context, ToggleFollowCursor
 	return ToggleFollowCursorResponse{}, ErrProviderActionUnsupported
 }
 
-func (p *windowsProvider) RefreshWindows(context.Context, RefreshWindowsRequest) (RefreshWindowsResponse, error) {
+func (p *windowsProvider) RefreshWindows(ctx context.Context, _ RefreshWindowsRequest) (RefreshWindowsResponse, error) {
+	_ = p.highlights.Clear(ctx)
 	p.core.invalidateWindowCache("")
 	return RefreshWindowsResponse{}, ErrProviderActionUnsupported
 }
