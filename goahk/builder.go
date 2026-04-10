@@ -3,20 +3,28 @@ package goahk
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
+
+	"goahk/internal/program"
 )
 
 // BindingBuilder is an intermediate fluent value produced by App.On.
 type BindingBuilder struct {
 	app    *App
 	hotkey string
+	policy program.ConcurrencyPolicy
 }
 
 // On starts a binding chain for a hotkey.
 //
 // Use On("Ctrl+H").Do(...) when you prefer a fluent style.
 func (a *App) On(hotkey string) *BindingBuilder {
-	return &BindingBuilder{app: a, hotkey: normalizeHotkey(hotkey)}
+	return &BindingBuilder{
+		app:    a,
+		hotkey: normalizeHotkey(hotkey),
+		policy: program.DefaultConcurrencyPolicy(),
+	}
 }
 
 // Bind adds a hotkey binding in one call and returns the same app for chaining.
@@ -30,9 +38,67 @@ func (a *App) Bind(hotkey string, steps ...stepSpecProvider) *App {
 func (b *BindingBuilder) Do(steps ...stepSpecProvider) *App {
 	copied := make([]stepSpecProvider, len(steps))
 	copy(copied, steps)
-	b.app.bindings = append(b.app.bindings, bindingSpec{hotkey: b.hotkey, steps: copied})
+	b.app.bindings = append(b.app.bindings, bindingSpec{hotkey: b.hotkey, steps: copied, concurrencyPolicy: b.policy})
 	b.app.recordBindingWiringErrors(b.hotkey, copied)
 	return b.app
+}
+
+// WithPolicy sets the per-binding concurrency policy.
+func (b *BindingBuilder) WithPolicy(policy string) *BindingBuilder {
+	normalized, ok := parseConcurrencyPolicy(policy)
+	if !ok {
+		b.app.buildErrors = append(b.app.buildErrors, fmt.Sprintf("binding %q has unsupported concurrency policy %q (supported: %s)", b.hotkey, policy, strings.Join(allowedConcurrencyPolicies(), ", ")))
+		return b
+	}
+	b.policy = normalized
+	return b
+}
+
+// Serial sets serial execution policy.
+func (b *BindingBuilder) Serial() *BindingBuilder {
+	return b.WithPolicy(string(program.ConcurrencyPolicySerial))
+}
+
+// Replace sets replace execution policy.
+func (b *BindingBuilder) Replace() *BindingBuilder {
+	return b.WithPolicy(string(program.ConcurrencyPolicyReplace))
+}
+
+// QueueOne sets queue-one execution policy.
+func (b *BindingBuilder) QueueOne() *BindingBuilder {
+	return b.WithPolicy(string(program.ConcurrencyPolicyQueueOne))
+}
+
+// Parallel sets parallel execution policy.
+func (b *BindingBuilder) Parallel() *BindingBuilder {
+	return b.WithPolicy(string(program.ConcurrencyPolicyParallel))
+}
+
+// Drop sets drop execution policy.
+func (b *BindingBuilder) Drop() *BindingBuilder {
+	return b.WithPolicy(string(program.ConcurrencyPolicyDrop))
+}
+
+func parseConcurrencyPolicy(policy string) (program.ConcurrencyPolicy, bool) {
+	normalized := program.ConcurrencyPolicy(strings.ToLower(strings.TrimSpace(policy)))
+	switch normalized {
+	case program.ConcurrencyPolicySerial, program.ConcurrencyPolicyReplace, program.ConcurrencyPolicyQueueOne, program.ConcurrencyPolicyParallel, program.ConcurrencyPolicyDrop:
+		return normalized, true
+	default:
+		return "", false
+	}
+}
+
+func allowedConcurrencyPolicies() []string {
+	policies := []string{
+		string(program.ConcurrencyPolicySerial),
+		string(program.ConcurrencyPolicyReplace),
+		string(program.ConcurrencyPolicyQueueOne),
+		string(program.ConcurrencyPolicyParallel),
+		string(program.ConcurrencyPolicyDrop),
+	}
+	slices.Sort(policies)
+	return policies
 }
 
 func (a *App) recordBindingWiringErrors(hotkey string, steps []stepSpecProvider) {

@@ -2,6 +2,7 @@ package goahk
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -29,5 +30,38 @@ func TestAPIHappyPath_TinyScriptFlow(t *testing.T) {
 	}
 	if err := app.Run(context.Background()); err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
+	}
+}
+
+func TestAPIHappyPath_UnknownPolicyRejected(t *testing.T) {
+	app := NewApp()
+	app.On("Ctrl+H").WithPolicy("fastest").Do(Log("x"))
+
+	err := app.Run(context.Background())
+	if err == nil {
+		t.Fatal("Run() error = nil, want invalid policy error")
+	}
+	if !strings.Contains(err.Error(), `unsupported concurrency policy "fastest"`) {
+		t.Fatalf("Run() error = %q, want unsupported policy detail", err.Error())
+	}
+}
+
+func TestAPIHappyPath_RuntimeArtifactsCarryPolicyAndDefault(t *testing.T) {
+	app := NewApp().
+		On("Ctrl+R").Replace().Do(Log("replace")).
+		On("Ctrl+S").Do(Log("serial-default"))
+
+	p, cfg, _ := app.runtimeArtifacts()
+	if got := string(p.Bindings[0].ConcurrencyPolicy); got != "replace" {
+		t.Fatalf("program policy[0] = %q, want replace", got)
+	}
+	if got := cfg.Hotkeys[0].ConcurrencyPolicy; got != "replace" {
+		t.Fatalf("config policy[0] = %q, want replace", got)
+	}
+	if got := string(p.Bindings[1].ConcurrencyPolicy); got != "serial" {
+		t.Fatalf("program policy[1] = %q, want serial", got)
+	}
+	if got := cfg.Hotkeys[1].ConcurrencyPolicy; got != "serial" {
+		t.Fatalf("config policy[1] = %q, want serial", got)
 	}
 }

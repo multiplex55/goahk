@@ -2,30 +2,18 @@
 
 ## Program snippet
 
-```json
-{
-  "hotkeys": [
-    {
-      "id": "refresh-index",
-      "hotkey": "ctrl+shift+r",
-      "policy": { "concurrency": "replace" },
-      "steps": [
-        { "action": "goahk.callback", "params": { "callback_ref": "refresh" } }
-      ]
-    }
-  ]
-}
-```
-
 ```go
-registry.MustRegisterCallback("refresh", func(ctx actions.CallbackContext) error {
-    for i := 0; i < 100; i++ {
-        if !ctx.Sleep(100 * time.Millisecond) {
-            return ctx.Err()
-        }
-    }
-    return nil
-})
+app := goahk.NewApp().
+	On("Ctrl+Shift+R").Replace().Do(
+		goahk.Func(func(ctx *goahk.Context) error {
+			for i := 0; i < 100; i++ {
+				if !ctx.Runtime.Sleep(100 * time.Millisecond) {
+					return ctx.Err()
+				}
+			}
+			return nil
+		}),
+	)
 ```
 
 ## Expected runtime log sequence
