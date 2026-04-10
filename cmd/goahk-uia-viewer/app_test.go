@@ -15,13 +15,18 @@ type fakeInspectService struct {
 	underCursorCalls  int
 	underCursorValues []inspect.TreeNodeDTO
 	toggleResp        inspect.ToggleFollowCursorResponse
+	inspectWindowReqs []inspect.InspectWindowRequest
+	inspectWindowResp inspect.InspectWindowResponse
 }
 
 func (f *fakeInspectService) ListWindows(context.Context, inspect.ListWindowsRequest) (inspect.ListWindowsResponse, error) {
 	return inspect.ListWindowsResponse{}, nil
 }
-func (f *fakeInspectService) InspectWindow(context.Context, inspect.InspectWindowRequest) (inspect.InspectWindowResponse, error) {
-	return inspect.InspectWindowResponse{}, nil
+func (f *fakeInspectService) InspectWindow(_ context.Context, req inspect.InspectWindowRequest) (inspect.InspectWindowResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.inspectWindowReqs = append(f.inspectWindowReqs, req)
+	return f.inspectWindowResp, nil
 }
 func (f *fakeInspectService) GetTreeRoot(context.Context, inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {
 	return inspect.GetTreeRootResponse{}, nil
@@ -132,5 +137,30 @@ func TestToggleFollowCursorEmitsOnChangedNodeOnly(t *testing.T) {
 	}
 	if emitted[0].Element.NodeID != "a" || emitted[1].Element.NodeID != "b" {
 		t.Fatalf("unexpected sequence: %#v", emitted)
+	}
+}
+
+func TestViewerApp_InspectWindow_ForwardsRequestUnchanged(t *testing.T) {
+	svc := &fakeInspectService{
+		inspectWindowResp: inspect.InspectWindowResponse{
+			Window:     inspect.WindowSummary{HWND: "0x200", Title: "Demo"},
+			RootNodeID: "node:root",
+		},
+	}
+	app := NewViewerApp(svc)
+	req := inspect.InspectWindowRequest{HWND: "0x200"}
+
+	resp, err := app.InspectWindow(context.Background(), req)
+	if err != nil {
+		t.Fatalf("InspectWindow returned error: %v", err)
+	}
+	if got, want := len(svc.inspectWindowReqs), 1; got != want {
+		t.Fatalf("expected %d service call, got %d", want, got)
+	}
+	if got := svc.inspectWindowReqs[0]; got != req {
+		t.Fatalf("expected forwarded request %+v, got %+v", req, got)
+	}
+	if resp != svc.inspectWindowResp {
+		t.Fatalf("expected response %+v, got %+v", svc.inspectWindowResp, resp)
 	}
 }

@@ -57,6 +57,9 @@ describe('inspectStore', () => {
 
     expect(bindings.ActivateWindow).toHaveBeenCalledWith({ hwnd: 'w1' });
     expect(bindings.InspectWindow).toHaveBeenCalledWith({ hwnd: 'w1' });
+    const inspectWindowArg = (bindings.InspectWindow as any).mock.calls[0][0];
+    expect(inspectWindowArg).toEqual({ hwnd: 'w1' });
+    expect('refresh' in inspectWindowArg).toBe(false);
     expect(bindings.GetTreeRoot).toHaveBeenCalledWith({ hwnd: 'w1', refresh: true });
     expect(store.getState().treeNodes.map((node) => node.nodeID)).toContain('root-1');
     expect(store.getState().selectedNodeID).toBe('root-1');

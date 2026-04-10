@@ -11,13 +11,16 @@ var _ WindowsProvider = (*mockProvider)(nil)
 
 type mockProvider struct {
 	invokePatternErr error
+	inspectWindowReq *InspectWindowRequest
 }
 
 func (m *mockProvider) ListWindows(context.Context, ListWindowsRequest) (ListWindowsResponse, error) {
 	return ListWindowsResponse{Windows: []WindowSummary{{HWND: "0x1", Title: "Demo"}}}, nil
 }
 
-func (m *mockProvider) InspectWindow(context.Context, InspectWindowRequest) (InspectWindowResponse, error) {
+func (m *mockProvider) InspectWindow(_ context.Context, req InspectWindowRequest) (InspectWindowResponse, error) {
+	copied := req
+	m.inspectWindowReq = &copied
 	return InspectWindowResponse{}, nil
 }
 
@@ -91,6 +94,7 @@ func TestService_ArgumentValidation(t *testing.T) {
 			return err
 		}},
 		{"invoke pattern requires action and node id", func() error { _, err := svc.InvokePattern(context.Background(), InvokePatternRequest{}); return err }},
+		{"inspect window requires hwnd", func() error { _, err := svc.InspectWindow(context.Background(), InspectWindowRequest{}); return err }},
 	}
 
 	for _, tc := range tests {
@@ -101,6 +105,24 @@ func TestService_ArgumentValidation(t *testing.T) {
 				t.Fatalf("expected ErrInvalidNodeID, got %v", err)
 			}
 		})
+	}
+}
+
+func TestService_InspectWindow_ForwardsRequestUnchanged(t *testing.T) {
+	t.Parallel()
+
+	provider := &mockProvider{}
+	svc := newServiceWithProvider(provider)
+	req := InspectWindowRequest{HWND: "0x42"}
+
+	if _, err := svc.InspectWindow(context.Background(), req); err != nil {
+		t.Fatalf("InspectWindow returned error: %v", err)
+	}
+	if provider.inspectWindowReq == nil {
+		t.Fatalf("expected provider InspectWindow to be called")
+	}
+	if *provider.inspectWindowReq != req {
+		t.Fatalf("expected request %+v, got %+v", req, *provider.inspectWindowReq)
 	}
 }
 
