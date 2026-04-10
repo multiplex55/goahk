@@ -59,6 +59,38 @@ func (p *windowsProvider) SelectNode(ctx context.Context, req SelectNodeRequest)
 	return SelectNodeResponse{Selected: TreeNodeDTO{NodeID: selected.NodeID, Name: selected.Name, ControlType: selected.ControlType, ClassName: selected.ClassName}}, nil
 }
 
+func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetailsRequest) (GetNodeDetailsResponse, error) {
+	selected, err := p.core.inspectByNodeID(ctx, req.NodeID)
+	if err != nil {
+		return GetNodeDetailsResponse{}, err
+	}
+	properties := []PropertyDTO{
+		{Name: "name", Value: selected.Name},
+		{Name: "controlType", Value: selected.ControlType},
+		{Name: "className", Value: selected.ClassName},
+	}
+	if selected.AutomationID != "" {
+		properties = append(properties, PropertyDTO{Name: "automationId", Value: selected.AutomationID})
+	}
+	patterns, err := p.core.getPatternActions(ctx, req.NodeID)
+	if err != nil {
+		return GetNodeDetailsResponse{}, err
+	}
+	bestSelector := ""
+	if selected.BestSelector != nil {
+		bestSelector = selected.BestSelector.AutomationID
+		if bestSelector == "" {
+			bestSelector = selected.BestSelector.Name
+		}
+	}
+	return GetNodeDetailsResponse{
+		Properties:   properties,
+		Patterns:     patterns,
+		StatusText:   selected.Name,
+		BestSelector: bestSelector,
+	}, nil
+}
+
 func (p *windowsProvider) GetFocusedElement(ctx context.Context, req GetFocusedElementRequest) (GetFocusedElementResponse, error) {
 	el, err := p.core.focused(ctx)
 	if err != nil {
@@ -124,6 +156,10 @@ func (p *windowsProvider) InvokePattern(ctx context.Context, req InvokePatternRe
 
 func (p *windowsProvider) ToggleFollowCursor(context.Context, ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error) {
 	return ToggleFollowCursorResponse{}, ErrProviderActionUnsupported
+}
+
+func (p *windowsProvider) ActivateWindow(context.Context, ActivateWindowRequest) (ActivateWindowResponse, error) {
+	return ActivateWindowResponse{}, ErrProviderActionUnsupported
 }
 
 func (p *windowsProvider) RefreshWindows(ctx context.Context, _ RefreshWindowsRequest) (RefreshWindowsResponse, error) {

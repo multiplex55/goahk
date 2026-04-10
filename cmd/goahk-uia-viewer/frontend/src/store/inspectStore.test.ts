@@ -3,8 +3,8 @@ import { createInspectStore, InspectBindings } from './inspectStore';
 
 function makeBindings(overrides?: Partial<InspectBindings>): InspectBindings {
   return {
-    RefreshWindows: vi.fn().mockResolvedValue({ windows: [{ hwnd: 'w1', title: 'Notepad' }] }),
-    InspectWindow: vi.fn().mockResolvedValue({ rootNodeID: 'root-1' }),
+    RefreshWindows: vi.fn().mockResolvedValue({ windows: [{ hwnd: 'w1', title: 'Notepad', processName: 'notepad.exe', processID: 10 }] }),
+    InspectWindow: vi.fn().mockResolvedValue({ window: { hwnd: 'w1', title: 'Notepad', processName: 'notepad.exe' }, rootNodeID: 'root-1' }),
     GetTreeRoot: vi.fn().mockResolvedValue({ root: { nodeID: 'root-1', name: 'Root', hasChildren: true } }),
     GetNodeChildren: vi.fn().mockResolvedValue({
       parentNodeID: 'root-1',
@@ -14,9 +14,11 @@ function makeBindings(overrides?: Partial<InspectBindings>): InspectBindings {
       selected: { nodeID, name: `Node ${nodeID}`, hasChildren: false }
     })),
     GetNodeDetails: vi.fn().mockImplementation(async ({ nodeID }) => ({
+      windowInfo: { hwnd: 'w1', title: 'Notepad' },
       properties: [{ name: 'AutomationId', value: nodeID }],
       patterns: [{ name: 'Invoke' }],
-      statusText: `Details ${nodeID}`
+      statusText: `Details ${nodeID}`,
+      path: [{ nodeID: 'root-1', hasChildren: true }, { nodeID, hasChildren: false }]
     })),
     HighlightNode: vi.fn().mockResolvedValue({ highlighted: true }),
     ToggleFollowCursor: vi.fn().mockImplementation(async ({ enabled }) => ({ enabled })),
@@ -44,7 +46,7 @@ describe('inspectStore', () => {
       visibleOnly: false,
       titleOnly: true
     });
-    expect(store.getState().windows).toEqual([{ hwnd: 'w1', title: 'Notepad' }]);
+    expect(store.getState().windows[0].processName).toBe('notepad.exe');
     expect(store.getState().statusText).toContain('Loaded');
   });
 
@@ -121,7 +123,7 @@ describe('inspectStore', () => {
               resolveSlow = resolve as typeof resolveSlow;
             })
         )
-        .mockResolvedValueOnce({ properties: [{ name: 'AutomationId', value: 'root-2' }], patterns: [{ name: 'Focus' }], statusText: 'Details root-2' }),
+        .mockResolvedValueOnce({ properties: [{ name: 'AutomationId', value: 'root-2' }], patterns: [{ name: 'Focus' }], statusText: 'Details root-2', path: [{ nodeID: 'root-2', hasChildren: true }] }),
       InspectWindow: vi
         .fn()
         .mockResolvedValueOnce({ rootNodeID: 'root-1' })

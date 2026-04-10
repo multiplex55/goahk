@@ -131,3 +131,12 @@ type InspectWindow struct {
 	RootNodeID     string           `json:"rootNodeId,omitempty"`
 	RootElement    *TreeNodeSummary `json:"rootElement,omitempty"`
 }
+
+// Canonical inspect DTO aliases shared by service/app/frontend bindings.
+type (
+	WindowListRequestDTO  = RefreshWindowsRequest
+	WindowListItemDTO     = WindowSummary
+	TreeNodeCanonicalDTO  = TreeNodeDTO
+	NodeDetailsRequestDTO = GetNodeDetailsRequest
+	NodeDetailsDTO        = GetNodeDetailsResponse
+)
