@@ -9,13 +9,21 @@ import (
 )
 
 const (
-	ErrCodeDuplicateBindingID = "binding.id.duplicate"
-	ErrCodeInvalidHotkey      = "binding.hotkey.invalid"
-	ErrCodeConflictingHotkeys = "binding.hotkey.conflict"
-	ErrCodeStepsRequired      = "binding.steps.required"
-	ErrCodeStepActionRequired = "binding.step.action.required"
-	ErrCodeUnknownFlow        = "binding.flow.unknown"
-	ErrCodeUnknownPolicy      = "binding.policy.unknown"
+	ErrCodeDuplicateBindingID  = "binding.id.duplicate"
+	ErrCodeInvalidHotkey       = "binding.hotkey.invalid"
+	ErrCodeConflictingHotkeys  = "binding.hotkey.conflict"
+	ErrCodeStepsRequired       = "binding.steps.required"
+	ErrCodeStepActionRequired  = "binding.step.action.required"
+	ErrCodeUnknownFlow         = "binding.flow.unknown"
+	ErrCodeUnknownPolicy       = "binding.policy.unknown"
+	ErrCodeControlMixedSteps   = "binding.control.mixed_steps"
+	ErrCodeControlFlowConflict = "binding.control.flow_conflict"
+	ErrCodeControlParams       = "binding.control.params.forbidden"
+)
+
+const (
+	controlActionStop     = "runtime.control_stop"
+	controlActionHardStop = "runtime.control_hard_stop"
 )
 
 type ValidationIssue struct {
@@ -97,6 +105,29 @@ func Validate(p Program) error {
 				issues = append(issues, ValidationIssue{Code: ErrCodeStepActionRequired, Path: fmt.Sprintf("%s.steps[%d].action", path, j), Message: "action name is required"})
 			}
 		}
+		if cmdStepIdx, ok := findControlStepIndex(b.Steps); ok {
+			if strings.TrimSpace(b.Flow) != "" {
+				issues = append(issues, ValidationIssue{
+					Code:    ErrCodeControlFlowConflict,
+					Path:    path + ".flow",
+					Message: "control bindings cannot reference flow",
+				})
+			}
+			if len(b.Steps) != 1 {
+				issues = append(issues, ValidationIssue{
+					Code:    ErrCodeControlMixedSteps,
+					Path:    path + ".steps",
+					Message: "control bindings must contain exactly one control action step",
+				})
+			}
+			if len(b.Steps[cmdStepIdx].Params) > 0 {
+				issues = append(issues, ValidationIssue{
+					Code:    ErrCodeControlParams,
+					Path:    fmt.Sprintf("%s.steps[%d].params", path, cmdStepIdx),
+					Message: "control action does not accept params",
+				})
+			}
+		}
 		if !isAllowedConcurrencyPolicy(b.ConcurrencyPolicy) {
 			issues = append(issues, ValidationIssue{Code: ErrCodeUnknownPolicy, Path: path + ".concurrencyPolicy", Message: fmt.Sprintf("unsupported policy %q", b.ConcurrencyPolicy)})
 		}
@@ -124,7 +155,11 @@ func Validate(p Program) error {
 }
 
 func normalizeOptions(in Options) Options {
-	out := Options{Flows: make([]FlowSpec, 0, len(in.Flows)), UIASelectors: make(map[string]UIASelectorSpec, len(in.UIASelectors))}
+	out := Options{
+		Flows:                        make([]FlowSpec, 0, len(in.Flows)),
+		UIASelectors:                 make(map[string]UIASelectorSpec, len(in.UIASelectors)),
+		EnableImplicitEscapeControls: in.EnableImplicitEscapeControls,
+	}
 	for _, f := range in.Flows {
 		out.Flows = append(out.Flows, normalizeFlow(f))
 	}
@@ -198,4 +233,14 @@ func isAllowedConcurrencyPolicy(p ConcurrencyPolicy) bool {
 	default:
 		return false
 	}
+}
+
+func findControlStepIndex(steps []StepSpec) (int, bool) {
+	for idx, step := range steps {
+		switch strings.ToLower(strings.TrimSpace(step.Action)) {
+		case controlActionStop, controlActionHardStop:
+			return idx, true
+		}
+	}
+	return -1, false
 }

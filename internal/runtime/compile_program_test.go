@@ -37,3 +37,59 @@ func TestCompileRuntimeBindingsFromProgram(t *testing.T) {
 		t.Fatalf("policy = %q, want %q", got, program.ConcurrencyPolicyQueueOne)
 	}
 }
+
+func TestCompileRuntimeBindings_EscapeWithNormalActionIsNotControlCommand(t *testing.T) {
+	p := program.Program{
+		Bindings: []program.BindingSpec{{
+			ID:     "escape_log",
+			Hotkey: "escape",
+			Steps:  []program.StepSpec{{Action: "system.log"}},
+		}},
+	}
+	bindings, err := CompileRuntimeBindings(p, actions.NewRegistry())
+	if err != nil {
+		t.Fatalf("CompileRuntimeBindings() error = %v", err)
+	}
+	if got := bindings[0].ControlCommand; got != "" {
+		t.Fatalf("control command = %q, want empty", got)
+	}
+}
+
+func TestCompileRuntimeBindings_ExplicitControlActionsCreateControlCommands(t *testing.T) {
+	p := program.Program{
+		Bindings: []program.BindingSpec{
+			{ID: "graceful", Hotkey: "f12", Steps: []program.StepSpec{{Action: "runtime.control_stop"}}},
+			{ID: "hard", Hotkey: "ctrl+f12", Steps: []program.StepSpec{{Action: "runtime.control_hard_stop"}}},
+		},
+	}
+	bindings, err := CompileRuntimeBindings(p, actions.NewRegistry())
+	if err != nil {
+		t.Fatalf("CompileRuntimeBindings() error = %v", err)
+	}
+	if got := bindings[0].ControlCommand; got != "stop" {
+		t.Fatalf("graceful control command = %q, want stop", got)
+	}
+	if got := bindings[1].ControlCommand; got != "hard_stop" {
+		t.Fatalf("hard control command = %q, want hard_stop", got)
+	}
+}
+
+func TestCompileRuntimeBindings_ImplicitEscapeCompatibilityFlag(t *testing.T) {
+	p := program.Program{
+		Bindings: []program.BindingSpec{
+			{ID: "esc", Hotkey: "escape", Steps: []program.StepSpec{{Action: "system.log"}}},
+			{ID: "hard", Hotkey: "shift+escape", Steps: []program.StepSpec{{Action: "system.log"}}},
+		},
+		Options: program.Options{EnableImplicitEscapeControls: true},
+	}
+	bindings, err := CompileRuntimeBindings(p, actions.NewRegistry())
+	if err != nil {
+		t.Fatalf("CompileRuntimeBindings() error = %v", err)
+	}
+	if got := bindings[0].ControlCommand; got != "stop" {
+		t.Fatalf("escape control command = %q, want stop", got)
+	}
+	if got := bindings[1].ControlCommand; got != "hard_stop" {
+		t.Fatalf("shift+escape control command = %q, want hard_stop", got)
+	}
+}

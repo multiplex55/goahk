@@ -79,11 +79,10 @@ func CompileRuntimeBindingsFromProgram(p program.Program, registry *actions.Regi
 	compiled := make([]RuntimeBinding, 0, len(p.Bindings))
 	for i, b := range p.Bindings {
 		rb := RuntimeBinding{ID: b.ID, Chord: parsed[i].Chord, Policy: b.ConcurrencyPolicy}
-		switch {
-		case strings.EqualFold(parsed[i].Chord.Key, "escape") && parsed[i].Chord.Modifiers == 0:
-			rb.ControlCommand = "stop"
-		case strings.EqualFold(parsed[i].Chord.Key, "escape") && parsed[i].Chord.Modifiers == hotkey.ModShift:
-			rb.ControlCommand = "hard_stop"
+		if command, isControl := compileControlCommand(b, parsed[i].Chord, p.Options.EnableImplicitEscapeControls); isControl {
+			rb.ControlCommand = command
+			compiled = append(compiled, rb)
+			continue
 		}
 		if ref := strings.ToLower(strings.TrimSpace(b.Flow)); ref != "" {
 			f, ok := flowsByID[ref]
@@ -120,6 +119,29 @@ func CompileRuntimeBindingsFromProgram(p program.Program, registry *actions.Regi
 		compiled = append(compiled, rb)
 	}
 	return compiled, nil
+}
+
+func compileControlCommand(binding program.BindingSpec, chord hotkey.Chord, allowImplicitEscape bool) (string, bool) {
+	if len(binding.Steps) == 1 {
+		actionName := strings.ToLower(strings.TrimSpace(binding.Steps[0].Action))
+		switch actionName {
+		case "runtime.control_stop":
+			return "stop", true
+		case "runtime.control_hard_stop":
+			return "hard_stop", true
+		}
+	}
+	if !allowImplicitEscape {
+		return "", false
+	}
+	switch {
+	case strings.EqualFold(chord.Key, "escape") && chord.Modifiers == 0:
+		return "stop", true
+	case strings.EqualFold(chord.Key, "escape") && chord.Modifiers == hotkey.ModShift:
+		return "hard_stop", true
+	default:
+		return "", false
+	}
 }
 
 func validateBindingActions(binding program.BindingSpec, registry *actions.Registry) error {
