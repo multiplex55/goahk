@@ -58,3 +58,25 @@ func TestFind_NotFound(t *testing.T) {
 }
 
 func strPtr(v string) *string { return &v }
+
+func TestFind_EndToEndSelectionScenario(t *testing.T) {
+	window, pane, button := "Window", "Pane", "Button"
+	nav := mockNavigator{
+		elements: map[string]Element{
+			"root":    {ID: "root", ControlType: &window, Name: strPtr("Checkout")},
+			"content": {ID: "content", ControlType: &pane, Name: strPtr("Summary")},
+			"submit":  {ID: "submit", ControlType: &button, AutomationID: strPtr("submitBtn"), Name: strPtr("Submit")},
+		},
+		children: map[string][]string{"root": {"content"}, "content": {"submit"}},
+	}
+	got, visited, err := Find(context.Background(), nav, "root", Selector{
+		AutomationID: "submitBtn",
+		Ancestors:    []Selector{{Name: "Checkout", ControlType: "Window"}, {Name: "Summary", ControlType: "Pane"}},
+	})
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if got.ID != "submit" || visited < 3 {
+		t.Fatalf("got=%+v visited=%d", got, visited)
+	}
+}

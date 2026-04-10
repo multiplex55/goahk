@@ -53,14 +53,19 @@ type RuntimeAPI interface {
 	Sleep(duration time.Duration)
 }
 
+// AutomationAPI aliases UIAService for ergonomic naming in callbacks.
+type AutomationAPI = UIAService
+
 type Context struct {
-	Clipboard ClipboardAPI
-	Input     InputAPI
-	Window    WindowAPI
-	Process   ProcessAPI
-	Runtime   RuntimeAPI
-	Vars      map[string]string
-	AppState  StateStore
+	Clipboard  ClipboardAPI
+	Input      InputAPI
+	Window     WindowAPI
+	Process    ProcessAPI
+	UIA        UIAService
+	Automation AutomationAPI
+	Runtime    RuntimeAPI
+	Vars       map[string]string
+	AppState   StateStore
 
 	actionCtx *actions.ActionContext
 }
@@ -106,6 +111,8 @@ func newContext(actionCtx *actions.ActionContext, state StateStore) *Context {
 	ctx.Input = inputService{ctx: ctx}
 	ctx.Window = windowService{ctx: ctx}
 	ctx.Process = processService{ctx: ctx}
+	ctx.UIA = uiaService{ctx: ctx}
+	ctx.Automation = ctx.UIA
 	ctx.Runtime = runtimeService{ctx: ctx}
 	return ctx
 }

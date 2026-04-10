@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -20,11 +22,7 @@ func TestRun_WindowActiveRoutes(t *testing.T) {
 			},
 			list: func(context.Context) ([]window.Info, error) { return nil, nil },
 		},
-		uia: uiaProviderFunc{
-			focused: func(context.Context) (uia.Element, error) { return uia.Element{}, nil },
-			under:   func(context.Context) (uia.Element, error) { return uia.Element{}, nil },
-			tree:    func(context.Context, int) (*uia.Node, error) { return nil, nil },
-		},
+		uia: uiaProviderFunc{},
 	}
 	var out bytes.Buffer
 	if err := run(context.Background(), []string{"window", "active"}, &out, &bytes.Buffer{}, d); err != nil {
@@ -46,26 +44,43 @@ func TestRun_UIATreeRequiresFlag(t *testing.T) {
 	}
 }
 
-func TestRun_ParsesJSONFormat(t *testing.T) {
+func TestRun_ParsesJSONFormatWindowAndUIA(t *testing.T) {
 	d := deps{
 		window: windowProviderFunc{
 			active: func(context.Context) (window.Info, error) {
-				return window.Info{HWND: 0x2, Title: "Term"}, nil
+				return window.Info{HWND: 0x2, Title: "Term", Class: "ConsoleWindowClass", PID: 42}, nil
 			},
-			list: func(context.Context) ([]window.Info, error) { return nil, nil },
+			list: func(context.Context) ([]window.Info, error) {
+				return []window.Info{{HWND: 0x2, Title: "Term", Active: true}}, nil
+			},
 		},
 		uia: uiaProviderFunc{
-			focused: func(context.Context) (uia.Element, error) { return uia.Element{}, nil },
-			under:   func(context.Context) (uia.Element, error) { return uia.Element{}, nil },
-			tree:    func(context.Context, int) (*uia.Node, error) { return nil, nil },
+			under: func(context.Context) (uia.Element, error) {
+				name := "Submit"
+				return uia.Element{ID: "u-1", Name: &name}, nil
+			},
 		},
 	}
-	var out bytes.Buffer
-	if err := run(context.Background(), []string{"--format", "json", "window", "active"}, &out, &bytes.Buffer{}, d); err != nil {
-		t.Fatalf("run() error = %v", err)
+	cases := []struct {
+		args []string
+		key  string
+	}{
+		{args: []string{"--format", "json", "window", "active"}, key: "Title"},
+		{args: []string{"--format", "json", "window", "list"}, key: "Title"},
+		{args: []string{"--format", "json", "uia", "under-cursor"}, key: "id"},
 	}
-	if !strings.Contains(out.String(), "\"Title\": \"Term\"") {
-		t.Fatalf("expected json output, got %q", out.String())
+	for _, tc := range cases {
+		var out bytes.Buffer
+		if err := run(context.Background(), tc.args, &out, &bytes.Buffer{}, d); err != nil {
+			t.Fatalf("run(%v) error = %v", tc.args, err)
+		}
+		var decoded any
+		if err := json.Unmarshal(out.Bytes(), &decoded); err != nil {
+			t.Fatalf("json unmarshal(%v): %v", tc.args, err)
+		}
+		if !strings.Contains(out.String(), tc.key) {
+			t.Fatalf("expected key %q in output %q", tc.key, out.String())
+		}
 	}
 }
 
@@ -106,12 +121,46 @@ func TestParseGlobal_TableDriven(t *testing.T) {
 	}
 }
 
+func TestDefaultDeps_AreOperationalProviders(t *testing.T) {
+	d := defaultDeps()
+	if _, ok := d.window.(osWindowProvider); !ok {
+		t.Fatalf("window provider type = %T, want osWindowProvider", d.window)
+	}
+	if _, ok := d.uia.(*uia.OSInspectProvider); !ok {
+		t.Fatalf("uia provider type = %T, want *uia.OSInspectProvider", d.uia)
+	}
+}
+
+func TestMapOpError_MapsPlatformAndBackendErrors(t *testing.T) {
+	tests := []struct {
+		op   string
+		err  error
+		want string
+	}{
+		{op: "window list", err: window.ErrUnsupportedPlatform, want: "window list: unsupported platform"},
+		{op: "uia focused", err: uia.ErrUnsupportedPlatform, want: "uia focused: unsupported platform"},
+		{op: "uia focused", err: uia.ErrInspectUnavailable, want: "uia focused: ui automation backend unavailable"},
+		{op: "uia focused", err: errors.New("boom"), want: "uia focused: boom"},
+	}
+	for _, tt := range tests {
+		got := mapOpError(tt.op, tt.err)
+		if got == nil || got.Error() != tt.want {
+			t.Fatalf("mapOpError(%q, %v) = %v, want %q", tt.op, tt.err, got, tt.want)
+		}
+	}
+}
+
 type windowProviderFunc struct {
 	active func(context.Context) (window.Info, error)
 	list   func(context.Context) ([]window.Info, error)
 }
 
-func (f windowProviderFunc) Active(ctx context.Context) (window.Info, error) { return f.active(ctx) }
+func (f windowProviderFunc) Active(ctx context.Context) (window.Info, error) {
+	if f.active == nil {
+		return window.Info{}, nil
+	}
+	return f.active(ctx)
+}
 func (f windowProviderFunc) List(ctx context.Context) ([]window.Info, error) {
 	if f.list == nil {
 		return nil, nil
@@ -125,8 +174,21 @@ type uiaProviderFunc struct {
 	tree    func(context.Context, int) (*uia.Node, error)
 }
 
-func (f uiaProviderFunc) Focused(ctx context.Context) (uia.Element, error)     { return f.focused(ctx) }
-func (f uiaProviderFunc) UnderCursor(ctx context.Context) (uia.Element, error) { return f.under(ctx) }
+func (f uiaProviderFunc) Focused(ctx context.Context) (uia.Element, error) {
+	if f.focused == nil {
+		return uia.Element{}, nil
+	}
+	return f.focused(ctx)
+}
+func (f uiaProviderFunc) UnderCursor(ctx context.Context) (uia.Element, error) {
+	if f.under == nil {
+		return uia.Element{}, nil
+	}
+	return f.under(ctx)
+}
 func (f uiaProviderFunc) ActiveWindowTree(ctx context.Context, depth int) (*uia.Node, error) {
+	if f.tree == nil {
+		return nil, nil
+	}
 	return f.tree(ctx, depth)
 }

@@ -1,0 +1,7 @@
+ID: btn-1
+Name: Search
+ControlType: Button
+ClassName: (missing)
+AutomationID: (missing)
+FrameworkID: (missing)
+Patterns: Invoke
