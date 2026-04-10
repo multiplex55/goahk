@@ -12,6 +12,8 @@ export type PropertyItem = {
 export type PatternAction = {
   id: string;
   label: string;
+  supported?: boolean;
+  requiresInput?: boolean;
 };
 
 export type TreeNode = {

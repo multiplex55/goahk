@@ -17,8 +17,9 @@ const properties: PropertyItem[] = [
 ];
 
 const patternActions: PatternAction[] = [
-  { id: 'invoke', label: 'Invoke' },
-  { id: 'focus', label: 'SetFocus' }
+  { id: 'invoke', label: 'Invoke', supported: true },
+  { id: 'set-value', label: 'SetValue', supported: true, requiresInput: true },
+  { id: 'focus', label: 'SetFocus', supported: false }
 ];
 
 const rootNodes: TreeNode[] = [
@@ -55,7 +56,12 @@ export default function App() {
             windowTitle={windows.find((window) => window.id === selectedWindowId)?.title ?? 'Unknown Window'}
             properties={properties}
             patternActions={patternActions}
-            onInvokePattern={(id) => setFooterState((current) => ({ ...current, status: `Invoked: ${id}` }))}
+            onInvokePattern={(id, payload) =>
+              setFooterState((current) => ({
+                ...current,
+                status: payload ? `Invoked: ${id} (${payload})` : `Invoked: ${id}`
+              }))
+            }
           />
         }
         right={

@@ -58,8 +58,15 @@ body {
 
 .property-row {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  grid-template-columns: 140px 1fr auto;
   gap: 8px;
+  align-items: center;
+  padding: 4px;
+}
+
+.property-row.selected {
+  background: #dbeafe;
+  border-radius: 4px;
 }
 
 .property-row dt {
@@ -70,10 +77,34 @@ body {
   margin: 0;
 }
 
+.copy-button {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 4px;
+}
+
 .pattern-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
+}
+
+.pattern-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pattern-row.disabled {
+  opacity: 0.5;
+}
+
+.pattern-row input {
+  min-width: 180px;
+}
+
+.pattern-row button:disabled {
+  cursor: not-allowed;
 }
 
 .splitter {
@@ -100,4 +131,24 @@ body {
   display: flex;
   flex-direction: column;
   text-align: right;
+  align-items: flex-end;
+}
+
+.status-copy {
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: copy;
+}
+
+.status-copy:hover {
+  border-color: #d1d5db;
+  border-radius: 4px;
+}
+
+.status-toast {
+  background: #111827;
+  color: #fff;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
 }
