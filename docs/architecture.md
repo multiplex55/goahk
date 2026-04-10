@@ -34,10 +34,35 @@ To keep v1 narrow and reliable, these are explicit non-goals:
 - **Canonical compiler entrypoint:** `internal/runtime.CompileRuntimeBindings(program.Program, *actions.Registry)`.
 - **Primary adapter:** code-first API (`goahk.NewApp`, `Bind`, `Run`).
 - **Compatibility adapter:** JSON config loader used by `cmd/goahk`.
-- **Legacy adapters:** `internal/app.CompileRuntimeBindingsFromProgram` and `internal/app.CompileRuntimeBindings`
-  are compatibility shims that delegate to the canonical runtime compiler.
 
 This keeps runtime dispatch independent from how programs are authored, while preserving existing JSON workflows.
+
+## Entrypoint call graph (current canonical routing)
+
+```text
+cmd/goahk/main.go
+  -> internal/runtime.NewBootstrap()
+  -> internal/runtime.Bootstrap.Run()
+     -> internal/config.LoadProgramFile()
+     -> internal/runtime.Bootstrap.RunProgram()
+        -> internal/runtime.CompileRuntimeBindings()
+        -> hotkey manager + runtime dispatch loop
+
+goahk.(*App).Run()
+  -> runtimeArtifacts() (build program.Program + callback refs)
+  -> internal/runtime.CompileRuntimeBindings() [compile validation]
+  -> internal/runtime.NewBootstrap()
+  -> internal/runtime.Bootstrap.Run() / RunProgram()
+```
+
+`internal/app` remains as a lifecycle compatibility layer only and is no longer part of
+the canonical compile/dispatch path.
+
+### Deprecated shim timeline
+
+- `internal/app` compile/dispatch forwarding was deprecated in **v1.1**.
+- New imports/calls to that deprecated forwarding layer are blocked by repository hygiene checks.
+- Removal target for shim behavior: **v1.3** after bridge coverage remains green.
 
 ## Compatibility matrix (builder vs JSON adapter)
 

@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"goahk/internal/actions"
-	"goahk/internal/app"
 	"goahk/internal/config"
 	"goahk/internal/program"
+	"goahk/internal/runtime"
 )
 
 func TestAdapterParity_MatrixClaims(t *testing.T) {
@@ -113,7 +113,7 @@ func TestAdapterParity_MatrixClaims(t *testing.T) {
 	})
 }
 
-func compileFromConfig(cfg config.Config, registry *actions.Registry) ([]app.RuntimeBinding, error) {
+func compileFromConfig(cfg config.Config, registry *actions.Registry) ([]runtime.RuntimeBinding, error) {
 	p, err := config.ToProgram(cfg)
 	if err != nil {
 		return nil, err
@@ -121,6 +121,6 @@ func compileFromConfig(cfg config.Config, registry *actions.Registry) ([]app.Run
 	return compileFromProgram(p, registry)
 }
 
-func compileFromProgram(p program.Program, registry *actions.Registry) ([]app.RuntimeBinding, error) {
-	return app.CompileRuntimeBindingsFromProgram(p, registry)
+func compileFromProgram(p program.Program, registry *actions.Registry) ([]runtime.RuntimeBinding, error) {
+	return runtime.CompileRuntimeBindings(p, registry)
 }

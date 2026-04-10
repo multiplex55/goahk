@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"goahk/internal/actions"
-	internalapp "goahk/internal/app"
 	"goahk/internal/runtime"
 )
 
@@ -42,14 +41,14 @@ func TestRunCallback_RegistersAndExecutesThroughExecutor(t *testing.T) {
 	}
 }
 
-func compileTestBindings(t *testing.T, a *App) ([]internalapp.RuntimeBinding, *actions.Executor) {
+func compileTestBindings(t *testing.T, a *App) ([]runtime.RuntimeBinding, *actions.Executor) {
 	t.Helper()
 
 	program, _, callbacks := a.runtimeArtifacts()
 	registry := buildRegistryWithCallbacks(a.state, callbacks, a.actionLogger())
-	bindings, err := internalapp.CompileRuntimeBindingsFromProgram(program, registry)
+	bindings, err := runtime.CompileRuntimeBindings(program, registry)
 	if err != nil {
-		t.Fatalf("CompileRuntimeBindingsFromProgram() error = %v", err)
+		t.Fatalf("CompileRuntimeBindings() error = %v", err)
 	}
 	return bindings, actions.NewExecutor(registry)
 }
