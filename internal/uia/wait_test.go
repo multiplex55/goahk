@@ -65,3 +65,53 @@ func TestWaitUntilExists_TimesOut(t *testing.T) {
 		t.Fatalf("error=%v", err)
 	}
 }
+
+type stagedNavigator struct {
+	attempt int
+}
+
+func (s *stagedNavigator) ElementByID(_ context.Context, id string) (Element, error) {
+	switch id {
+	case "root":
+		window := "Window"
+		return Element{ID: "root", Name: strPtr("Settings"), ControlType: &window}, nil
+	case "panel":
+		pane := "Pane"
+		return Element{ID: "panel", Name: strPtr("General"), ControlType: &pane}, nil
+	case "target":
+		button := "Button"
+		return Element{ID: "target", Name: strPtr("Apply"), ControlType: &button, AutomationID: strPtr("applyBtn")}, nil
+	default:
+		return Element{}, fmt.Errorf("unknown id")
+	}
+}
+
+func (s *stagedNavigator) ChildrenIDs(_ context.Context, id string) ([]string, error) {
+	switch id {
+	case "root":
+		return []string{"panel"}, nil
+	case "panel":
+		s.attempt++
+		if s.attempt >= 2 {
+			return []string{"target"}, nil
+		}
+		return nil, nil
+	default:
+		return nil, nil
+	}
+}
+
+func TestWaitUntilExists_EndToEndSelectorScenario(t *testing.T) {
+	clk := &fakeClock{now: time.Unix(0, 0)}
+	nav := &stagedNavigator{}
+	result, err := WaitUntilExists(context.Background(), nav, "root", Selector{
+		AutomationID: "applyBtn",
+		Ancestors:    []Selector{{Name: "Settings"}, {Name: "General", ControlType: "Pane"}},
+	}, time.Second, RetryPolicy{Interval: 20 * time.Millisecond}, clk)
+	if err != nil {
+		t.Fatalf("WaitUntilExists() error = %v", err)
+	}
+	if result.Element.ID != "target" || result.Attempts < 2 {
+		t.Fatalf("result=%+v", result)
+	}
+}

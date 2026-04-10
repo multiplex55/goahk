@@ -61,3 +61,26 @@ func TestBuildTree_DeterministicTraversalOrder(t *testing.T) {
 		t.Fatalf("child order = %v, want [a b c]", ids)
 	}
 }
+
+func TestBuildTree_FindIntegrationScenario(t *testing.T) {
+	window, pane, edit := "Window", "Pane", "Edit"
+	nav := mockNavigator{
+		elements: map[string]Element{
+			"root":   {ID: "root", Name: strPtr("App"), ControlType: &window},
+			"panel":  {ID: "panel", Name: strPtr("Login"), ControlType: &pane},
+			"target": {ID: "target", AutomationID: strPtr("username"), ControlType: &edit},
+		},
+		children: map[string][]string{"root": {"panel"}, "panel": {"target"}},
+	}
+	built, err := BuildTree(context.Background(), nav, "root", TreeOptions{MaxDepth: 3})
+	if err != nil {
+		t.Fatalf("BuildTree() error = %v", err)
+	}
+	if built.Element.ID != "root" || len(built.Children) != 1 {
+		t.Fatalf("unexpected tree: %#v", built)
+	}
+	found, _, err := Find(context.Background(), nav, "root", Selector{AutomationID: "username", Ancestors: []Selector{{Name: "Login"}}})
+	if err != nil || found.ID != "target" {
+		t.Fatalf("Find() got=%+v err=%v", found, err)
+	}
+}
