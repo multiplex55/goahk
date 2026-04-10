@@ -17,6 +17,10 @@ export type InspectWindow = {
   className?: string;
 };
 
+export type InspectWindowRequest = {
+  hwnd: string;
+};
+
 export type FollowCursorBridgeEvent = {
   type: 'follow-cursor';
   eventID?: number;
@@ -65,7 +69,7 @@ type NodeDetailsResponse = {
 
 export type InspectBindings = {
   RefreshWindows(req: { filter: string; visibleOnly: boolean; titleOnly: boolean }): Promise<{ windows: InspectWindow[] }>;
-  InspectWindow(req: { hwnd: string }): Promise<{ rootNodeID?: string }>;
+  InspectWindow(req: InspectWindowRequest): Promise<{ rootNodeID?: string }>;
   GetTreeRoot(req: { hwnd: string; refresh?: boolean }): Promise<{ root: InspectTreeNode }>;
   GetNodeChildren(req: { nodeID: string }): Promise<{ parentNodeID: string; children: InspectTreeNode[] }>;
   SelectNode(req: { nodeID: string }): Promise<{ selected: InspectTreeNode }>;
