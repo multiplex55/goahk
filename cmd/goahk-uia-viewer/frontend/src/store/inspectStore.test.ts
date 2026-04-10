@@ -19,6 +19,7 @@ function makeBindings(overrides?: Partial<InspectBindings>): InspectBindings {
       statusText: `Details ${nodeID}`
     })),
     HighlightNode: vi.fn().mockResolvedValue({ highlighted: true }),
+    ToggleFollowCursor: vi.fn().mockImplementation(async ({ enabled }) => ({ enabled })),
     ActivateWindow: vi.fn().mockResolvedValue({ activated: true }),
     ...overrides
   };
@@ -151,5 +152,69 @@ describe('inspectStore', () => {
 
     expect(store.getState().errorText).toBe('network down');
     expect(store.getState().statusText).toBe('Failed to expand node');
+  });
+
+  it('applies bridge follow-cursor events and updates selection/tree/highlight path', async () => {
+    const bindings = makeBindings();
+    const store = createInspectStore(bindings, { followCursorDebounceMs: 10 });
+
+    await store.selectWindow('w1');
+    store.applyBridgeEvent({
+      type: 'follow-cursor',
+      eventID: 1,
+      windowID: 'w1',
+      element: { nodeID: 'node-99', name: 'Hovered', hasChildren: false },
+      path: [{ nodeID: 'root-1', hasChildren: true }, { nodeID: 'node-99', hasChildren: false }]
+    });
+
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(store.getState().selectedNodeID).toBe('node-99');
+    expect(store.getState().selectedPath.map((item) => item.nodeID)).toEqual(['root-1', 'node-99']);
+    expect(bindings.SelectNode).toHaveBeenCalledWith({ nodeID: 'node-99' });
+    expect(bindings.HighlightNode).toHaveBeenCalledWith({ nodeID: 'node-99' });
+  });
+
+  it('toggle follow-cursor is idempotent and reflects backend enabled state', async () => {
+    const bindings = makeBindings();
+    const store = createInspectStore(bindings);
+
+    await store.setFollowCursor(true);
+    await store.setFollowCursor(true);
+    await store.setFollowCursor(false);
+
+    expect(bindings.ToggleFollowCursor).toHaveBeenNthCalledWith(1, { enabled: true });
+    expect(bindings.ToggleFollowCursor).toHaveBeenNthCalledWith(2, { enabled: true });
+    expect(bindings.ToggleFollowCursor).toHaveBeenNthCalledWith(3, { enabled: false });
+    expect(store.getState().followCursor).toBe(false);
+  });
+
+  it('throttles/debounces rapid follow-cursor events to latest selection', async () => {
+    const bindings = makeBindings();
+    const store = createInspectStore(bindings, { followCursorDebounceMs: 50 });
+    await store.selectWindow('w1');
+
+    store.applyBridgeEvent({ type: 'follow-cursor', eventID: 2, windowID: 'w1', element: { nodeID: 'n1', hasChildren: false } });
+    store.applyBridgeEvent({ type: 'follow-cursor', eventID: 3, windowID: 'w1', element: { nodeID: 'n2', hasChildren: false } });
+    store.applyBridgeEvent({ type: 'follow-cursor', eventID: 4, windowID: 'w1', element: { nodeID: 'n3', hasChildren: false } });
+
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(bindings.SelectNode).toHaveBeenCalledWith({ nodeID: 'n3' });
+    expect(store.getState().selectedNodeID).toBe('n3');
+  });
+
+  it('suppresses stale follow-cursor events from old window after window switch', async () => {
+    const bindings = makeBindings();
+    const store = createInspectStore(bindings, { followCursorDebounceMs: 10 });
+
+    await store.selectWindow('w1');
+    await store.selectWindow('w2');
+
+    store.applyBridgeEvent({ type: 'follow-cursor', eventID: 10, windowID: 'w1', element: { nodeID: 'old', hasChildren: false } });
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(store.getState().selectedWindowID).toBe('w2');
+    expect(store.getState().selectedNodeID).not.toBe('old');
   });
 });
