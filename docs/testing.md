@@ -18,6 +18,7 @@ Use a Windows runner (local machine or CI) with:
 - Permissions to register/unregister global hotkeys.
 - Stable keyboard layout for chord parsing/trigger checks.
 - A clean environment with no conflicting global hotkey registrations.
+- Set `GOAHK_ENABLE_WINDOWS_INPUT_ITEST=1` to enable real keyboard/mouse injection checks in the integration suite.
 
 > Integration tests are intentionally gated with build tags so Linux/macOS CI and quick local loops stay fast.
 
@@ -36,7 +37,7 @@ Use a Windows runner (local machine or CI) with:
 - Targeted package unit runs:
   - `go test ./internal/hotkey ./internal/runtime ./internal/actions`
 - Windows integration (from Windows host):
-  - `go test -tags=integration ./internal/runtime ./internal/hotkey`
+  - `GOAHK_ENABLE_WINDOWS_INPUT_ITEST=1 go test -tags=integration ./internal/runtime ./internal/hotkey`
 
 ### CI command examples
 

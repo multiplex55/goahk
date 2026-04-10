@@ -6,7 +6,6 @@ import (
 )
 
 func TestAPIHappyPath_TinyScriptFlow(t *testing.T) {
-	t.Parallel()
 
 	app := NewApp().
 		Bind("1", MessageBox("Quick note", "Pressed 1"), Stop()).
