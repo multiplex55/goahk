@@ -14,7 +14,6 @@ type fakeInspectService struct {
 	mu                sync.Mutex
 	underCursorCalls  int
 	underCursorValues []inspect.TreeNodeDTO
-	toggleResp        inspect.ToggleFollowCursorResponse
 	inspectWindowReqs []inspect.InspectWindowRequest
 	inspectWindowResp inspect.InspectWindowResponse
 }
@@ -69,35 +68,52 @@ func (f *fakeInspectService) InvokePattern(context.Context, inspect.InvokePatter
 	return inspect.InvokePatternResponse{}, nil
 }
 func (f *fakeInspectService) ToggleFollowCursor(context.Context, inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
-	return f.toggleResp, nil
+	return inspect.ToggleFollowCursorResponse{}, nil
 }
 func (f *fakeInspectService) RefreshWindows(context.Context, inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
 	return inspect.RefreshWindowsResponse{}, nil
 }
 
-func TestToggleFollowCursorIdempotentEnableDisable(t *testing.T) {
+func TestNewViewerApp_InitializesDependencies(t *testing.T) {
+	svc := &fakeInspectService{}
+	app := NewViewerApp(svc)
+	if app.service != svc {
+		t.Fatalf("expected service dependency to be injected")
+	}
+	if app.followTicker == nil {
+		t.Fatalf("expected follow ticker to be initialized")
+	}
+	if app.followInterval <= 0 {
+		t.Fatalf("expected positive follow interval, got %v", app.followInterval)
+	}
+}
+
+func TestToggleFollowCursor_IdempotentTransitions(t *testing.T) {
+	tests := []struct {
+		name    string
+		enabled bool
+	}{
+		{name: "enable once", enabled: true},
+		{name: "enable twice", enabled: true},
+		{name: "disable once", enabled: false},
+		{name: "disable twice", enabled: false},
+	}
+
 	svc := &fakeInspectService{underCursorValues: []inspect.TreeNodeDTO{{NodeID: "n1"}}}
 	app := NewViewerApp(svc)
-
 	tick := make(chan time.Time, 1)
 	app.followTicker = func() <-chan time.Time { return tick }
 
-	resp, err := app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: true})
-	if err != nil || !resp.Enabled {
-		t.Fatalf("enable failed: %v %#v", err, resp)
-	}
-	resp, err = app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: true})
-	if err != nil || !resp.Enabled {
-		t.Fatalf("second enable failed: %v %#v", err, resp)
-	}
-
-	resp, err = app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: false})
-	if err != nil || resp.Enabled {
-		t.Fatalf("disable failed: %v %#v", err, resp)
-	}
-	resp, err = app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: false})
-	if err != nil || resp.Enabled {
-		t.Fatalf("second disable failed: %v %#v", err, resp)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: tc.enabled})
+			if err != nil {
+				t.Fatalf("ToggleFollowCursor error: %v", err)
+			}
+			if resp.Enabled != tc.enabled {
+				t.Fatalf("expected enabled=%v got=%v", tc.enabled, resp.Enabled)
+			}
+		})
 	}
 }
 
@@ -162,5 +178,32 @@ func TestViewerApp_InspectWindow_ForwardsRequestUnchanged(t *testing.T) {
 	}
 	if resp != svc.inspectWindowResp {
 		t.Fatalf("expected response %+v, got %+v", svc.inspectWindowResp, resp)
+	}
+}
+
+func TestViewerApp_OnShutdown_DisablesFollowCursorAndEmitter(t *testing.T) {
+	svc := &fakeInspectService{underCursorValues: []inspect.TreeNodeDTO{{NodeID: "n1"}}}
+	app := NewViewerApp(svc)
+	tick := make(chan time.Time, 1)
+	app.followTicker = func() <-chan time.Time { return tick }
+
+	emitted := 0
+	app.SetEventEmitter(func(string, any) { emitted++ })
+	_, _ = app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: true})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	app.OnShutdown(ctx)
+
+	if app.emitEvent != nil {
+		t.Fatalf("expected emitter to be cleared on shutdown")
+	}
+
+	resp, err := app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: false})
+	if err != nil {
+		t.Fatalf("expected no error disabling follow cursor after shutdown: %v", err)
+	}
+	if resp.Enabled {
+		t.Fatalf("expected follow cursor to remain disabled after shutdown")
 	}
 }
