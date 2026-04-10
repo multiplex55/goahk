@@ -1,0 +1,68 @@
+//go:build !windows
+// +build !windows
+
+package inspect
+
+import "context"
+
+type unsupportedProvider struct{}
+
+func newWindowsProvider() WindowsProvider {
+	return unsupportedProvider{}
+}
+
+func (unsupportedProvider) ListWindows(context.Context, ListWindowsRequest) (ListWindowsResponse, error) {
+	return ListWindowsResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) InspectWindow(context.Context, InspectWindowRequest) (InspectWindowResponse, error) {
+	return InspectWindowResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) GetTreeRoot(context.Context, GetTreeRootRequest) (GetTreeRootResponse, error) {
+	return GetTreeRootResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) GetNodeChildren(context.Context, GetNodeChildrenRequest) (GetNodeChildrenResponse, error) {
+	return GetNodeChildrenResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) SelectNode(context.Context, SelectNodeRequest) (SelectNodeResponse, error) {
+	return SelectNodeResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) GetFocusedElement(context.Context, GetFocusedElementRequest) (GetFocusedElementResponse, error) {
+	return GetFocusedElementResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) GetElementUnderCursor(context.Context, GetElementUnderCursorRequest) (GetElementUnderCursorResponse, error) {
+	return GetElementUnderCursorResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) HighlightNode(context.Context, HighlightNodeRequest) (HighlightNodeResponse, error) {
+	return HighlightNodeResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) ClearHighlight(context.Context, ClearHighlightRequest) (ClearHighlightResponse, error) {
+	return ClearHighlightResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) CopyBestSelector(context.Context, CopyBestSelectorRequest) (CopyBestSelectorResponse, error) {
+	return CopyBestSelectorResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) GetPatternActions(context.Context, GetPatternActionsRequest) (GetPatternActionsResponse, error) {
+	return GetPatternActionsResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) InvokePattern(context.Context, InvokePatternRequest) (InvokePatternResponse, error) {
+	return InvokePatternResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) ToggleFollowCursor(context.Context, ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error) {
+	return ToggleFollowCursorResponse{}, ErrProviderActionUnsupported
+}
+
+func (unsupportedProvider) RefreshWindows(context.Context, RefreshWindowsRequest) (RefreshWindowsResponse, error) {
+	return RefreshWindowsResponse{}, ErrProviderActionUnsupported
+}
