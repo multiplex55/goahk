@@ -1,0 +1,320 @@
+package inspect
+
+import (
+	"context"
+	"errors"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+)
+
+var errNilElementReference = errors.New("inspect: nil element reference")
+var errStaleElementReference = errors.New("inspect: stale element reference")
+
+type ProviderCallError struct {
+	Op     string
+	NodeID string
+	HWND   string
+	Err    error
+}
+
+func (e *ProviderCallError) Error() string {
+	parts := []string{"inspect provider call failed", e.Op}
+	if e.NodeID != "" {
+		parts = append(parts, "node="+e.NodeID)
+	}
+	if e.HWND != "" {
+		parts = append(parts, "hwnd="+e.HWND)
+	}
+	return strings.Join(parts, " ") + ": " + e.Err.Error()
+}
+
+func (e *ProviderCallError) Unwrap() error { return e.Err }
+
+type uiaRect struct{ Left, Top, Width, Height int }
+
+type uiaElement struct {
+	Ref                  string
+	RuntimeID            string
+	ParentRef            string
+	Name                 string
+	LocalizedControlType string
+	ControlType          string
+	AutomationID         string
+	ClassName            string
+	FrameworkID          string
+	ProcessID            int
+	HelpText             *string
+	Status               *string
+	Value                *string
+	ItemStatus           *string
+	LabeledBy            *string
+	BoundingRect         *uiaRect
+	IsEnabled            bool
+	IsKeyboardFocusable  bool
+	HasKeyboardFocus     bool
+	IsOffscreen          bool
+	IsContentElement     bool
+	IsControlElement     bool
+	IsPassword           bool
+	SupportedPatterns    []string
+}
+
+type uiaAdapter interface {
+	ResolveWindowRoot(context.Context, string) (*uiaElement, error)
+	GetFocusedElement(context.Context) (*uiaElement, error)
+	GetCursorPosition(context.Context) (int, int, error)
+	ElementFromPoint(context.Context, int, int) (*uiaElement, error)
+	GetElementByRef(context.Context, string) (*uiaElement, error)
+	GetParent(context.Context, string) (*uiaElement, error)
+	GetChildren(context.Context, string) ([]*uiaElement, error)
+}
+
+type providerCore struct {
+	adapter    uiaAdapter
+	mu         sync.RWMutex
+	nodeToRef  map[string]string
+	parentByID map[string]string
+}
+
+func newProviderCore(adapter uiaAdapter) *providerCore {
+	return &providerCore{adapter: adapter, nodeToRef: map[string]string{}, parentByID: map[string]string{}}
+}
+
+func (p *providerCore) treeRoot(ctx context.Context, hwnd string) (TreeNodeDTO, error) {
+	root, err := p.adapter.ResolveWindowRoot(ctx, hwnd)
+	if err != nil {
+		return TreeNodeDTO{}, p.wrapErr("ResolveWindowRoot", "", hwnd, err)
+	}
+	return p.cacheNode(root), nil
+}
+
+func (p *providerCore) focused(ctx context.Context) (TreeNodeDTO, error) {
+	el, err := p.adapter.GetFocusedElement(ctx)
+	if err != nil {
+		return TreeNodeDTO{}, p.wrapErr("GetFocusedElement", "", "", err)
+	}
+	return p.cacheNode(el), nil
+}
+
+func (p *providerCore) underCursor(ctx context.Context) (TreeNodeDTO, error) {
+	x, y, err := p.adapter.GetCursorPosition(ctx)
+	if err != nil {
+		return TreeNodeDTO{}, p.wrapErr("GetCursorPosition", "", "", err)
+	}
+	el, err := p.adapter.ElementFromPoint(ctx, x, y)
+	if err != nil {
+		return TreeNodeDTO{}, p.wrapErr("ElementFromPoint", "", "", err)
+	}
+	return p.cacheNode(el), nil
+}
+
+func (p *providerCore) nodeChildren(ctx context.Context, nodeID string) ([]TreeNodeDTO, error) {
+	ref, ok := p.lookupRef(nodeID)
+	if !ok {
+		return nil, ErrStaleCache
+	}
+	children, err := p.adapter.GetChildren(ctx, ref)
+	if err != nil {
+		return nil, p.wrapErr("GetChildren", nodeID, "", err)
+	}
+	out := make([]TreeNodeDTO, 0, len(children))
+	for _, child := range children {
+		out = append(out, p.cacheNode(child))
+	}
+	return out, nil
+}
+
+func (p *providerCore) nodeParent(ctx context.Context, nodeID string) (TreeNodeDTO, error) {
+	ref, ok := p.lookupRef(nodeID)
+	if !ok {
+		return TreeNodeDTO{}, ErrStaleCache
+	}
+	parent, err := p.adapter.GetParent(ctx, ref)
+	if err != nil {
+		return TreeNodeDTO{}, p.wrapErr("GetParent", nodeID, "", err)
+	}
+	return p.cacheNode(parent), nil
+}
+
+func (p *providerCore) inspectByNodeID(ctx context.Context, nodeID string) (InspectElement, error) {
+	ref, ok := p.lookupRef(nodeID)
+	if !ok {
+		return InspectElement{}, ErrStaleCache
+	}
+	el, err := p.adapter.GetElementByRef(ctx, ref)
+	if err != nil {
+		return InspectElement{}, p.wrapErr("GetElementByRef", nodeID, "", err)
+	}
+	if el.ParentRef != "" {
+		parentID := p.cacheNodeIDOnly(el.ParentRef)
+		p.mu.Lock()
+		p.parentByID[nodeID] = parentID
+		p.mu.Unlock()
+	}
+	return toInspectElement(nodeID, p.parentOf(nodeID), el), nil
+}
+
+func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
+	if el == nil || el.Ref == "" {
+		return TreeNodeDTO{}
+	}
+	nodeID := p.cacheNodeIDOnly(el.Ref)
+	if el.ParentRef != "" {
+		parentID := p.cacheNodeIDOnly(el.ParentRef)
+		p.mu.Lock()
+		p.parentByID[nodeID] = parentID
+		p.mu.Unlock()
+	}
+	patterns := patternActionsFromSupported(el.SupportedPatterns)
+	names := make([]string, 0, len(patterns))
+	for _, p := range patterns {
+		names = append(names, p.Action)
+	}
+	return TreeNodeDTO{NodeID: nodeID, Name: el.Name, ControlType: normalizeControlType(el.ControlType, el.LocalizedControlType), ClassName: el.ClassName, Patterns: names}
+}
+
+func (p *providerCore) cacheNodeIDOnly(ref string) string {
+	nodeID := "node:" + ref
+	p.mu.Lock()
+	p.nodeToRef[nodeID] = ref
+	p.mu.Unlock()
+	return nodeID
+}
+
+func (p *providerCore) lookupRef(nodeID string) (string, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	ref, ok := p.nodeToRef[nodeID]
+	return ref, ok
+}
+func (p *providerCore) parentOf(nodeID string) string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.parentByID[nodeID]
+}
+
+func (p *providerCore) wrapErr(op, nodeID, hwnd string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, errNilElementReference) || errors.Is(err, errStaleElementReference) {
+		return ErrStaleCache
+	}
+	return &ProviderCallError{Op: op, NodeID: nodeID, HWND: hwnd, Err: err}
+}
+
+func toInspectElement(nodeID, parentNodeID string, el *uiaElement) InspectElement {
+	if el == nil {
+		return InspectElement{NodeID: nodeID, ParentNodeID: parentNodeID}
+	}
+	best, alts := selectorCandidatesForElement(el)
+	return InspectElement{
+		NodeID: nodeID, RuntimeID: strings.TrimSpace(el.RuntimeID), ParentNodeID: parentNodeID,
+		Name: el.Name, LocalizedControlType: normalizeLocalizedControlType(el.LocalizedControlType, el.ControlType), ControlType: normalizeControlType(el.ControlType, el.LocalizedControlType),
+		AutomationID: el.AutomationID, ClassName: el.ClassName, FrameworkID: el.FrameworkID, ProcessID: el.ProcessID,
+		HelpText: el.HelpText, Status: el.Status, Value: el.Value, ItemStatus: el.ItemStatus, LabeledBy: el.LabeledBy,
+		BoundingRect: toRect(el.BoundingRect), IsEnabled: el.IsEnabled, IsKeyboardFocusable: el.IsKeyboardFocusable, HasKeyboardFocus: el.HasKeyboardFocus,
+		IsOffscreen: el.IsOffscreen, IsContentElement: el.IsContentElement, IsControlElement: el.IsControlElement, IsPassword: el.IsPassword,
+		Patterns: patternActionsFromSupported(el.SupportedPatterns), BestSelector: best, SelectorSuggestions: alts,
+	}
+}
+
+func toRect(r *uiaRect) *Rect {
+	if r == nil {
+		return nil
+	}
+	return &Rect{Left: r.Left, Top: r.Top, Width: r.Width, Height: r.Height}
+}
+
+func normalizeControlType(controlType, localized string) string {
+	c := strings.TrimSpace(controlType)
+	if c != "" {
+		return strings.ToUpper(c[:1]) + c[1:]
+	}
+	l := strings.TrimSpace(localized)
+	if l == "" {
+		return ""
+	}
+	return strings.ToUpper(l[:1]) + l[1:]
+}
+
+func normalizeLocalizedControlType(localized, controlType string) string {
+	l := strings.TrimSpace(localized)
+	if l != "" {
+		return strings.ToLower(l)
+	}
+	c := strings.TrimSpace(controlType)
+	if c == "" {
+		return ""
+	}
+	return strings.ToLower(c)
+}
+
+func patternActionsFromSupported(patterns []string) []PatternAction {
+	m := map[string][]PatternAction{
+		"Invoke":         {{Pattern: "Invoke", Action: "invoke", DisplayName: "Invoke"}},
+		"ExpandCollapse": {{Pattern: "ExpandCollapse", Action: "expand", DisplayName: "Expand"}, {Pattern: "ExpandCollapse", Action: "collapse", DisplayName: "Collapse"}},
+		"SelectionItem":  {{Pattern: "SelectionItem", Action: "select", DisplayName: "Select"}},
+		"Value":          {{Pattern: "Value", Action: "setValue", DisplayName: "Set Value", PayloadSchema: `{"type":"object","required":["value"]}`}},
+		"Toggle":         {{Pattern: "Toggle", Action: "toggle", DisplayName: "Toggle"}},
+	}
+	seen := map[string]bool{}
+	var out []PatternAction
+	for _, p := range patterns {
+		for _, a := range m[strings.TrimSpace(p)] {
+			key := a.Pattern + ":" + a.Action
+			if !seen[key] {
+				seen[key] = true
+				out = append(out, a)
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Pattern == out[j].Pattern {
+			return out[i].Action < out[j].Action
+		}
+		return out[i].Pattern < out[j].Pattern
+	})
+	return out
+}
+
+func selectorCandidatesForElement(el *uiaElement) (*Selector, []SelectorCandidate) {
+	if el == nil {
+		return nil, nil
+	}
+	type cand struct {
+		sel   Selector
+		why   string
+		score int
+		src   string
+	}
+	var cands []cand
+	if v := strings.TrimSpace(el.AutomationID); v != "" {
+		cands = append(cands, cand{sel: Selector{AutomationID: v}, why: "automation id is stable", score: 100, src: "automationId"})
+	}
+	ct := normalizeControlType(el.ControlType, el.LocalizedControlType)
+	if aid := strings.TrimSpace(el.AutomationID); aid != "" && ct != "" {
+		cands = append(cands, cand{sel: Selector{AutomationID: aid, ControlType: ct}, why: "automation id with control type narrows duplicates", score: 95, src: "automationId+controlType"})
+	}
+	if n := strings.TrimSpace(el.Name); n != "" && ct != "" {
+		cands = append(cands, cand{sel: Selector{Name: n, ControlType: ct, ClassName: strings.TrimSpace(el.ClassName)}, why: "name+type fallback", score: 70, src: "name+controlType"})
+	}
+	if strings.TrimSpace(el.Name) != "" {
+		cands = append(cands, cand{sel: Selector{Name: strings.TrimSpace(el.Name)}, why: "name-only broad fallback", score: 40, src: "name"})
+	}
+	if strings.TrimSpace(el.ClassName) != "" && strings.TrimSpace(el.FrameworkID) != "" {
+		cands = append(cands, cand{sel: Selector{ClassName: strings.TrimSpace(el.ClassName), FrameworkID: strings.TrimSpace(el.FrameworkID), ControlType: ct}, why: "framework class fallback", score: 35, src: "class+framework"})
+	}
+	sort.SliceStable(cands, func(i, j int) bool { return cands[i].score > cands[j].score })
+	out := make([]SelectorCandidate, 0, len(cands))
+	for i, c := range cands {
+		out = append(out, SelectorCandidate{Rank: i + 1, Selector: c.sel, Rationale: c.why, Score: c.score, Source: c.src, Meta: map[string]any{"index": strconv.Itoa(i)}})
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	best := out[0].Selector
+	return &best, out
+}
