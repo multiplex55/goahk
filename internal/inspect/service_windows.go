@@ -22,7 +22,7 @@ func (p *windowsProvider) ListWindows(context.Context, ListWindowsRequest) (List
 }
 
 func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRequest) (InspectWindowResponse, error) {
-	root, err := p.core.treeRoot(ctx, req.HWND, req.Refresh)
+	root, err := p.core.treeRoot(ctx, req.HWND, false)
 	if err != nil {
 		return InspectWindowResponse{}, err
 	}

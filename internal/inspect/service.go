@@ -79,6 +79,8 @@ type ListWindowsResponse struct {
 }
 
 type InspectWindowRequest struct {
+	// InspectWindow is metadata-only and does not refresh the UIA tree cache.
+	// Call GetTreeRoot with Refresh=true when a cache refresh is required.
 	HWND string `json:"hwnd"`
 }
 
