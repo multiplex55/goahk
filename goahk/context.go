@@ -50,11 +50,19 @@ type ProcessAPI interface {
 
 type RuntimeAPI interface {
 	Stop()
-	Sleep(duration time.Duration)
+	Sleep(duration time.Duration) bool
 }
 
 // AutomationAPI aliases UIAService for ergonomic naming in callbacks.
 type AutomationAPI = UIAService
+
+// CallbackLogger is the callback-facing logging contract.
+//
+// It mirrors runtime logging and is safe to call from callback goroutines.
+type CallbackLogger interface {
+	Info(msg string, fields map[string]any)
+	Error(msg string, fields map[string]any)
+}
 
 type Context struct {
 	Clipboard  ClipboardAPI
@@ -70,6 +78,10 @@ type Context struct {
 	actionCtx *actions.ActionContext
 }
 
+// Context returns the underlying callback context.
+//
+// Prefer Err and Sleep for most callback cancellation checks. Use Context()
+// only for low-level integrations that require a context.Context.
 func (c *Context) Context() context.Context {
 	if c == nil || c.actionCtx == nil {
 		return context.Background()
@@ -77,11 +89,63 @@ func (c *Context) Context() context.Context {
 	return c.actionCtx.Context
 }
 
+// Err reports callback cancellation/stop state.
+//
+// It returns nil while work may continue, and returns context cancellation
+// errors (for example context.Canceled) after stop/cancel is observed.
+// Err is safe to call concurrently.
+func (c *Context) Err() error {
+	return actions.NewCallbackContext(c.actionCtx).Err()
+}
+
+// Sleep waits for d or until callback cancellation/stop is observed.
+//
+// It returns true when the timer elapses normally, and false when the callback
+// context is canceled before d completes.
+// Sleep is safe to call concurrently.
+func (c *Context) Sleep(d time.Duration) bool {
+	return actions.NewCallbackContext(c.actionCtx).Sleep(d)
+}
+
+// Logger returns the callback logger configured by the runtime.
+//
+// If no logger is configured, a no-op logger is returned.
+// The returned logger is safe for callback use across goroutines.
+func (c *Context) Logger() CallbackLogger {
+	return actions.NewCallbackContext(c.actionCtx).Log()
+}
+
+// Log emits an info-level callback log with optional key/value pairs.
+//
+// Odd trailing values are ignored. Non-string keys are skipped.
+func (c *Context) Log(msg string, keyvals ...any) {
+	fields := map[string]any{}
+	for i := 0; i+1 < len(keyvals); i += 2 {
+		key, ok := keyvals[i].(string)
+		if !ok {
+			continue
+		}
+		fields[key] = keyvals[i+1]
+	}
+	c.Logger().Info(msg, fields)
+}
+
 func (c *Context) BindingID() string {
 	if c == nil || c.actionCtx == nil {
 		return ""
 	}
 	return c.actionCtx.BindingID
+}
+
+// Binding returns the trigger binding identifier for this callback run.
+func (c *Context) Binding() string { return c.BindingID() }
+
+// Trigger returns the trigger text (hotkey chord) for this callback run.
+func (c *Context) Trigger() string {
+	if c == nil || c.actionCtx == nil {
+		return ""
+	}
+	return c.actionCtx.TriggerText
 }
 
 func (c *Context) Metadata() map[string]string {

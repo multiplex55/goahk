@@ -7,7 +7,7 @@ app := goahk.NewApp().
 	On("Ctrl+Shift+R").Replace().Do(
 		goahk.Func(func(ctx *goahk.Context) error {
 			for i := 0; i < 100; i++ {
-				if !ctx.Runtime.Sleep(100 * time.Millisecond) {
+				if !ctx.Sleep(100 * time.Millisecond) {
 					return ctx.Err()
 				}
 			}
@@ -33,3 +33,4 @@ dispatch_trigger_result (run #2 success)
 - `replace` guarantees newest intent wins for a binding.
 - Incoming triggers cancel currently running work for that binding before admitting the latest run.
 - Callback code must treat cancellation as expected control flow and return quickly.
+- Config-mode equivalent sets `"concurrency": "replace"` on the same binding.
