@@ -1,0 +1,103 @@
+:root {
+  font-family: Inter, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100vh;
+}
+
+.three-column-layout {
+  display: grid;
+  min-height: 0;
+}
+
+.pane {
+  border-right: 1px solid #d1d5db;
+  overflow: auto;
+  padding: 12px;
+}
+
+.list,
+.tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list button,
+.tree-list button {
+  align-items: flex-start;
+  border: 1px solid transparent;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.list button.selected {
+  border-color: #2563eb;
+  border-radius: 4px;
+}
+
+.window-info {
+  margin-top: 0;
+}
+
+.property-grid {
+  margin: 0;
+}
+
+.property-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px;
+}
+
+.property-row dt {
+  font-weight: 600;
+}
+
+.property-row dd {
+  margin: 0;
+}
+
+.pattern-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.splitter {
+  background: #e5e7eb;
+  cursor: col-resize;
+}
+
+.footer-controls {
+  border-top: 1px solid #d1d5db;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.footer-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.footer-status {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+}
