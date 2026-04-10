@@ -34,8 +34,15 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Verify no tracked binary artifacts
+      - name: Verify no blocked tracked binary artifacts
+        env:
+          GOAHK_ALLOW_RELEASE_ARTIFACTS: ${{ github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'release-artifacts') }}
         run: cmd /c build\check-no-source-binaries.bat
+
+      - name: Verify tracked-artifact policy (repohygiene)
+        env:
+          GOAHK_ALLOW_RELEASE_ARTIFACTS: ${{ github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'release-artifacts') }}
+        run: go test -v ./internal/repohygiene -run TestNoTrackedBinaryArtifacts -count=1
 
       - name: Run build script tests (Pester)
         shell: pwsh

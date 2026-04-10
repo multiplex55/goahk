@@ -2,13 +2,11 @@ package repohygiene
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 )
-
-var forbiddenBinaryExtensions = []string{".exe", ".dll", ".so", ".dylib"}
 
 func TestNoTrackedBinaryArtifacts(t *testing.T) {
 	t.Helper()
@@ -22,23 +20,19 @@ func TestNoTrackedBinaryArtifacts(t *testing.T) {
 	}
 
 	lines := bytes.Split(output, []byte{'\n'})
-	var trackedForbidden []string
+	files := make([]string, 0, len(lines))
 	for _, line := range lines {
 		file := strings.TrimSpace(string(line))
-		if file == "" {
-			continue
-		}
-		ext := strings.ToLower(filepath.Ext(file))
-		for _, forbidden := range forbiddenBinaryExtensions {
-			if ext == forbidden {
-				trackedForbidden = append(trackedForbidden, file)
-				break
-			}
+		if file != "" {
+			files = append(files, file)
 		}
 	}
 
-	if len(trackedForbidden) > 0 {
-		t.Fatalf("tracked binary artifacts are not allowed: %s", strings.Join(trackedForbidden, ", "))
+	allowReleaseArtifacts := strings.EqualFold(os.Getenv("GOAHK_ALLOW_RELEASE_ARTIFACTS"), "1") ||
+		strings.EqualFold(os.Getenv("GOAHK_ALLOW_RELEASE_ARTIFACTS"), "true")
+	blocked := blockedBinaryFiles(files, allowReleaseArtifacts)
+	if len(blocked) > 0 {
+		t.Fatalf("blocked tracked binaries are not allowed outside %s unless GOAHK_ALLOW_RELEASE_ARTIFACTS=1: %s", releaseArtifactPrefix, strings.Join(blocked, ", "))
 	}
 }
 

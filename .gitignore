@@ -12,6 +12,7 @@
 *.lib
 
 # Common build output directories
+# NOTE: dist/release binaries stay ignored for normal PRs; use `git add -f` only in release-artifact PRs.
 /dist/
 /bin/
 **/build/
