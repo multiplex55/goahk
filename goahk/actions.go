@@ -130,6 +130,16 @@ func Stop() Action {
 	return Action{name: "runtime.stop", params: map[string]string{}}
 }
 
+// ControlStop marks a binding as an explicit runtime control-plane graceful stop command.
+func ControlStop() Action {
+	return Action{name: "runtime.control_stop", params: map[string]string{}}
+}
+
+// ControlHardStop marks a binding as an explicit runtime control-plane hard-stop command.
+func ControlHardStop() Action {
+	return Action{name: "runtime.control_hard_stop", params: map[string]string{}}
+}
+
 // Quit is an alias for Stop.
 func Quit() Action {
 	return Stop()

@@ -49,6 +49,32 @@ func TestValidateTable(t *testing.T) {
 			program:   Program{Bindings: []BindingSpec{{ID: "copy", Hotkey: "ctrl+c", Flow: "missing"}}, Options: Options{Flows: []FlowSpec{{ID: "known", Steps: []FlowStepSpec{{Action: "system.log"}}}}}},
 			wantCodes: []string{ErrCodeUnknownFlow},
 		},
+		{
+			name: "control mixed with normal action",
+			program: Program{Bindings: []BindingSpec{{
+				ID: "control_mixed", Hotkey: "f10", Steps: []StepSpec{
+					{Action: "runtime.control_stop"},
+					{Action: "system.log"},
+				},
+			}}},
+			wantCodes: []string{ErrCodeControlMixedSteps},
+		},
+		{
+			name: "control action forbids params",
+			program: Program{Bindings: []BindingSpec{{
+				ID: "control_params", Hotkey: "f10", Steps: []StepSpec{
+					{Action: "runtime.control_hard_stop", Params: map[string]any{"unexpected": "true"}},
+				},
+			}}},
+			wantCodes: []string{ErrCodeControlParams},
+		},
+		{
+			name: "control action cannot reference flow",
+			program: Program{Bindings: []BindingSpec{{
+				ID: "control_flow", Hotkey: "f10", Flow: "f1", Steps: []StepSpec{{Action: "runtime.control_stop"}},
+			}}},
+			wantCodes: []string{ErrCodeControlFlowConflict},
+		},
 	}
 
 	for _, tt := range tests {

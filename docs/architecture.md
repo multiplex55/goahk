@@ -60,9 +60,10 @@ Not guaranteed equivalent: custom Go callbacks (`goahk.Func`) because JSON canno
 The runtime deliberately separates **control** and **work** concerns.
 
 - **Control plane**
-  - Receives high-priority runtime commands from bound control chords.
+  - Receives high-priority runtime commands from bindings that use explicit control actions.
   - Canonical commands: `stop`, `hard_stop`, `suspend`, `reload`.
-  - `Escape` maps to `stop`; `Shift+Escape` maps to `hard_stop` at compile time.
+  - Example explicit bindings: `app.Bind("Escape", goahk.ControlStop())`, `app.Bind("Shift+Escape", goahk.ControlHardStop())`.
+  - Escape-shaped hotkeys are not treated as control commands unless the binding action is explicit control (or compatibility mode enables legacy implicit mapping).
   - Control events are emitted as `control_command_received` log entries.
 - **Work plane**
   - Executes binding plans, flows, and callbacks under the supervisor.

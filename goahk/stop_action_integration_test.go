@@ -64,3 +64,36 @@ func TestStopActionIntegration_EscapeBindingExitsWithoutDeadlock(t *testing.T) {
 		t.Fatalf("stop callback calls = %d, want 1", got)
 	}
 }
+
+func TestStopActionIntegration_EscapeWithNormalActionDoesNotBecomeControlBinding(t *testing.T) {
+	t.Parallel()
+
+	a := NewApp()
+	a.Bind("Escape", Log("normal"))
+	bindings, _ := compileTestBindings(t, a)
+	if got := bindings[0].ControlCommand; got != "" {
+		t.Fatalf("control command = %q, want empty", got)
+	}
+}
+
+func TestStopActionIntegration_ExplicitControlStopCompilesToControlPlaneCommand(t *testing.T) {
+	t.Parallel()
+
+	a := NewApp()
+	a.Bind("F10", ControlStop())
+	bindings, _ := compileTestBindings(t, a)
+	if got := bindings[0].ControlCommand; got != "stop" {
+		t.Fatalf("control command = %q, want stop", got)
+	}
+}
+
+func TestStopActionIntegration_ExplicitControlHardStopCompilesToControlPlaneCommand(t *testing.T) {
+	t.Parallel()
+
+	a := NewApp()
+	a.Bind("Ctrl+F10", ControlHardStop())
+	bindings, _ := compileTestBindings(t, a)
+	if got := bindings[0].ControlCommand; got != "hard_stop" {
+		t.Fatalf("control command = %q, want hard_stop", got)
+	}
+}

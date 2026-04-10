@@ -17,7 +17,7 @@ import (
 func main() {
 	if err := goahk.NewApp().
 		Bind("1", goahk.MessageBox("goahk", "You pressed 1")).
-		Bind("Escape", goahk.Stop()).
+		Bind("Escape", goahk.ControlStop()).
 		Run(context.Background()); err != nil {
 		log.Fatal(err)
 	}

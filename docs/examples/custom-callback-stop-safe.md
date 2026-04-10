@@ -18,7 +18,7 @@ app.Bind("Ctrl+Shift+R", goahk.Func(func(ctx *goahk.Context) error {
         }
     }
 }))
-app.Bind("Escape", goahk.Stop())
+app.Bind("Escape", goahk.ControlStop())
 ```
 
 ## Expected runtime log sequence

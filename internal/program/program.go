@@ -8,8 +8,9 @@ type Program struct {
 }
 
 type Options struct {
-	Flows        []FlowSpec
-	UIASelectors map[string]UIASelectorSpec
+	Flows                        []FlowSpec
+	UIASelectors                 map[string]UIASelectorSpec
+	EnableImplicitEscapeControls bool
 }
 
 type FlowSpec struct {

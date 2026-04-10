@@ -8,6 +8,7 @@ import (
 
 	"goahk/internal/actions"
 	"goahk/internal/hotkey"
+	"goahk/internal/program"
 )
 
 func TestDispatchHotkeyEvents_BlockingActionDoesNotPreventStopHotkey(t *testing.T) {
@@ -61,5 +62,40 @@ func TestDispatchHotkeyEvents_BlockingActionDoesNotPreventStopHotkey(t *testing.
 	}
 	if stopCalls.Load() != 1 {
 		t.Fatalf("stop calls = %d, want 1", stopCalls.Load())
+	}
+}
+
+func TestDispatchHotkeyEvents_CompiledExplicitControlHardStopDispatchesControlEvent(t *testing.T) {
+	p := program.Program{
+		Bindings: []program.BindingSpec{
+			{ID: "hard", Hotkey: "ctrl+f12", Steps: []program.StepSpec{{Action: "runtime.control_hard_stop"}}},
+		},
+	}
+	bindings, err := CompileRuntimeBindings(p, actions.NewRegistry())
+	if err != nil {
+		t.Fatalf("CompileRuntimeBindings() error = %v", err)
+	}
+	control := map[string]RuntimeControlCommand{}
+	for _, b := range bindings {
+		if b.ControlCommand != "" {
+			control[b.ID] = RuntimeControlCommand(b.ControlCommand)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events := make(chan hotkey.TriggerEvent, 1)
+	var hardStops atomic.Int32
+	results := DispatchHotkeyEvents(ctx, ctx.Done(), events, map[string]actions.Plan{"hard": {}}, control, actions.NewExecutor(actions.NewRegistry()), actions.ActionContext{}, nil, func(ev runtimeControlEvent) {
+		if ev.Command == RuntimeControlHardStop {
+			hardStops.Add(1)
+			cancel()
+		}
+	})
+	events <- hotkey.TriggerEvent{BindingID: "hard", Chord: hotkey.Chord{Modifiers: hotkey.ModCtrl, Key: "F12"}}
+	for range results {
+	}
+	if got := hardStops.Load(); got != 1 {
+		t.Fatalf("hard stop events = %d, want 1", got)
 	}
 }

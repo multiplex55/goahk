@@ -34,6 +34,8 @@ func TestActionConstructorsSerializeStepSpecs(t *testing.T) {
 		{name: "send chord keys", in: SendChord("ctrl", "v"), want: program.StepSpec{Action: "input.send_chord", Params: map[string]any{"chord": "ctrl+v"}}},
 		{name: "log", in: Log("ok"), want: program.StepSpec{Action: "system.log", Params: map[string]any{"message": "ok"}}},
 		{name: "stop", in: Stop(), want: program.StepSpec{Action: "runtime.stop", Params: map[string]any{}}},
+		{name: "control stop", in: ControlStop(), want: program.StepSpec{Action: "runtime.control_stop", Params: map[string]any{}}},
+		{name: "control hard stop", in: ControlHardStop(), want: program.StepSpec{Action: "runtime.control_hard_stop", Params: map[string]any{}}},
 		{name: "quit alias", in: Quit(), want: program.StepSpec{Action: "runtime.stop", Params: map[string]any{}}},
 	}
 

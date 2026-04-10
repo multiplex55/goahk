@@ -5,13 +5,18 @@
 ```json
 {
   "hotkeys": [
-    { "id": "graceful", "hotkey": "esc", "steps": [{ "action": "system.log", "params": { "message": "graceful" } }] },
-    { "id": "hard", "hotkey": "shift+esc", "steps": [{ "action": "system.log", "params": { "message": "hard" } }] }
+    { "id": "graceful", "hotkey": "esc", "steps": [{ "action": "runtime.control_stop" }] },
+    { "id": "hard", "hotkey": "shift+esc", "steps": [{ "action": "runtime.control_hard_stop" }] }
   ]
 }
 ```
 
-> Runtime compilation maps `esc` to control command `stop` and `shift+esc` to `hard_stop`.
+Equivalent code-first API:
+
+```go
+app.Bind("Escape", goahk.ControlStop())
+app.Bind("Shift+Escape", goahk.ControlHardStop())
+```
 
 ## Expected runtime log sequence
 
