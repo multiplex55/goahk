@@ -80,6 +80,7 @@ describe('inspectStore', () => {
     expect(store.getState().selectedNodeID).toBe('node-22');
     expect(store.getState().properties).toEqual([{ name: 'AutomationId', value: 'node-22' }]);
     expect(store.getState().statusText).toBe('Details node-22');
+    expect(store.getState().selectorText).toBe('');
   });
 
   it('Flow 4: expanding a node lazily loads children and reuses cache', async () => {
@@ -147,16 +148,20 @@ describe('inspectStore', () => {
     expect(store.getState().properties[0].value).toBe('root-2');
   });
 
-  it('surfaces backend failures into error state', async () => {
+  it('backend error path sets error state and clears stale selection', async () => {
     const bindings = makeBindings({
-      GetNodeChildren: vi.fn().mockRejectedValue(new Error('network down'))
+      SelectNode: vi.fn().mockRejectedValue(new Error('network down'))
     });
     const store = createInspectStore(bindings);
+    await store.selectWindow('w1');
 
-    await store.expandNode('root-1');
+    await store.selectNode('root-1');
 
     expect(store.getState().errorText).toBe('network down');
-    expect(store.getState().statusText).toBe('Failed to expand node');
+    expect(store.getState().statusText).toBe('Failed to select node');
+    expect(store.getState().selectedNodeID).toBe('');
+    expect(store.getState().properties).toEqual([]);
+    expect(store.getState().patterns).toEqual([]);
   });
 
   it('applies bridge follow-cursor events and updates selection/tree/highlight path', async () => {

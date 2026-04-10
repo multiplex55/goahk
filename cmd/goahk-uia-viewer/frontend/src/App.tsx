@@ -1,45 +1,53 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import FooterControls, { FooterState } from './components/FooterControls';
 import TreePane from './components/TreePane';
 import WindowDetailsPane from './components/WindowDetailsPane';
 import WindowListPane from './components/WindowListPane';
 import ThreeColumnLayout from './layout/ThreeColumnLayout';
-import { PatternAction, PropertyItem, TreeNode, WindowItem } from './types';
+import { createInspectBindings } from './bindings';
+import { createInspectStore, InspectBridgeEvent, InspectStore } from './store/inspectStore';
 
-const windows: WindowItem[] = [
-  { id: '1', title: 'Settings', processName: 'SystemSettings.exe' },
-  { id: '2', title: 'Notepad', processName: 'notepad.exe' }
-];
+function pathToText(path: { name?: string; nodeID: string }[]): string {
+  return path.map((item) => item.name || item.nodeID).join(' > ');
+}
 
-const properties: PropertyItem[] = [
-  { name: 'AutomationId', value: 'MainWindow' },
-  { name: 'ControlType', value: 'Window' }
-];
+function subscribeFollowCursor(store: InspectStore): (() => void) | undefined {
+  const runtime = (window as Window & { runtime?: { EventsOn?: (name: string, cb: (payload: unknown) => void) => void; EventsOff?: (name: string) => void } }).runtime;
+  if (!runtime?.EventsOn || !runtime?.EventsOff) {
+    return undefined;
+  }
 
-const patternActions: PatternAction[] = [
-  { id: 'invoke', label: 'Invoke', supported: true },
-  { id: 'set-value', label: 'SetValue', supported: true, requiresInput: true },
-  { id: 'focus', label: 'SetFocus', supported: false }
-];
+  const onFollowCursor = (payload: unknown) => {
+    store.applyBridgeEvent({ type: 'follow-cursor', ...(payload as Omit<InspectBridgeEvent, 'type'>) } as InspectBridgeEvent);
+  };
 
-const rootNodes: TreeNode[] = [
-  { id: 'root', name: 'Desktop', hasChildren: true },
-  { id: 'child-window', name: 'Settings', hasChildren: true }
-];
+  runtime.EventsOn('inspect:follow-cursor', onFollowCursor);
+  return () => runtime.EventsOff?.('inspect:follow-cursor');
+}
 
 export default function App() {
-  const [selectedWindowId, setSelectedWindowId] = useState(windows[0].id);
-  const [expandedNodes, setExpandedNodes] = useState(new Set<string>(['root']));
+  const store = useMemo(() => createInspectStore(createInspectBindings()), []);
+  const [snapshot, setSnapshot] = useState(store.getState());
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [leftWidthPx, setLeftWidthPx] = useState(300);
   const [middleWidthPx, setMiddleWidthPx] = useState(420);
-  const [footerState, setFooterState] = useState<FooterState>({
-    visibleOnly: true,
-    titleOnly: false,
-    activateWindow: false,
-    filter: '',
-    status: 'Ready',
-    path: 'Desktop > Settings'
-  });
+
+  useEffect(() => store.subscribe(setSnapshot), [store]);
+
+  useEffect(() => {
+    void store.refreshWindows();
+    const unsubscribe = subscribeFollowCursor(store);
+    return () => unsubscribe?.();
+  }, [store]);
+
+  const footerState: FooterState = {
+    visibleOnly: snapshot.visibleOnly,
+    titleOnly: snapshot.titleOnly,
+    activateWindow: snapshot.activateOnSelect,
+    filter: snapshot.filter,
+    status: snapshot.errorText || snapshot.statusText,
+    path: snapshot.selectorText || pathToText(snapshot.selectedPath)
+  };
 
   return (
     <div className="app-shell">
@@ -50,24 +58,42 @@ export default function App() {
           setLeftWidthPx(nextLeft);
           setMiddleWidthPx(nextMiddle);
         }}
-        left={<WindowListPane windows={windows} selectedWindowId={selectedWindowId} onSelectWindow={setSelectedWindowId} />}
+        left={
+          <WindowListPane
+            windows={snapshot.windows.map((window) => ({
+              id: window.hwnd,
+              title: window.title,
+              processName: window.processName ?? ''
+            }))}
+            selectedWindowId={snapshot.selectedWindowID}
+            onSelectWindow={(id) => {
+              void store.selectWindow(id);
+            }}
+          />
+        }
         middle={
           <WindowDetailsPane
-            windowTitle={windows.find((window) => window.id === selectedWindowId)?.title ?? 'Unknown Window'}
-            properties={properties}
-            patternActions={patternActions}
-            onInvokePattern={(id, payload) =>
-              setFooterState((current) => ({
-                ...current,
-                status: payload ? `Invoked: ${id} (${payload})` : `Invoked: ${id}`
-              }))
-            }
+            windowTitle={snapshot.windows.find((window) => window.hwnd === snapshot.selectedWindowID)?.title ?? 'Unknown Window'}
+            properties={snapshot.properties}
+            patternActions={snapshot.patterns.map((pattern) => ({
+              id: pattern.name,
+              label: pattern.name,
+              requiresInput: !!pattern.payloadSchema,
+              supported: true
+            }))}
+            onInvokePattern={(id) => {
+              setSnapshot((current) => ({ ...current, statusText: `Pattern ${id} is not wired yet` }));
+            }}
           />
         }
         right={
           <TreePane
-            rootNodes={rootNodes}
+            rootNodes={snapshot.treeNodes.map((node) => ({ id: node.nodeID, name: node.name ?? node.nodeID, hasChildren: node.hasChildren }))}
             expandedNodeIds={expandedNodes}
+            selectedNodeId={snapshot.selectedNodeID}
+            onSelectNode={(id) => {
+              void store.selectNode(id);
+            }}
             onToggleNode={(id) => {
               setExpandedNodes((current) => {
                 const next = new Set(current);
@@ -75,6 +101,7 @@ export default function App() {
                   next.delete(id);
                 } else {
                   next.add(id);
+                  void store.expandNode(id);
                 }
                 return next;
               });
@@ -85,11 +112,13 @@ export default function App() {
 
       <FooterControls
         state={footerState}
-        onRefresh={() => setFooterState((current) => ({ ...current, status: 'Refreshed windows' }))}
-        onToggleVisible={(value) => setFooterState((current) => ({ ...current, visibleOnly: value }))}
-        onToggleTitle={(value) => setFooterState((current) => ({ ...current, titleOnly: value }))}
-        onToggleActivate={(value) => setFooterState((current) => ({ ...current, activateWindow: value }))}
-        onChangeFilter={(value) => setFooterState((current) => ({ ...current, filter: value }))}
+        onRefresh={() => {
+          void store.refreshWindows();
+        }}
+        onToggleVisible={(value) => store.setVisibleOnly(value)}
+        onToggleTitle={(value) => store.setTitleOnly(value)}
+        onToggleActivate={(value) => store.setActivateOnSelect(value)}
+        onChangeFilter={(value) => store.setFilterInput(value)}
       />
     </div>
   );
