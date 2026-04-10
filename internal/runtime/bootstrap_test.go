@@ -362,3 +362,67 @@ func TestBootstrap_CtrlCCancellationReturnsWithinGraceBound(t *testing.T) {
 		t.Fatalf("Run() elapsed=%s, expected bounded shutdown", elapsed)
 	}
 }
+
+func TestBootstrap_EmitsLifecycleLogsOnStartAndShutdown(t *testing.T) {
+	listener := newFakeListener()
+	cfg := config.Config{Hotkeys: []config.HotkeyBinding{{ID: "quit", Hotkey: "ctrl+esc", Steps: []config.Step{{Action: "runtime.stop"}}}}}
+	logs := make([]DispatchLogEntry, 0, 8)
+
+	b := NewBootstrap()
+	b.LoadProgram = func(context.Context, string) (program.Program, error) { return mustProgram(t, cfg), nil }
+	b.NewListener = func(context.Context) (Listener, error) { return listener, nil }
+	b.LogDispatch = func(_ context.Context, entry DispatchLogEntry) { logs = append(logs, entry) }
+	listener.runFn = func(ctx context.Context) error {
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			listener.Emit(1)
+		}()
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	if err := b.Run(context.Background(), "ignored"); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	hasEvent := func(name string) bool {
+		for _, e := range logs {
+			if e.Event == name {
+				return true
+			}
+		}
+		return false
+	}
+	for _, event := range []string{"runtime_startup", "binding_registration_summary", "runtime_shutdown"} {
+		if !hasEvent(event) {
+			t.Fatalf("missing lifecycle event %q in logs: %#v", event, logs)
+		}
+	}
+}
+
+func TestBootstrap_EmitsCompileFailureLifecycleLog(t *testing.T) {
+	cfg := config.Config{Hotkeys: []config.HotkeyBinding{{ID: "one", Hotkey: "ctrl+1", Steps: []config.Step{{Action: "does.not.exist"}}}}}
+	logs := make([]DispatchLogEntry, 0, 4)
+	b := NewBootstrap()
+	b.LoadProgram = func(context.Context, string) (program.Program, error) { return mustProgram(t, cfg), nil }
+	b.LogDispatch = func(_ context.Context, entry DispatchLogEntry) { logs = append(logs, entry) }
+	b.NewListener = func(context.Context) (Listener, error) {
+		t.Fatal("listener should not be created on compile failure")
+		return nil, nil
+	}
+
+	err := b.Run(context.Background(), "ignored")
+	if err == nil {
+		t.Fatal("Run() error = nil, want failure")
+	}
+	seenCompileFailure := false
+	for _, e := range logs {
+		if e.Event == "runtime_compile_failed" {
+			seenCompileFailure = true
+			break
+		}
+	}
+	if !seenCompileFailure {
+		t.Fatalf("expected runtime_compile_failed log, got %#v", logs)
+	}
+}

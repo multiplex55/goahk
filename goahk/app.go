@@ -25,7 +25,7 @@ type bindingSpec struct {
 // The returned App is safe to configure from a single goroutine and run once.
 // Validation is deferred until Run so small "tiny main.go" scripts can stay concise.
 func NewApp(opts ...Option) *App {
-	a := &App{validateActions: true, state: newAppState()}
+	a := &App{validateActions: true, state: newAppState(), logger: noopLogger{}}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(a)

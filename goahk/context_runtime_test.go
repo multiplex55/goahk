@@ -25,3 +25,12 @@ func TestContextRuntime_StopAndSleep(t *testing.T) {
 		t.Fatalf("Sleep() returned too quickly")
 	}
 }
+
+func TestContextRuntime_DefaultLoggerIsNoopWhenOptionOmitted(t *testing.T) {
+	t.Parallel()
+
+	a := NewApp()
+	logger := a.actionLogger()
+	logger.Info("noop", map[string]any{"k": "v"})
+	logger.Error("noop", map[string]any{"k": "v"})
+}
