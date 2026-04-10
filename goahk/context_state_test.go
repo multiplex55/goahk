@@ -20,7 +20,7 @@ func TestContextState_PerTriggerVarsIsolationAndSharedAppState(t *testing.T) {
 		return nil
 	}))
 	program, _, callbacks := a.runtimeArtifacts()
-	registry := buildRegistryWithCallbacks(a.state, callbacks)
+	registry := buildRegistryWithCallbacks(a.state, callbacks, a.actionLogger())
 	executor := actions.NewExecutor(registry)
 
 	bindings, err := internalapp.CompileRuntimeBindingsFromProgram(program, registry)

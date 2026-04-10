@@ -22,33 +22,61 @@ type callbackRegistration struct {
 
 // Run validates configured bindings, then starts the runtime loop.
 func (a *App) Run(ctx context.Context) error {
+	logger := a.actionLogger()
 	if len(a.buildErrors) > 0 {
+		logger.Error("goahk.invalid_binding_wiring", map[string]any{"error_count": len(a.buildErrors), "errors": strings.Join(a.buildErrors, "; ")})
 		return fmt.Errorf("invalid binding wiring: %s", strings.Join(a.buildErrors, "; "))
 	}
 
 	p, _, callbacks := a.runtimeArtifacts()
+	logger.Info("goahk.runtime_startup", map[string]any{"binding_count": len(p.Bindings), "callback_count": len(callbacks), "validate_actions": a.validateActions})
 
 	var registry *actions.Registry
 	if a.validateActions || len(callbacks) > 0 {
-		registry = buildRegistryWithCallbacks(a.state, callbacks)
+		registry = buildRegistryWithCallbacks(a.state, callbacks, logger)
 	}
 
 	if _, err := internalapp.CompileRuntimeBindingsFromProgram(p, registry); err != nil {
+		logger.Error("goahk.compile_runtime_bindings_failed", map[string]any{"error": err.Error()})
 		return fmt.Errorf("compile app program: %w", err)
 	}
 
 	if stdruntime.GOOS != "windows" {
+		logger.Info("goahk.runtime_not_started", map[string]any{"reason": "non_windows", "goos": stdruntime.GOOS})
 		return nil
 	}
 
 	bootstrap := runtime.NewBootstrap()
+	bootstrap.BaseActionCtx.Logger = logger
 	bootstrap.LoadProgram = func(context.Context, string) (program.Program, error) {
 		return p, nil
 	}
 	bootstrap.BuildRegistry = func(context.Context, program.Program) (*actions.Registry, error) {
-		return buildRegistryWithCallbacks(a.state, callbacks), nil
+		return buildRegistryWithCallbacks(a.state, callbacks, logger), nil
 	}
+	bootstrap.LogDispatch = a.dispatchLogSink(logger)
+	logger.Info("goahk.binding_registration_summary", map[string]any{"binding_count": len(p.Bindings)})
 	return bootstrap.Run(ctx, "")
+}
+
+func (a *App) dispatchLogSink(logger actions.Logger) runtime.DispatchLogSink {
+	return func(ctx context.Context, entry runtime.DispatchLogEntry) {
+		fields := map[string]any{
+			"event":         entry.Event,
+			"binding_id":    entry.BindingID,
+			"known_count":   entry.KnownCount,
+			"actions":       entry.Actions,
+			"duration":      entry.Duration.String(),
+			"error":         entry.Error,
+			"timestamp":     entry.Timestamp,
+			"failed_action": entry.FailedAction,
+		}
+		if entry.Error != "" {
+			logger.Error("goahk.dispatch", fields)
+			return
+		}
+		logger.Info("goahk.dispatch", fields)
+	}
 }
 
 func (a *App) toConfig() config.Config {
@@ -56,11 +84,15 @@ func (a *App) toConfig() config.Config {
 	return cfg
 }
 
-func buildRegistryWithCallbacks(state StateStore, callbacks []callbackRegistration) *actions.Registry {
+func buildRegistryWithCallbacks(state StateStore, callbacks []callbackRegistration, logger actions.Logger) *actions.Registry {
 	r := actions.NewRegistry()
 	for _, cb := range callbacks {
 		cb := cb
 		r.MustRegisterCallback(cb.ref, func(callbackCtx actions.CallbackContext) error {
+			callbackLogger := callbackCtx.Log()
+			if callbackLogger == nil {
+				callbackLogger = logger
+			}
 			ctx := newContext(&actions.ActionContext{
 				Context:     callbackCtx.Context(),
 				Services:    callbackCtx.Window(),
@@ -68,7 +100,7 @@ func buildRegistryWithCallbacks(state StateStore, callbacks []callbackRegistrati
 				BindingID:   callbackCtx.BindingID(),
 				TriggerText: callbackCtx.TriggerText(),
 				Stop:        func(reason string) { callbackCtx.StopRuntime(reason) },
-				Logger:      callbackCtx.Log(),
+				Logger:      callbackLogger,
 			}, state)
 			err := cb.fn(ctx)
 			syncVarsToActionContext(ctx)

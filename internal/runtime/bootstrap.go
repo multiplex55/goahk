@@ -97,9 +97,14 @@ func (b Bootstrap) Run(ctx context.Context, configPath string) error {
 	if b.LoadProgram == nil {
 		return fmt.Errorf("program loader is not configured")
 	}
+	if b.LogDispatch == nil {
+		b.LogDispatch = func(context.Context, DispatchLogEntry) {}
+	}
 
+	b.LogDispatch(ctx, DispatchLogEntry{Event: "runtime_startup", Timestamp: time.Now().UTC()})
 	p, err := b.LoadProgram(ctx, configPath)
 	if err != nil {
+		b.LogDispatch(ctx, DispatchLogEntry{Event: "runtime_load_program_failed", Error: err.Error(), Timestamp: time.Now().UTC()})
 		return fmt.Errorf("load program: %w", err)
 	}
 
@@ -121,21 +126,26 @@ func (b Bootstrap) RunProgram(ctx context.Context, p program.Program) error {
 	}
 
 	if err := program.Validate(p); err != nil {
+		b.LogDispatch(ctx, DispatchLogEntry{Event: "runtime_validate_failed", Error: err.Error(), Timestamp: time.Now().UTC()})
 		return fmt.Errorf("validate program: %w", err)
 	}
 
 	registry, err := b.BuildRegistry(ctx, p)
 	if err != nil {
+		b.LogDispatch(ctx, DispatchLogEntry{Event: "runtime_build_registry_failed", Error: err.Error(), Timestamp: time.Now().UTC()})
 		return fmt.Errorf("build action registry: %w", err)
 	}
 
 	compiled, err := CompileRuntimeBindings(p, registry)
 	if err != nil {
+		b.LogDispatch(ctx, DispatchLogEntry{Event: "runtime_compile_failed", Error: err.Error(), Timestamp: time.Now().UTC()})
 		return fmt.Errorf("compile runtime bindings: %w", err)
 	}
+	b.LogDispatch(ctx, DispatchLogEntry{Event: "binding_registration_summary", KnownCount: len(compiled), Timestamp: time.Now().UTC()})
 
 	listener, err := b.NewListener(ctx)
 	if err != nil {
+		b.LogDispatch(ctx, DispatchLogEntry{Event: "runtime_listener_create_failed", Error: err.Error(), Timestamp: time.Now().UTC()})
 		return fmt.Errorf("create windows listener: %w", err)
 	}
 	manager := hotkey.NewManager(listener)
@@ -216,6 +226,13 @@ func (b Bootstrap) RunProgram(ctx context.Context, p program.Program) error {
 	if hardStop.Load() {
 		b.LogDispatch(ctx, DispatchLogEntry{Event: "job_forced_termination", Timestamp: time.Now().UTC()})
 	}
+	shutdownReason := "completed"
+	if hardStop.Load() {
+		shutdownReason = "runtime.hard_stop"
+	} else if runCtx.Err() != nil {
+		shutdownReason = runCtx.Err().Error()
+	}
+	b.LogDispatch(ctx, DispatchLogEntry{Event: "runtime_shutdown", Error: shutdownReason, Timestamp: time.Now().UTC()})
 	_ = <-managerErr
 
 	if err := unregisterAll(manager, registered); err != nil {
