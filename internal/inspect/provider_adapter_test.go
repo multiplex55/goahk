@@ -34,9 +34,11 @@ type fakeAdapter struct {
 	expandCount       int
 	collapseCount     int
 	lastSetValue      string
+	resolveRootCalls  int
 }
 
 func (f *fakeAdapter) ResolveWindowRoot(context.Context, string) (*uiaElement, error) {
+	f.resolveRootCalls++
 	return f.root, nil
 }
 func (f *fakeAdapter) GetFocusedElement(context.Context) (*uiaElement, error) {
@@ -206,10 +208,10 @@ func TestProviderAdapter_CacheBehavior(t *testing.T) {
 
 func TestProviderAdapter_TreeAPIContract(t *testing.T) {
 	adapter := &fakeAdapter{
-		root: &uiaElement{Ref: "root", Name: "Root"},
+		root: &uiaElement{Ref: "root", RuntimeID: "1", Name: "Root"},
 		kids: map[string][]*uiaElement{
-			"root": {{Ref: "c1", ParentRef: "root", Name: "C1"}},
-			"c1":   {{Ref: "root", ParentRef: "c1", Name: "RootCycle"}},
+			"root": {{Ref: "c1", RuntimeID: "2", ParentRef: "root", Name: "C1"}},
+			"c1":   {{Ref: "root", RuntimeID: "1", ParentRef: "c1", Name: "RootCycle"}},
 		},
 		childCount: map[string]int{"root": 1},
 	}
@@ -233,7 +235,7 @@ func TestProviderAdapter_TreeAPIContract(t *testing.T) {
 	if len(children) != 1 {
 		t.Fatalf("expected direct children only, got %d", len(children))
 	}
-	if children[0].NodeID != "node:c1" {
+	if children[0].NodeID != "node:rid:2" {
 		t.Fatalf("expected direct child c1, got %s", children[0].NodeID)
 	}
 
@@ -243,6 +245,51 @@ func TestProviderAdapter_TreeAPIContract(t *testing.T) {
 	}
 	if len(grandchildren) != 1 || !grandchildren[0].Cycle {
 		t.Fatalf("expected cycle marker on back-edge node, got %+v", grandchildren)
+	}
+}
+
+func TestProviderAdapter_RuntimeIDStabilityAcrossRefresh(t *testing.T) {
+	adapter := &fakeAdapter{
+		root: &uiaElement{Ref: "root#v1", RuntimeID: "42", Name: "Root"},
+	}
+	core := newProviderCore(adapter)
+	first, err := core.treeRoot(context.Background(), "0x1", false)
+	if err != nil {
+		t.Fatalf("treeRoot first: %v", err)
+	}
+	adapter.root = &uiaElement{Ref: "root#v2", RuntimeID: "42", Name: "Root Updated"}
+	second, err := core.treeRoot(context.Background(), "0x1", true)
+	if err != nil {
+		t.Fatalf("treeRoot second: %v", err)
+	}
+	if first.NodeID != second.NodeID {
+		t.Fatalf("expected stable node identity from runtime ID, got %q vs %q", first.NodeID, second.NodeID)
+	}
+}
+
+func TestProviderAdapter_FixtureDrivenNotepadLikeTree(t *testing.T) {
+	fixture := map[string][]*uiaElement{
+		"root": {
+			{Ref: "menu", RuntimeID: "101", ParentRef: "root", Name: "Application", ControlType: "MenuBar"},
+			{Ref: "editor", RuntimeID: "102", ParentRef: "root", Name: "Text Editor", ControlType: "Edit"},
+			{Ref: "status", RuntimeID: "103", ParentRef: "root", Name: "Ready", ControlType: "StatusBar"},
+		},
+	}
+	adapter := &fakeAdapter{
+		root: &uiaElement{Ref: "root", RuntimeID: "100", Name: "Untitled - Notepad", ControlType: "Window"},
+		kids: fixture,
+	}
+	core := newProviderCore(adapter)
+	root, err := core.treeRoot(context.Background(), "0x1", false)
+	if err != nil {
+		t.Fatalf("treeRoot: %v", err)
+	}
+	children, err := core.nodeChildren(context.Background(), root.NodeID)
+	if err != nil {
+		t.Fatalf("nodeChildren: %v", err)
+	}
+	if len(children) != 3 || children[1].ControlType != "Edit" {
+		t.Fatalf("unexpected notepad fixture descendants: %+v", children)
 	}
 }
 

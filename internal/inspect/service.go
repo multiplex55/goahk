@@ -101,16 +101,19 @@ type GetTreeRootRequest struct {
 }
 
 type TreeNodeDTO struct {
-	NodeID       string   `json:"nodeID"`
-	Name         string   `json:"name,omitempty"`
-	ControlType  string   `json:"controlType,omitempty"`
-	ClassName    string   `json:"className,omitempty"`
-	HasChildren  bool     `json:"hasChildren"`
-	ParentNodeID string   `json:"parentNodeID,omitempty"`
-	Patterns     []string `json:"patterns,omitempty"`
-	ChildCount   *int     `json:"childCount,omitempty"`
-	Expanded     bool     `json:"expanded,omitempty"`
-	Cycle        bool     `json:"cycle,omitempty"`
+	NodeID               string   `json:"nodeID"`
+	NodeId               string   `json:"nodeId,omitempty"`
+	HWND                 string   `json:"hwnd,omitempty"`
+	Name                 string   `json:"name,omitempty"`
+	ControlType          string   `json:"controlType,omitempty"`
+	LocalizedControlType string   `json:"localizedControlType,omitempty"`
+	ClassName            string   `json:"className,omitempty"`
+	HasChildren          bool     `json:"hasChildren"`
+	ParentNodeID         string   `json:"parentNodeID,omitempty"`
+	Patterns             []string `json:"patterns,omitempty"`
+	ChildCount           *int     `json:"childCount,omitempty"`
+	Expanded             bool     `json:"expanded,omitempty"`
+	Cycle                bool     `json:"cycle,omitempty"`
 }
 
 type GetTreeRootResponse struct {
@@ -153,6 +156,9 @@ type WindowInfoDTO struct {
 }
 
 type ElementPropertiesDTO struct {
+	NodeID               string `json:"nodeID,omitempty"`
+	NodeId               string `json:"nodeId,omitempty"`
+	HWND                 string `json:"hwnd,omitempty"`
 	ControlType          string `json:"controlType,omitempty"`
 	LocalizedControlType string `json:"localizedControlType,omitempty"`
 	Name                 string `json:"name,omitempty"`

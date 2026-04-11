@@ -35,9 +35,9 @@ func (f *fakeWindowAdapter) ActivateWindow(_ context.Context, hwnd window.HWND) 
 
 func TestWindowsProvider_InspectAndTreeCacheBehavior(t *testing.T) {
 	deps := &fakeAdapter{
-		root: &uiaElement{Ref: "root", Name: "Root"},
+		root: &uiaElement{Ref: "root", RuntimeID: "1", HWND: "0x1", Name: "Root"},
 		kids: map[string][]*uiaElement{
-			"root": {{Ref: "c1", ParentRef: "root", Name: "Child"}},
+			"root": {{Ref: "c1", RuntimeID: "2", ParentRef: "root", Name: "Child"}},
 		},
 	}
 	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
@@ -67,6 +67,52 @@ func TestWindowsProvider_InspectAndTreeCacheBehavior(t *testing.T) {
 	}
 	if got := deps.childrenCallCount["root"]; got != 2 {
 		t.Fatalf("expected children to reload after refresh invalidates cache, calls=%d", got)
+	}
+	if deps.resolveRootCalls < 2 {
+		t.Fatalf("expected root resolution at tree roots only, calls=%d", deps.resolveRootCalls)
+	}
+}
+
+func TestWindowsProvider_GetNodeChildrenPreservesProviderOrder(t *testing.T) {
+	deps := &fakeAdapter{
+		root: &uiaElement{Ref: "root", RuntimeID: "1", Name: "Root"},
+		kids: map[string][]*uiaElement{
+			"root": {
+				{Ref: "b", RuntimeID: "20", ParentRef: "root", Name: "Second"},
+				{Ref: "a", RuntimeID: "10", ParentRef: "root", Name: "First"},
+			},
+		},
+	}
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"})
+	if err != nil {
+		t.Fatalf("GetTreeRoot failed: %v", err)
+	}
+	resp, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: root.Root.NodeID})
+	if err != nil {
+		t.Fatalf("GetNodeChildren failed: %v", err)
+	}
+	if len(resp.Children) != 2 || resp.Children[0].Name != "Second" || resp.Children[1].Name != "First" {
+		t.Fatalf("expected UIA enumeration order to be preserved, got %+v", resp.Children)
+	}
+}
+
+func TestWindowsProvider_UIAFailuresReturnStructuredErrors(t *testing.T) {
+	deps := &fakeAdapter{
+		root: &uiaElement{Ref: "root", RuntimeID: "1", Name: "Root"},
+		getChildrenErr: map[string]error{
+			"root": errors.New("uia failure"),
+		},
+	}
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"})
+	if err != nil {
+		t.Fatalf("GetTreeRoot failed: %v", err)
+	}
+	_, err = provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: root.Root.NodeID})
+	var pErr *ProviderCallError
+	if !errors.As(err, &pErr) {
+		t.Fatalf("expected structured provider error, got %v", err)
 	}
 }
 

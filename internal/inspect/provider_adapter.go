@@ -38,6 +38,7 @@ type uiaRect struct{ Left, Top, Width, Height int }
 type uiaElement struct {
 	Ref                  string
 	RuntimeID            string
+	HWND                 string
 	ParentRef            string
 	Name                 string
 	LocalizedControlType string
@@ -204,7 +205,10 @@ func (p *providerCore) inspectByNodeID(ctx context.Context, nodeID string) (Insp
 		return InspectElement{}, p.wrapErr("GetElementByRef", nodeID, "", err)
 	}
 	if el.ParentRef != "" {
-		parentID := p.cacheNodeIDOnly(el.ParentRef)
+		parentID := p.parentOf(nodeID)
+		if parentID == "" {
+			parentID = "node:ref:" + el.ParentRef
+		}
 		p.mu.Lock()
 		p.parentByID[nodeID] = parentID
 		p.mu.Unlock()
@@ -377,9 +381,12 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 	if el == nil || el.Ref == "" {
 		return TreeNodeDTO{}
 	}
-	nodeID := p.cacheNodeIDOnly(el.Ref)
+	nodeID := p.cacheNodeRef(el)
 	if el.ParentRef != "" {
-		parentID := p.cacheNodeIDOnly(el.ParentRef)
+		parentID := p.parentOf(nodeID)
+		if parentID == "" {
+			parentID = "node:ref:" + el.ParentRef
+		}
 		p.mu.Lock()
 		p.parentByID[nodeID] = parentID
 		p.mu.Unlock()
@@ -389,7 +396,12 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 	for _, p := range patterns {
 		names = append(names, p.Action)
 	}
-	node := TreeNodeDTO{NodeID: nodeID, Name: el.Name, ControlType: normalizeControlType(el.ControlType, el.LocalizedControlType), ClassName: el.ClassName, Patterns: names}
+	node := TreeNodeDTO{
+		NodeID: nodeID, NodeId: nodeID, HWND: strings.TrimSpace(el.HWND),
+		Name: el.Name, ControlType: normalizeControlType(el.ControlType, el.LocalizedControlType),
+		LocalizedControlType: normalizeLocalizedControlType(el.LocalizedControlType, el.ControlType),
+		ClassName:            el.ClassName, Patterns: names,
+	}
 	if count, ok, err := p.adapter.GetChildCount(context.Background(), el.Ref); err == nil && ok {
 		node.ChildCount = &count
 		node.HasChildren = count > 0
@@ -397,10 +409,25 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 	return node
 }
 
-func (p *providerCore) cacheNodeIDOnly(ref string) string {
-	nodeID := "node:" + ref
+func runtimeNodeID(runtimeID, ref string) string {
+	if rid := strings.TrimSpace(runtimeID); rid != "" {
+		return "node:rid:" + rid
+	}
+	return "node:ref:" + strings.TrimSpace(ref)
+}
+
+func (p *providerCore) cacheNodeRef(el *uiaElement) string {
+	nodeID := runtimeNodeID(el.RuntimeID, el.Ref)
 	p.mu.Lock()
-	p.nodeToRef[nodeID] = ref
+	p.nodeToRef[nodeID] = el.Ref
+	if el.ParentRef != "" {
+		for existingID, existingRef := range p.nodeToRef {
+			if existingRef == el.ParentRef {
+				p.parentByID[nodeID] = existingID
+				break
+			}
+		}
+	}
 	p.mu.Unlock()
 	return nodeID
 }
@@ -460,6 +487,7 @@ func toInspectElement(nodeID, parentNodeID string, el *uiaElement) InspectElemen
 	best, alts := selectorCandidatesForElement(el)
 	return InspectElement{
 		NodeID: nodeID, RuntimeID: strings.TrimSpace(el.RuntimeID), ParentNodeID: parentNodeID,
+		HWND: strings.TrimSpace(el.HWND),
 		Name: el.Name, LocalizedControlType: normalizeLocalizedControlType(el.LocalizedControlType, el.ControlType), ControlType: normalizeControlType(el.ControlType, el.LocalizedControlType),
 		AutomationID: el.AutomationID, ClassName: el.ClassName, FrameworkID: el.FrameworkID, ProcessID: el.ProcessID,
 		HelpText: el.HelpText, AccessKey: el.AccessKey, AcceleratorKey: el.AcceleratorKey, Status: el.Status, Value: el.Value,

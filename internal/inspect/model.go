@@ -84,6 +84,7 @@ type TreeNodeSummary struct {
 type InspectElement struct {
 	NodeID               string              `json:"nodeId"`
 	RuntimeID            string              `json:"runtimeId,omitempty"`
+	HWND                 string              `json:"hwnd,omitempty"`
 	ParentNodeID         string              `json:"parentNodeId,omitempty"`
 	Name                 string              `json:"name,omitempty"`
 	LocalizedControlType string              `json:"localizedControlType,omitempty"`

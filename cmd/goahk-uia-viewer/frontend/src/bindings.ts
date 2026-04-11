@@ -37,6 +37,11 @@ const call = async <T>(fn: () => Promise<T>, fallbackMessage: string): Promise<T
   }
 };
 
+const normalizeNode = <T extends { nodeID?: string; nodeId?: string }>(node: T): T & { nodeID: string; nodeId: string } => {
+  const resolved = node?.nodeId ?? node?.nodeID ?? '';
+  return { ...node, nodeID: resolved, nodeId: resolved };
+};
+
 export function createInspectBindings(): InspectBindings {
   return {
     RefreshWindows: async (req: inspect.RefreshWindowsRequest) => {
@@ -52,13 +57,13 @@ export function createInspectBindings(): InspectBindings {
       if (!response?.root) {
         throw new Error('Tree root response was empty');
       }
-      return { root: response.root };
+      return { root: normalizeNode(response.root) };
     },
     GetNodeChildren: async (req: inspect.GetNodeChildrenRequest) => {
       const response = await call(() => GetNodeChildren(req), 'Failed to load node children');
       return {
         parentNodeID: response?.parentNodeID ?? req.nodeID,
-        children: Array.isArray(response?.children) ? response.children : []
+        children: Array.isArray(response?.children) ? response.children.map((child) => normalizeNode(child)) : []
       };
     },
     SelectNode: async (req: inspect.SelectNodeRequest) => {
@@ -66,7 +71,7 @@ export function createInspectBindings(): InspectBindings {
       if (!response?.selected) {
         throw new Error('Selected node response was empty');
       }
-      return { selected: response.selected };
+      return { selected: normalizeNode(response.selected) };
     },
     GetNodeDetails: async (req: inspect.GetNodeDetailsRequest) => {
       const response = await call(() => GetNodeDetails(req), 'Failed to load node details');

@@ -260,6 +260,7 @@ func describeHWND(hwnd window.HWND) (*uiaElement, error) {
 	return &uiaElement{
 		Ref:               makeElementRef(hwnd),
 		RuntimeID:         strconv.FormatUint(uint64(hwnd), 10),
+		HWND:              hwnd.String(),
 		ParentRef:         makeElementRef(parent),
 		Name:              title,
 		ControlType:       "Window",
