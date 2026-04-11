@@ -63,6 +63,7 @@ func (a *ViewerApp) OnStartup(ctx context.Context) {
 
 func (a *ViewerApp) OnShutdown(ctx context.Context) {
 	_, _ = a.ToggleFollowCursor(ctx, inspect.ToggleFollowCursorRequest{Enabled: false})
+	_, _ = a.service.ClearHighlight(ctx, inspect.ClearHighlightRequest{})
 	a.SetEventEmitter(nil)
 }
 

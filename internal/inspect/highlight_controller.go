@@ -32,6 +32,14 @@ func (c *highlightController) ShowNode(ctx context.Context, nodeID string, eleme
 		}
 		return false, nil
 	}
+	c.mu.Lock()
+	shouldClearBeforeShow := c.highlightedNodeID != "" && (c.highlightedNodeID != nodeID || c.highlightedWindowID != windowID)
+	c.mu.Unlock()
+	if shouldClearBeforeShow {
+		if err := c.overlay.Clear(ctx); err != nil {
+			return false, err
+		}
+	}
 	if err := c.overlay.Show(ctx, rect); err != nil {
 		return false, err
 	}

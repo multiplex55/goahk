@@ -81,6 +81,7 @@ export type InspectBindings = {
   SelectNode(req: { nodeID: string }): Promise<{ selected: InspectTreeNode }>;
   GetNodeDetails(req: { nodeID: string }): Promise<NodeDetailsResponse>;
   HighlightNode(req: { nodeID: string }): Promise<{ highlighted: boolean }>;
+  ClearHighlight?(req?: Record<string, never>): Promise<{ cleared: boolean }>;
   ToggleFollowCursor?(req: { enabled: boolean }): Promise<{ enabled: boolean }>;
   ActivateWindow?(req: { hwnd: string }): Promise<{ activated: boolean }>;
 };
@@ -193,6 +194,7 @@ export function createInspectStore(
   const refreshWindows = async () => {
     const token = ++windowsToken;
     setState({ loadingWindows: true, errorText: '' });
+    await bindings.ClearHighlight?.({});
 
     try {
       const resp = await bindings.RefreshWindows({
@@ -227,6 +229,7 @@ export function createInspectStore(
 
   const selectWindow = async (windowID: string) => {
     const token = ++windowSelectionToken;
+    await bindings.ClearHighlight?.({});
     setState({
       selectedWindowID: windowID,
       loadingWindow: true,
@@ -402,6 +405,9 @@ export function createInspectStore(
       }
 
       lastAppliedBridgeEventID = event.eventID ?? lastAppliedBridgeEventID;
+      if (!event.selectedNodeID) {
+        void bindings.ClearHighlight?.({});
+      }
       setState({ selectedNodeID: event.selectedNodeID, selectedPath: event.path ?? state.selectedPath, statusText: `Selected ${event.selectedNodeID}` });
       return;
     }

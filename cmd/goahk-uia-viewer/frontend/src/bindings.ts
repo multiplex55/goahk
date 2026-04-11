@@ -15,6 +15,7 @@ type ViewerApi = {
     path?: unknown[];
   }>;
   HighlightNode?: (req: { nodeID: string }) => Promise<{ highlighted?: boolean }>;
+  ClearHighlight?: (req?: Record<string, never>) => Promise<{ cleared?: boolean }>;
   ToggleFollowCursor?: (req: { enabled: boolean }) => Promise<{ enabled?: boolean }>;
   ActivateWindow?: (req: { hwnd: string }) => Promise<{ activated?: boolean }>;
 };
@@ -115,6 +116,11 @@ export function createInspectBindings(): InspectBindings {
       const api = getViewerApi();
       const response = await call('HighlightNode', () => api.HighlightNode?.(req), 'Failed to highlight node');
       return { highlighted: !!response?.highlighted };
+    },
+    ClearHighlight: async (req) => {
+      const api = getViewerApi();
+      const response = await call('ClearHighlight', () => api.ClearHighlight?.(req), 'Failed to clear highlight');
+      return { cleared: !!response?.cleared };
     },
     ToggleFollowCursor: async (req) => {
       const api = getViewerApi();

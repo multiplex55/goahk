@@ -21,6 +21,7 @@ function makeBindings(overrides?: Partial<InspectBindings>): InspectBindings {
       path: [{ nodeID: 'root-1', hasChildren: true }, { nodeID, hasChildren: false }]
     })),
     HighlightNode: vi.fn().mockResolvedValue({ highlighted: true }),
+    ClearHighlight: vi.fn().mockResolvedValue({ cleared: true }),
     ToggleFollowCursor: vi.fn().mockImplementation(async ({ enabled }) => ({ enabled })),
     ActivateWindow: vi.fn().mockResolvedValue({ activated: true }),
     ...overrides
@@ -46,6 +47,7 @@ describe('inspectStore', () => {
       visibleOnly: false,
       titleOnly: true
     });
+    expect(bindings.ClearHighlight).toHaveBeenCalled();
     expect(store.getState().windows[0].processName).toBe('notepad.exe');
     expect(store.getState().statusText).toContain('Loaded');
   });
@@ -57,6 +59,7 @@ describe('inspectStore', () => {
 
     await store.selectWindow('w1');
 
+    expect(bindings.ClearHighlight).toHaveBeenCalled();
     expect(bindings.ActivateWindow).toHaveBeenCalledWith({ hwnd: 'w1' });
     expect(bindings.InspectWindow).toHaveBeenCalledWith({ hwnd: 'w1' });
     const inspectWindowArg = (bindings.InspectWindow as any).mock.calls[0][0];
@@ -226,5 +229,15 @@ describe('inspectStore', () => {
 
     expect(store.getState().selectedWindowID).toBe('w2');
     expect(store.getState().selectedNodeID).not.toBe('old');
+  });
+
+  it('selection-changed deselection clears native highlight', async () => {
+    const bindings = makeBindings();
+    const store = createInspectStore(bindings);
+
+    store.applyBridgeEvent({ type: 'selection-changed', eventID: 11, selectedNodeID: '' });
+
+    expect(bindings.ClearHighlight).toHaveBeenCalled();
+    expect(store.getState().selectedNodeID).toBe('');
   });
 });
