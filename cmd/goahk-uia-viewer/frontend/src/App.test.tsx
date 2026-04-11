@@ -33,6 +33,7 @@ const mockStore = {
   selectWindow: vi.fn().mockResolvedValue(undefined),
   selectNode: vi.fn().mockResolvedValue(undefined),
   expandNode: vi.fn().mockResolvedValue(undefined),
+  invokePatternAction: vi.fn().mockResolvedValue(undefined),
   setFilterInput: vi.fn(),
   setFollowCursor: vi.fn().mockResolvedValue(undefined),
   setVisibleOnly: vi.fn(),

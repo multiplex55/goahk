@@ -7,6 +7,7 @@ const viewerAppFns = vi.hoisted(() => ({
   GetNodeChildren: vi.fn(),
   SelectNode: vi.fn(),
   GetNodeDetails: vi.fn(),
+  InvokePattern: vi.fn(),
   HighlightNode: vi.fn(),
   ClearHighlight: vi.fn(),
   ToggleFollowCursor: vi.fn(),
@@ -30,6 +31,7 @@ describe('createInspectBindings', () => {
     viewerAppFns.SelectNode.mockResolvedValue({ selected: { nodeID: 'n1', hasChildren: false } });
     viewerAppFns.GetNodeDetails.mockResolvedValue({ properties: [], patterns: [], path: [], selectorPath: {} });
     viewerAppFns.HighlightNode.mockResolvedValue({ highlighted: true });
+    viewerAppFns.InvokePattern.mockResolvedValue({ invoked: true, action: 'invoke', nodeID: 'n1' });
     viewerAppFns.ClearHighlight.mockResolvedValue({ cleared: true });
     viewerAppFns.ToggleFollowCursor.mockResolvedValue({ enabled: true });
     viewerAppFns.ActivateWindow.mockResolvedValue({ activated: true });
@@ -44,6 +46,7 @@ describe('createInspectBindings', () => {
       select: { nodeID: 'n1' },
       details: { nodeID: 'n1' },
       highlight: { nodeID: 'n1' },
+      invokePattern: { nodeID: 'n1', action: 'invoke' },
       clear: {},
       follow: { enabled: true },
       activate: { hwnd: '0x1' }
@@ -56,6 +59,7 @@ describe('createInspectBindings', () => {
     await bindings.SelectNode(reqs.select);
     await bindings.GetNodeDetails(reqs.details);
     await bindings.HighlightNode(reqs.highlight);
+    await bindings.InvokePattern(reqs.invokePattern);
     await bindings.ClearHighlight?.(reqs.clear);
     await bindings.ToggleFollowCursor?.(reqs.follow);
     await bindings.ActivateWindow?.(reqs.activate);
@@ -74,6 +78,8 @@ describe('createInspectBindings', () => {
     expect(viewerAppFns.GetNodeDetails).toHaveBeenCalledWith(reqs.details);
     expect(viewerAppFns.HighlightNode.mock.calls[0]).toHaveLength(1);
     expect(viewerAppFns.HighlightNode).toHaveBeenCalledWith(reqs.highlight);
+    expect(viewerAppFns.InvokePattern.mock.calls[0]).toHaveLength(1);
+    expect(viewerAppFns.InvokePattern).toHaveBeenCalledWith(reqs.invokePattern);
     expect(viewerAppFns.ClearHighlight.mock.calls[0]).toHaveLength(1);
     expect(viewerAppFns.ClearHighlight).toHaveBeenCalledWith(reqs.clear);
     expect(viewerAppFns.ToggleFollowCursor.mock.calls[0]).toHaveLength(1);
@@ -87,6 +93,7 @@ describe('createInspectBindings', () => {
     viewerAppFns.InspectWindow.mockResolvedValue(undefined);
     viewerAppFns.GetNodeChildren.mockResolvedValue({ parentNodeID: undefined, children: null });
     viewerAppFns.GetNodeDetails.mockResolvedValue({ properties: null, patterns: 'bad', path: null });
+    viewerAppFns.InvokePattern.mockResolvedValue(undefined);
     viewerAppFns.HighlightNode.mockResolvedValue({});
     viewerAppFns.ClearHighlight.mockResolvedValue({});
     viewerAppFns.ToggleFollowCursor.mockResolvedValue({});
@@ -108,6 +115,12 @@ describe('createInspectBindings', () => {
       selectorPath: undefined
     });
     await expect(bindings.HighlightNode({ nodeID: 'n1' })).resolves.toEqual({ highlighted: false });
+    await expect(bindings.InvokePattern({ nodeID: 'n1', action: 'invoke' })).resolves.toEqual({
+      invoked: false,
+      action: 'invoke',
+      nodeID: 'n1',
+      result: undefined
+    });
     await expect(bindings.ClearHighlight?.({})).resolves.toEqual({ cleared: false });
     await expect(bindings.ToggleFollowCursor?.({ enabled: true })).resolves.toEqual({ enabled: false });
     await expect(bindings.ActivateWindow?.({ hwnd: '0x1' })).resolves.toEqual({ activated: false });

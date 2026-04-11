@@ -21,6 +21,11 @@ function makeBindings(overrides?: Partial<InspectBindings>): InspectBindings {
       bestSelector: `#${nodeID}`,
       path: [{ nodeID: 'root-1', hasChildren: true }, { nodeID, hasChildren: false }]
     })),
+    InvokePattern: vi.fn().mockImplementation(async ({ nodeID, action }) => ({
+      invoked: true,
+      action,
+      nodeID
+    })),
     HighlightNode: vi.fn().mockResolvedValue({ highlighted: true }),
     ClearHighlight: vi.fn().mockResolvedValue({ cleared: true }),
     ToggleFollowCursor: vi.fn().mockImplementation(async ({ enabled }) => ({ enabled })),
@@ -421,5 +426,43 @@ describe('inspectStore', () => {
 
     expect(bindings.ClearHighlight).toHaveBeenCalled();
     expect(store.getState().selectedNodeID).toBe('');
+  });
+
+  it('invokes backend pattern action with normalized payload and updates success status', async () => {
+    const bindings = makeBindings();
+    const store = createInspectStore(bindings);
+    await store.selectNode('node-22');
+
+    await store.invokePatternAction('set-value', 'new text');
+
+    expect(bindings.InvokePattern).toHaveBeenCalledWith({
+      nodeID: 'node-22',
+      action: 'setValue',
+      payload: { value: 'new text' }
+    });
+    expect(store.getState().statusText).toBe('Executed set-value with payload');
+    expect(store.getState().errorText).toBe('');
+  });
+
+  it('refreshes details and child branch after mutating pattern actions and surfaces backend errors', async () => {
+    const bindings = makeBindings({
+      GetNodeChildren: vi.fn().mockResolvedValue({
+        parentNodeID: 'node-22',
+        children: [{ nodeID: 'mutated-child', name: 'Mutated Child', hasChildren: false }]
+      })
+    });
+    const store = createInspectStore(bindings);
+    await store.selectNode('node-22');
+
+    await store.invokePatternAction('toggle');
+
+    expect(bindings.GetNodeDetails).toHaveBeenCalledWith({ nodeID: 'node-22' });
+    expect(bindings.GetNodeChildren).toHaveBeenLastCalledWith({ nodeID: 'node-22' });
+    expect(store.getState().childrenByParentID['node-22']).toEqual(['mutated-child']);
+
+    (bindings.InvokePattern as any).mockRejectedValueOnce(new Error('backend explode'));
+    await expect(store.invokePatternAction('toggle')).rejects.toThrow('backend explode');
+    expect(store.getState().statusText).toBe('backend explode');
+    expect(store.getState().errorText).toBe('backend explode');
   });
 });

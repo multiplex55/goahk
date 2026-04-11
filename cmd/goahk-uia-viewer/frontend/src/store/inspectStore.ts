@@ -1,6 +1,6 @@
 export type InspectProperty = { name: string; value: string };
 
-export type InspectPattern = { name: string; payloadSchema?: string };
+export type InspectPattern = { name: string; payloadSchema?: string; supported?: boolean };
 
 export type InspectTreeNode = {
   nodeID: string;
@@ -99,6 +99,7 @@ export type InspectBindings = {
   GetNodeChildren(req: { nodeID: string }): Promise<{ parentNodeID: string; children: InspectTreeNode[] }>;
   SelectNode(req: { nodeID: string }): Promise<{ selected: InspectTreeNode }>;
   GetNodeDetails(req: { nodeID: string }): Promise<NodeDetailsResponse>;
+  InvokePattern(req: { nodeID: string; action: string; payload?: Record<string, unknown> }): Promise<{ invoked: boolean; action: string; nodeID: string; result?: string }>;
   HighlightNode(req: { nodeID: string }): Promise<{ highlighted: boolean }>;
   ClearHighlight?(req?: Record<string, never>): Promise<{ cleared: boolean }>;
   ToggleFollowCursor?(req: { enabled: boolean }): Promise<{ enabled: boolean }>;
@@ -117,6 +118,7 @@ export type InspectStore = {
   selectWindow: (windowID: string) => Promise<void>;
   selectNode: (nodeID: string) => Promise<void>;
   expandNode: (nodeID: string, opts?: { refresh?: boolean }) => Promise<void>;
+  invokePatternAction: (action: string, payloadInput?: string) => Promise<void>;
   applyBridgeEvent: (event: InspectBridgeEvent) => void;
   selectNextWindow: () => Promise<void>;
   selectPreviousWindow: () => Promise<void>;
@@ -476,6 +478,67 @@ export function createInspectStore(
     }
   };
 
+  const refreshNodeDetails = async (nodeID: string) => {
+    const details = await bindings.GetNodeDetails({ nodeID });
+    setState({
+      properties: details.properties ?? [],
+      patterns: details.patterns ?? [],
+      selectorText: details.bestSelector ?? '',
+      nodeDetails: details,
+      selectedPath: details.path ?? state.selectedPath
+    });
+  };
+
+  const refreshChildBranch = async (nodeID: string) => {
+    const resp = await bindings.GetNodeChildren({ nodeID });
+    if (resp.parentNodeID !== nodeID) {
+      return;
+    }
+    const nextNodesByID = { ...state.nodesByID };
+    const childIDs: string[] = [];
+    for (const child of resp.children) {
+      const childID = child.nodeID;
+      childIDs.push(childID);
+      nextNodesByID[childID] = { ...nextNodesByID[childID], ...child, parentNodeID: nodeID };
+    }
+    setState({
+      nodesByID: nextNodesByID,
+      childrenByParentID: { ...state.childrenByParentID, [nodeID]: childIDs },
+      childrenLoadedByID: { ...state.childrenLoadedByID, [nodeID]: true }
+    });
+  };
+
+  const invokePatternAction = async (action: string, payloadInput?: string) => {
+    const nodeID = state.selectedNodeID;
+    if (!nodeID) {
+      return;
+    }
+    const normalizedAction = action === 'set-value' ? 'setValue' : action;
+    const payload = payloadInput?.trim();
+
+    setState({ errorText: '' });
+    try {
+      await bindings.InvokePattern({
+        nodeID,
+        action: normalizedAction,
+        payload: payload ? { value: payload } : undefined
+      });
+
+      const isMutatingAction = ['toggle', 'expand', 'collapse', 'set-value', 'setValue'].includes(action);
+      if (isMutatingAction) {
+        await Promise.all([refreshNodeDetails(nodeID), refreshChildBranch(nodeID)]);
+      } else {
+        await refreshNodeDetails(nodeID);
+      }
+
+      setState({ statusText: payload ? `Executed ${action} with payload` : `Executed ${action}` });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setState({ statusText: message, errorText: message });
+      throw err;
+    }
+  };
+
   const setFilterInput = (value: string) => {
     setState({ filter: value });
     if (pendingFilterTimer) {
@@ -574,6 +637,7 @@ export function createInspectStore(
     selectWindow,
     selectNode,
     expandNode,
+    invokePatternAction,
     setFilterInput,
     setFollowCursor,
     setVisibleOnly: (value) => setState({ visibleOnly: value }),
