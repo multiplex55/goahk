@@ -7,7 +7,7 @@ describe('StatusBar', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
 
-    render(<StatusBar status="Ready" path="Desktop > App" selector={'name="App"'} />);
+    render(<StatusBar statusText="Ready" errorText="" path="Desktop > App" selector={'name="App"'} />);
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Desktop > App' }));
