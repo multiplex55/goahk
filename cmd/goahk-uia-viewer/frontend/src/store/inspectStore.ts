@@ -99,6 +99,7 @@ export type InspectBindings = {
   GetNodeChildren(req: { nodeID: string }): Promise<{ parentNodeID: string; children: InspectTreeNode[] }>;
   SelectNode(req: { nodeID: string }): Promise<{ selected: InspectTreeNode }>;
   GetNodeDetails(req: { nodeID: string }): Promise<NodeDetailsResponse>;
+  CopyBestSelector(req: { nodeID: string }): Promise<{ selector: string; clipboardUpdated: boolean }>;
   InvokePattern(req: { nodeID: string; action: string; payload?: Record<string, unknown> }): Promise<{ invoked: boolean; action: string; nodeID: string; result?: string }>;
   HighlightNode(req: { nodeID: string }): Promise<{ highlighted: boolean }>;
   ClearHighlight?(req?: Record<string, never>): Promise<{ cleared: boolean }>;
@@ -119,6 +120,7 @@ export type InspectStore = {
   selectNode: (nodeID: string) => Promise<void>;
   expandNode: (nodeID: string, opts?: { refresh?: boolean }) => Promise<void>;
   invokePatternAction: (action: string, payloadInput?: string) => Promise<void>;
+  copyBestSelector: () => Promise<{ selector: string; clipboardUpdated: boolean }>;
   applyBridgeEvent: (event: InspectBridgeEvent) => void;
   selectNextWindow: () => Promise<void>;
   selectPreviousWindow: () => Promise<void>;
@@ -539,6 +541,21 @@ export function createInspectStore(
     }
   };
 
+  const copyBestSelector = async (): Promise<{ selector: string; clipboardUpdated: boolean }> => {
+    const nodeID = state.selectedNodeID;
+    if (!nodeID) {
+      return { selector: '', clipboardUpdated: false };
+    }
+    setState({ errorText: '' });
+    const resp = await bindings.CopyBestSelector({ nodeID });
+    const selector = resp.selector || state.nodeDetails?.bestSelector || state.selectorText;
+    setState({
+      selectorText: selector,
+      statusText: selector ? (resp.clipboardUpdated ? 'Selector copied (backend)' : 'Selector ready to copy') : 'No selector available'
+    });
+    return { selector, clipboardUpdated: resp.clipboardUpdated };
+  };
+
   const setFilterInput = (value: string) => {
     setState({ filter: value });
     if (pendingFilterTimer) {
@@ -638,6 +655,7 @@ export function createInspectStore(
     selectNode,
     expandNode,
     invokePatternAction,
+    copyBestSelector,
     setFilterInput,
     setFollowCursor,
     setVisibleOnly: (value) => setState({ visibleOnly: value }),

@@ -62,6 +62,12 @@ export default function App() {
     filter: snapshot.filter
   };
 
+  const backendPath = snapshot.nodeDetails?.path?.length ? pathToText(snapshot.nodeDetails.path) : '';
+  const fallbackPath = snapshot.selectedPath.length ? pathToText(snapshot.selectedPath) : '[path:fallback] unavailable';
+  const footerPath = backendPath || fallbackPath;
+  const footerSelector = snapshot.nodeDetails?.bestSelector || snapshot.selectorText;
+  const footerStatusText = snapshot.nodeDetails?.statusText || snapshot.statusText;
+
   return (
     <div className="app-shell">
       <ThreeColumnLayout
@@ -136,11 +142,13 @@ export default function App() {
           onChangeFilter={(value) => store.setFilterInput(value)}
         />
         <StatusBar
-          statusText={snapshot.statusText}
+          statusText={footerStatusText}
           errorText={snapshot.errorText}
           preferStageFailure={isStageSpecificFailure(snapshot.errorText) || isStageSpecificFailure(snapshot.statusText)}
-          path={snapshot.selectorText || pathToText(snapshot.selectedPath)}
-          selector={snapshot.selectorText}
+          path={footerPath}
+          selector={footerSelector}
+          hasDetails={!!snapshot.nodeDetails}
+          onCopySelector={() => store.copyBestSelector()}
         />
       </footer>
     </div>

@@ -2,6 +2,7 @@ import type { inspect } from './wailsjs/wailsjs/go/models';
 import {
   ActivateWindow,
   ClearHighlight,
+  CopyBestSelector,
   GetNodeChildren,
   GetNodeDetails,
   GetTreeRoot,
@@ -118,6 +119,13 @@ export function createInspectBindings(): InspectBindings {
     ActivateWindow: async (req: inspect.ActivateWindowRequest) => {
       const response = await call(() => ActivateWindow(req), 'Failed to activate window');
       return { activated: !!response?.activated };
+    },
+    CopyBestSelector: async (req: inspect.CopyBestSelectorRequest) => {
+      const response = await call(() => CopyBestSelector(req), 'Failed to copy selector');
+      return {
+        selector: response?.selector ?? '',
+        clipboardUpdated: !!response?.clipboardUpdated
+      };
     }
   };
 }
