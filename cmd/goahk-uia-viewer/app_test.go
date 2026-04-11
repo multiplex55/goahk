@@ -116,7 +116,7 @@ func TestToggleFollowCursor_IdempotentTransitions(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, err := app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: tc.enabled})
+			resp, err := app.ToggleFollowCursor(inspect.ToggleFollowCursorRequest{Enabled: tc.enabled})
 			if err != nil {
 				t.Fatalf("ToggleFollowCursor error: %v", err)
 			}
@@ -149,12 +149,12 @@ func TestToggleFollowCursorEmitsOnChangedNodeOnly(t *testing.T) {
 		mu.Unlock()
 	})
 
-	_, _ = app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: true})
+	_, _ = app.ToggleFollowCursor(inspect.ToggleFollowCursorRequest{Enabled: true})
 	tick <- time.Now()
 	tick <- time.Now()
 	tick <- time.Now()
 	time.Sleep(10 * time.Millisecond)
-	_, _ = app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: false})
+	_, _ = app.ToggleFollowCursor(inspect.ToggleFollowCursorRequest{Enabled: false})
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -176,7 +176,7 @@ func TestViewerApp_InspectWindow_ForwardsRequestUnchanged(t *testing.T) {
 	app := NewViewerApp(svc)
 	req := inspect.InspectWindowRequest{HWND: "0x200"}
 
-	resp, err := app.InspectWindow(context.Background(), req)
+	resp, err := app.InspectWindow(req)
 	if err != nil {
 		t.Fatalf("InspectWindow returned error: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestViewerApp_OnShutdown_DisablesFollowCursorAndEmitter(t *testing.T) {
 
 	emitted := 0
 	app.SetEventEmitter(func(string, any) { emitted++ })
-	_, _ = app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: true})
+	_, _ = app.ToggleFollowCursor(inspect.ToggleFollowCursorRequest{Enabled: true})
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -212,7 +212,7 @@ func TestViewerApp_OnShutdown_DisablesFollowCursorAndEmitter(t *testing.T) {
 		t.Fatalf("expected highlight to be cleared during shutdown")
 	}
 
-	resp, err := app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: false})
+	resp, err := app.ToggleFollowCursor(inspect.ToggleFollowCursorRequest{Enabled: false})
 	if err != nil {
 		t.Fatalf("expected no error disabling follow cursor after shutdown: %v", err)
 	}

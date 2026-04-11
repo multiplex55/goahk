@@ -20,7 +20,8 @@ type followCursorEvent struct {
 type ViewerApp struct {
 	service inspect.Service
 
-	emitEvent func(name string, payload any)
+	emitEvent  func(name string, payload any)
+	runtimeCtx context.Context
 
 	followMu       sync.Mutex
 	followEnabled  bool
@@ -56,14 +57,15 @@ func NewViewerApp(service inspect.Service) *ViewerApp {
 }
 
 func (a *ViewerApp) OnStartup(ctx context.Context) {
+	a.runtimeCtx = ctx
 	a.SetEventEmitter(func(name string, payload any) {
-		wailsRuntime.EventsEmit(ctx, name, payload)
+		wailsRuntime.EventsEmit(a.runtimeContext(), name, payload)
 	})
 }
 
 func (a *ViewerApp) OnShutdown(ctx context.Context) {
-	_, _ = a.ToggleFollowCursor(ctx, inspect.ToggleFollowCursorRequest{Enabled: false})
-	_, _ = a.service.ClearHighlight(ctx, inspect.ClearHighlightRequest{})
+	_, _ = a.ToggleFollowCursor(inspect.ToggleFollowCursorRequest{Enabled: false})
+	_, _ = a.service.ClearHighlight(a.runtimeContext(), inspect.ClearHighlightRequest{})
 	a.SetEventEmitter(nil)
 }
 
@@ -71,63 +73,63 @@ func (a *ViewerApp) SetEventEmitter(emitter func(name string, payload any)) {
 	a.emitEvent = emitter
 }
 
-func (a *ViewerApp) ListWindows(ctx context.Context, req inspect.ListWindowsRequest) (inspect.ListWindowsResponse, error) {
-	return a.service.ListWindows(ctx, req)
+func (a *ViewerApp) ListWindows(req inspect.ListWindowsRequest) (inspect.ListWindowsResponse, error) {
+	return a.service.ListWindows(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) InspectWindow(ctx context.Context, req inspect.InspectWindowRequest) (inspect.InspectWindowResponse, error) {
-	return a.service.InspectWindow(ctx, req)
+func (a *ViewerApp) InspectWindow(req inspect.InspectWindowRequest) (inspect.InspectWindowResponse, error) {
+	return a.service.InspectWindow(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) GetTreeRoot(ctx context.Context, req inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {
-	return a.service.GetTreeRoot(ctx, req)
+func (a *ViewerApp) GetTreeRoot(req inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {
+	return a.service.GetTreeRoot(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) GetNodeChildren(ctx context.Context, req inspect.GetNodeChildrenRequest) (inspect.GetNodeChildrenResponse, error) {
-	return a.service.GetNodeChildren(ctx, req)
+func (a *ViewerApp) GetNodeChildren(req inspect.GetNodeChildrenRequest) (inspect.GetNodeChildrenResponse, error) {
+	return a.service.GetNodeChildren(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) SelectNode(ctx context.Context, req inspect.SelectNodeRequest) (inspect.SelectNodeResponse, error) {
-	return a.service.SelectNode(ctx, req)
+func (a *ViewerApp) SelectNode(req inspect.SelectNodeRequest) (inspect.SelectNodeResponse, error) {
+	return a.service.SelectNode(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) GetNodeDetails(ctx context.Context, req inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
-	return a.service.GetNodeDetails(ctx, req)
+func (a *ViewerApp) GetNodeDetails(req inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
+	return a.service.GetNodeDetails(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) GetFocusedElement(ctx context.Context, req inspect.GetFocusedElementRequest) (inspect.GetFocusedElementResponse, error) {
-	return a.service.GetFocusedElement(ctx, req)
+func (a *ViewerApp) GetFocusedElement(req inspect.GetFocusedElementRequest) (inspect.GetFocusedElementResponse, error) {
+	return a.service.GetFocusedElement(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) GetElementUnderCursor(ctx context.Context, req inspect.GetElementUnderCursorRequest) (inspect.GetElementUnderCursorResponse, error) {
-	return a.service.GetElementUnderCursor(ctx, req)
+func (a *ViewerApp) GetElementUnderCursor(req inspect.GetElementUnderCursorRequest) (inspect.GetElementUnderCursorResponse, error) {
+	return a.service.GetElementUnderCursor(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) HighlightNode(ctx context.Context, req inspect.HighlightNodeRequest) (inspect.HighlightNodeResponse, error) {
-	return a.service.HighlightNode(ctx, req)
+func (a *ViewerApp) HighlightNode(req inspect.HighlightNodeRequest) (inspect.HighlightNodeResponse, error) {
+	return a.service.HighlightNode(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) ClearHighlight(ctx context.Context, req inspect.ClearHighlightRequest) (inspect.ClearHighlightResponse, error) {
-	return a.service.ClearHighlight(ctx, req)
+func (a *ViewerApp) ClearHighlight(req inspect.ClearHighlightRequest) (inspect.ClearHighlightResponse, error) {
+	return a.service.ClearHighlight(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) CopyBestSelector(ctx context.Context, req inspect.CopyBestSelectorRequest) (inspect.CopyBestSelectorResponse, error) {
-	return a.service.CopyBestSelector(ctx, req)
+func (a *ViewerApp) CopyBestSelector(req inspect.CopyBestSelectorRequest) (inspect.CopyBestSelectorResponse, error) {
+	return a.service.CopyBestSelector(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) GetPatternActions(ctx context.Context, req inspect.GetPatternActionsRequest) (inspect.GetPatternActionsResponse, error) {
-	return a.service.GetPatternActions(ctx, req)
+func (a *ViewerApp) GetPatternActions(req inspect.GetPatternActionsRequest) (inspect.GetPatternActionsResponse, error) {
+	return a.service.GetPatternActions(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) InvokePattern(ctx context.Context, req inspect.InvokePatternRequest) (inspect.InvokePatternResponse, error) {
-	return a.service.InvokePattern(ctx, req)
+func (a *ViewerApp) InvokePattern(req inspect.InvokePatternRequest) (inspect.InvokePatternResponse, error) {
+	return a.service.InvokePattern(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) ActivateWindow(ctx context.Context, req inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
-	return a.service.ActivateWindow(ctx, req)
+func (a *ViewerApp) ActivateWindow(req inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
+	return a.service.ActivateWindow(a.runtimeContext(), req)
 }
 
-func (a *ViewerApp) ToggleFollowCursor(ctx context.Context, req inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
+func (a *ViewerApp) ToggleFollowCursor(req inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
 	a.followMu.Lock()
 	alreadyEnabled := a.followEnabled
 	if req.Enabled == alreadyEnabled {
@@ -136,7 +138,7 @@ func (a *ViewerApp) ToggleFollowCursor(ctx context.Context, req inspect.ToggleFo
 	}
 
 	if req.Enabled {
-		a.followCtx, a.followCancel = context.WithCancel(context.Background())
+		a.followCtx, a.followCancel = context.WithCancel(a.runtimeContext())
 		a.followDone = make(chan struct{})
 		a.followEnabled = true
 		a.lastNodeID = ""
@@ -158,10 +160,12 @@ func (a *ViewerApp) ToggleFollowCursor(ctx context.Context, req inspect.ToggleFo
 		cancel()
 	}
 	if done != nil {
+		waitCtx, cancelWait := context.WithTimeout(a.runtimeContext(), 2*time.Second)
+		defer cancelWait()
 		select {
 		case <-done:
-		case <-ctx.Done():
-			return inspect.ToggleFollowCursorResponse{Enabled: false}, ctx.Err()
+		case <-waitCtx.Done():
+			return inspect.ToggleFollowCursorResponse{Enabled: false}, waitCtx.Err()
 		}
 	}
 
@@ -208,6 +212,13 @@ func (a *ViewerApp) emit(name string, payload any) {
 	}
 }
 
-func (a *ViewerApp) RefreshWindows(ctx context.Context, req inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
-	return a.service.RefreshWindows(ctx, req)
+func (a *ViewerApp) RefreshWindows(req inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
+	return a.service.RefreshWindows(a.runtimeContext(), req)
+}
+
+func (a *ViewerApp) runtimeContext() context.Context {
+	if a.runtimeCtx != nil {
+		return a.runtimeCtx
+	}
+	return context.Background()
 }
