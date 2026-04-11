@@ -66,43 +66,43 @@ func TestViewerApp_MethodPassthroughAndErrorMapping(t *testing.T) {
 
 	t.Run("passthrough", func(t *testing.T) {
 		app := NewViewerApp(&passthroughService{})
-		if _, err := app.RefreshWindows(context.Background(), inspect.RefreshWindowsRequest{}); err != nil {
+		if _, err := app.RefreshWindows(inspect.RefreshWindowsRequest{}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.InspectWindow(context.Background(), inspect.InspectWindowRequest{HWND: "0x1"}); err != nil {
+		if _, err := app.InspectWindow(inspect.InspectWindowRequest{HWND: "0x1"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.GetTreeRoot(context.Background(), inspect.GetTreeRootRequest{HWND: "0x1"}); err != nil {
+		if _, err := app.GetTreeRoot(inspect.GetTreeRootRequest{HWND: "0x1"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.GetNodeChildren(context.Background(), inspect.GetNodeChildrenRequest{NodeID: "n1"}); err != nil {
+		if _, err := app.GetNodeChildren(inspect.GetNodeChildrenRequest{NodeID: "n1"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.SelectNode(context.Background(), inspect.SelectNodeRequest{NodeID: "n1"}); err != nil {
+		if _, err := app.SelectNode(inspect.SelectNodeRequest{NodeID: "n1"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.GetNodeDetails(context.Background(), inspect.GetNodeDetailsRequest{NodeID: "n1"}); err != nil {
+		if _, err := app.GetNodeDetails(inspect.GetNodeDetailsRequest{NodeID: "n1"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.HighlightNode(context.Background(), inspect.HighlightNodeRequest{NodeID: "n1"}); err != nil {
+		if _, err := app.HighlightNode(inspect.HighlightNodeRequest{NodeID: "n1"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.ClearHighlight(context.Background(), inspect.ClearHighlightRequest{}); err != nil {
+		if _, err := app.ClearHighlight(inspect.ClearHighlightRequest{}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.GetPatternActions(context.Background(), inspect.GetPatternActionsRequest{NodeID: "n1"}); err != nil {
+		if _, err := app.GetPatternActions(inspect.GetPatternActionsRequest{NodeID: "n1"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.InvokePattern(context.Background(), inspect.InvokePatternRequest{NodeID: "n1", Action: "invoke"}); err != nil {
+		if _, err := app.InvokePattern(inspect.InvokePatternRequest{NodeID: "n1", Action: "invoke"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.ActivateWindow(context.Background(), inspect.ActivateWindowRequest{HWND: "0x1"}); err != nil {
+		if _, err := app.ActivateWindow(inspect.ActivateWindowRequest{HWND: "0x1"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: true}); err != nil {
+		if _, err := app.ToggleFollowCursor(inspect.ToggleFollowCursorRequest{Enabled: true}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := app.CopyBestSelector(context.Background(), inspect.CopyBestSelectorRequest{NodeID: "n1"}); err != nil {
+		if _, err := app.CopyBestSelector(inspect.CopyBestSelectorRequest{NodeID: "n1"}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -110,7 +110,7 @@ func TestViewerApp_MethodPassthroughAndErrorMapping(t *testing.T) {
 	t.Run("error_passthrough", func(t *testing.T) {
 		want := errors.New("service boom")
 		app := NewViewerApp(&passthroughService{err: want})
-		_, err := app.RefreshWindows(context.Background(), inspect.RefreshWindowsRequest{})
+		_, err := app.RefreshWindows(inspect.RefreshWindowsRequest{})
 		if !errors.Is(err, want) {
 			t.Fatalf("expected forwarded error, got %v", err)
 		}
