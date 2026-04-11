@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -32,10 +33,18 @@ type ViewerApp struct {
 	followInterval time.Duration
 	followEventID  int64
 	lastNodeID     string
+
+	logDebugf func(ctx context.Context, format string, args ...any)
+	logErrorf func(ctx context.Context, format string, args ...any)
 }
 
 func NewViewerApp(service inspect.Service) *ViewerApp {
-	app := &ViewerApp{service: service, followInterval: 120 * time.Millisecond}
+	app := &ViewerApp{
+		service:        service,
+		followInterval: 120 * time.Millisecond,
+		logDebugf:      func(context.Context, string, ...any) {},
+		logErrorf:      func(context.Context, string, ...any) {},
+	}
 	app.followTicker = func() <-chan time.Time {
 		ticker := time.NewTicker(app.followInterval)
 		out := make(chan time.Time)
@@ -58,6 +67,8 @@ func NewViewerApp(service inspect.Service) *ViewerApp {
 
 func (a *ViewerApp) OnStartup(ctx context.Context) {
 	a.runtimeCtx = ctx
+	a.logDebugf = wailsRuntime.LogDebugf
+	a.logErrorf = wailsRuntime.LogErrorf
 	a.SetEventEmitter(func(name string, payload any) {
 		wailsRuntime.EventsEmit(a.runtimeContext(), name, payload)
 	})
@@ -78,11 +89,27 @@ func (a *ViewerApp) ListWindows(req inspect.ListWindowsRequest) (inspect.ListWin
 }
 
 func (a *ViewerApp) InspectWindow(req inspect.InspectWindowRequest) (inspect.InspectWindowResponse, error) {
-	return a.service.InspectWindow(a.runtimeContext(), req)
+	ctx := a.runtimeContext()
+	a.logDebugf(ctx, "inspect: method=InspectWindow phase=request hwnd=%s", req.HWND)
+	resp, err := a.service.InspectWindow(ctx, req)
+	if err != nil {
+		a.logErrorf(ctx, "inspect: method=InspectWindow phase=error hwnd=%s errorType=%s error=%v", req.HWND, normalizeInspectError(err), err)
+		return inspect.InspectWindowResponse{}, err
+	}
+	a.logDebugf(ctx, "inspect: method=InspectWindow phase=response hwnd=%s rootNodeID=%s", req.HWND, resp.RootNodeID)
+	return resp, nil
 }
 
 func (a *ViewerApp) GetTreeRoot(req inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {
-	return a.service.GetTreeRoot(a.runtimeContext(), req)
+	ctx := a.runtimeContext()
+	a.logDebugf(ctx, "inspect: method=GetTreeRoot phase=request hwnd=%s refresh=%t", req.HWND, req.Refresh)
+	resp, err := a.service.GetTreeRoot(ctx, req)
+	if err != nil {
+		a.logErrorf(ctx, "inspect: method=GetTreeRoot phase=error hwnd=%s errorType=%s error=%v", req.HWND, normalizeInspectError(err), err)
+		return inspect.GetTreeRootResponse{}, err
+	}
+	a.logDebugf(ctx, "inspect: method=GetTreeRoot phase=response hwnd=%s nodeID=%s", req.HWND, resp.Root.NodeID)
+	return resp, nil
 }
 
 func (a *ViewerApp) GetNodeChildren(req inspect.GetNodeChildrenRequest) (inspect.GetNodeChildrenResponse, error) {
@@ -94,7 +121,15 @@ func (a *ViewerApp) SelectNode(req inspect.SelectNodeRequest) (inspect.SelectNod
 }
 
 func (a *ViewerApp) GetNodeDetails(req inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
-	return a.service.GetNodeDetails(a.runtimeContext(), req)
+	ctx := a.runtimeContext()
+	a.logDebugf(ctx, "inspect: method=GetNodeDetails phase=request nodeID=%s", req.NodeID)
+	resp, err := a.service.GetNodeDetails(ctx, req)
+	if err != nil {
+		a.logErrorf(ctx, "inspect: method=GetNodeDetails phase=error nodeID=%s errorType=%s error=%v", req.NodeID, normalizeInspectError(err), err)
+		return inspect.GetNodeDetailsResponse{}, err
+	}
+	a.logDebugf(ctx, "inspect: method=GetNodeDetails phase=response nodeID=%s properties=%d patterns=%d", req.NodeID, len(resp.Properties), len(resp.Patterns))
+	return resp, nil
 }
 
 func (a *ViewerApp) GetFocusedElement(req inspect.GetFocusedElementRequest) (inspect.GetFocusedElementResponse, error) {
@@ -221,4 +256,21 @@ func (a *ViewerApp) runtimeContext() context.Context {
 		return a.runtimeCtx
 	}
 	return context.Background()
+}
+
+func normalizeInspectError(err error) string {
+	switch {
+	case err == nil:
+		return "none"
+	case errors.Is(err, inspect.ErrProviderActionUnsupported):
+		return "ErrProviderActionUnsupported"
+	case errors.Is(err, inspect.ErrStaleCache):
+		return "ErrStaleCache"
+	case errors.Is(err, inspect.ErrInvalidNodeID):
+		return "ErrInvalidNodeID"
+	case errors.Is(err, inspect.ErrTransientFailure), errors.Is(err, inspect.ErrProviderTransientFailure):
+		return "ErrTransientFailure"
+	default:
+		return fmt.Sprintf("%T", err)
+	}
 }

@@ -13,6 +13,10 @@ function pathToText(path: { name?: string; nodeID: string }[]): string {
   return path.map((item) => item.name || item.nodeID).join(' > ');
 }
 
+function isStageSpecificFailure(text: string): boolean {
+  return /^Failed (InspectWindow|GetTreeRoot|GetNodeDetails)/.test(text);
+}
+
 function subscribeFollowCursor(store: InspectStore): (() => void) | undefined {
   const runtime = (window as Window & { runtime?: { EventsOn?: (name: string, cb: (payload: unknown) => void) => void; EventsOff?: (name: string) => void } }).runtime;
   if (!runtime?.EventsOn || !runtime?.EventsOff) {
@@ -137,7 +141,9 @@ export default function App() {
           onChangeFilter={(value) => store.setFilterInput(value)}
         />
         <StatusBar
-          status={snapshot.errorText || snapshot.statusText}
+          statusText={snapshot.statusText}
+          errorText={snapshot.errorText}
+          preferStageFailure={isStageSpecificFailure(snapshot.errorText) || isStageSpecificFailure(snapshot.statusText)}
           path={snapshot.selectorText || pathToText(snapshot.selectedPath)}
           selector={snapshot.selectorText}
         />

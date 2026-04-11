@@ -208,6 +208,44 @@ describe('inspectStore', () => {
     expect(store.getState().patterns).toEqual([]);
   });
 
+  it.each([
+    {
+      name: 'InspectWindow failure',
+      overrides: {
+        InspectWindow: vi.fn().mockRejectedValue(new Error('inspect boom'))
+      },
+      expectedStatus: 'Failed InspectWindow',
+      expectedError: 'Failed InspectWindow: inspect boom'
+    },
+    {
+      name: 'GetTreeRoot failure',
+      overrides: {
+        GetTreeRoot: vi.fn().mockRejectedValue(new Error('tree boom'))
+      },
+      expectedStatus: 'Failed GetTreeRoot',
+      expectedError: 'Failed GetTreeRoot: tree boom'
+    },
+    {
+      name: 'GetNodeDetails failure',
+      overrides: {
+        GetNodeDetails: vi.fn().mockRejectedValue(new Error('details boom'))
+      },
+      expectedStatus: 'Failed GetNodeDetails',
+      expectedError: 'Failed GetNodeDetails: details boom'
+    }
+  ])('window bootstrap stage failure annotates status/error: $name', async ({ overrides, expectedStatus, expectedError }) => {
+    const bindings = makeBindings(overrides);
+    const store = createInspectStore(bindings);
+
+    await store.selectWindow('w1');
+
+    expect(store.getState().statusText).toBe(expectedStatus);
+    expect(store.getState().errorText).toBe(expectedError);
+    expect(store.getState().selectedNodeID).toBe('');
+    expect(store.getState().properties).toEqual([]);
+    expect(store.getState().patterns).toEqual([]);
+  });
+
   it('applies bridge follow-cursor events and updates selection/tree/highlight path', async () => {
     const bindings = makeBindings();
     const store = createInspectStore(bindings, { followCursorDebounceMs: 10 });
