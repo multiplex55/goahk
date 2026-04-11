@@ -3,113 +3,215 @@ package main
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"goahk/internal/inspect"
 )
 
-type passthroughService struct {
-	err error
+type contractCall struct {
+	method string
+	ctx    context.Context
+	req    any
 }
 
-func (s *passthroughService) ListWindows(context.Context, inspect.ListWindowsRequest) (inspect.ListWindowsResponse, error) {
+type contractService struct {
+	err   error
+	calls []contractCall
+}
+
+func (s *contractService) record(method string, ctx context.Context, req any) {
+	s.calls = append(s.calls, contractCall{method: method, ctx: ctx, req: req})
+}
+
+func (s *contractService) ListWindows(ctx context.Context, req inspect.ListWindowsRequest) (inspect.ListWindowsResponse, error) {
+	s.record("ListWindows", ctx, req)
 	return inspect.ListWindowsResponse{}, s.err
 }
-func (s *passthroughService) InspectWindow(context.Context, inspect.InspectWindowRequest) (inspect.InspectWindowResponse, error) {
+func (s *contractService) InspectWindow(ctx context.Context, req inspect.InspectWindowRequest) (inspect.InspectWindowResponse, error) {
+	s.record("InspectWindow", ctx, req)
 	return inspect.InspectWindowResponse{RootNodeID: "root-1"}, s.err
 }
-func (s *passthroughService) GetTreeRoot(context.Context, inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {
+func (s *contractService) GetTreeRoot(ctx context.Context, req inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {
+	s.record("GetTreeRoot", ctx, req)
 	return inspect.GetTreeRootResponse{Root: inspect.TreeNodeDTO{NodeID: "root-1", HasChildren: true}}, s.err
 }
-func (s *passthroughService) GetNodeChildren(context.Context, inspect.GetNodeChildrenRequest) (inspect.GetNodeChildrenResponse, error) {
-	return inspect.GetNodeChildrenResponse{ParentNodeID: "root-1"}, s.err
+func (s *contractService) GetNodeChildren(ctx context.Context, req inspect.GetNodeChildrenRequest) (inspect.GetNodeChildrenResponse, error) {
+	s.record("GetNodeChildren", ctx, req)
+	return inspect.GetNodeChildrenResponse{ParentNodeID: req.NodeID}, s.err
 }
-func (s *passthroughService) SelectNode(context.Context, inspect.SelectNodeRequest) (inspect.SelectNodeResponse, error) {
-	return inspect.SelectNodeResponse{Selected: inspect.TreeNodeDTO{NodeID: "n1"}}, s.err
+func (s *contractService) SelectNode(ctx context.Context, req inspect.SelectNodeRequest) (inspect.SelectNodeResponse, error) {
+	s.record("SelectNode", ctx, req)
+	return inspect.SelectNodeResponse{Selected: inspect.TreeNodeDTO{NodeID: req.NodeID}}, s.err
 }
-func (s *passthroughService) GetNodeDetails(context.Context, inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
+func (s *contractService) GetNodeDetails(ctx context.Context, req inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
+	s.record("GetNodeDetails", ctx, req)
 	return inspect.GetNodeDetailsResponse{StatusText: "ok"}, s.err
 }
-func (s *passthroughService) GetFocusedElement(context.Context, inspect.GetFocusedElementRequest) (inspect.GetFocusedElementResponse, error) {
+func (s *contractService) GetFocusedElement(ctx context.Context, req inspect.GetFocusedElementRequest) (inspect.GetFocusedElementResponse, error) {
+	s.record("GetFocusedElement", ctx, req)
 	return inspect.GetFocusedElementResponse{}, s.err
 }
-func (s *passthroughService) GetElementUnderCursor(context.Context, inspect.GetElementUnderCursorRequest) (inspect.GetElementUnderCursorResponse, error) {
+func (s *contractService) GetElementUnderCursor(ctx context.Context, req inspect.GetElementUnderCursorRequest) (inspect.GetElementUnderCursorResponse, error) {
+	s.record("GetElementUnderCursor", ctx, req)
 	return inspect.GetElementUnderCursorResponse{}, s.err
 }
-func (s *passthroughService) HighlightNode(context.Context, inspect.HighlightNodeRequest) (inspect.HighlightNodeResponse, error) {
+func (s *contractService) HighlightNode(ctx context.Context, req inspect.HighlightNodeRequest) (inspect.HighlightNodeResponse, error) {
+	s.record("HighlightNode", ctx, req)
 	return inspect.HighlightNodeResponse{Highlighted: true}, s.err
 }
-func (s *passthroughService) ClearHighlight(context.Context, inspect.ClearHighlightRequest) (inspect.ClearHighlightResponse, error) {
+func (s *contractService) ClearHighlight(ctx context.Context, req inspect.ClearHighlightRequest) (inspect.ClearHighlightResponse, error) {
+	s.record("ClearHighlight", ctx, req)
 	return inspect.ClearHighlightResponse{Cleared: true}, s.err
 }
-func (s *passthroughService) CopyBestSelector(context.Context, inspect.CopyBestSelectorRequest) (inspect.CopyBestSelectorResponse, error) {
+func (s *contractService) CopyBestSelector(ctx context.Context, req inspect.CopyBestSelectorRequest) (inspect.CopyBestSelectorResponse, error) {
+	s.record("CopyBestSelector", ctx, req)
 	return inspect.CopyBestSelectorResponse{Selector: "#id"}, s.err
 }
-func (s *passthroughService) GetPatternActions(context.Context, inspect.GetPatternActionsRequest) (inspect.GetPatternActionsResponse, error) {
+func (s *contractService) GetPatternActions(ctx context.Context, req inspect.GetPatternActionsRequest) (inspect.GetPatternActionsResponse, error) {
+	s.record("GetPatternActions", ctx, req)
 	return inspect.GetPatternActionsResponse{}, s.err
 }
-func (s *passthroughService) InvokePattern(context.Context, inspect.InvokePatternRequest) (inspect.InvokePatternResponse, error) {
+func (s *contractService) InvokePattern(ctx context.Context, req inspect.InvokePatternRequest) (inspect.InvokePatternResponse, error) {
+	s.record("InvokePattern", ctx, req)
 	return inspect.InvokePatternResponse{Invoked: true}, s.err
 }
-func (s *passthroughService) ActivateWindow(context.Context, inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
+func (s *contractService) ActivateWindow(ctx context.Context, req inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
+	s.record("ActivateWindow", ctx, req)
 	return inspect.ActivateWindowResponse{Activated: true}, s.err
 }
-func (s *passthroughService) ToggleFollowCursor(context.Context, inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
-	return inspect.ToggleFollowCursorResponse{Enabled: true}, s.err
+func (s *contractService) ToggleFollowCursor(ctx context.Context, req inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
+	s.record("ToggleFollowCursor", ctx, req)
+	return inspect.ToggleFollowCursorResponse{Enabled: req.Enabled}, s.err
 }
-func (s *passthroughService) RefreshWindows(context.Context, inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
+func (s *contractService) RefreshWindows(ctx context.Context, req inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
+	s.record("RefreshWindows", ctx, req)
 	return inspect.RefreshWindowsResponse{Windows: []inspect.WindowSummary{{HWND: "0x1"}}}, s.err
+}
+
+func TestViewerApp_WailsBoundMethods_HaveSingleRequestParameter(t *testing.T) {
+	t.Parallel()
+
+	contextType := reflect.TypeOf((*context.Context)(nil)).Elem()
+	responseType := reflect.TypeOf((*error)(nil)).Elem()
+	appType := reflect.TypeOf(&ViewerApp{})
+	boundMethods := []string{
+		"ListWindows",
+		"InspectWindow",
+		"GetTreeRoot",
+		"GetNodeChildren",
+		"SelectNode",
+		"GetNodeDetails",
+		"GetFocusedElement",
+		"GetElementUnderCursor",
+		"HighlightNode",
+		"ClearHighlight",
+		"CopyBestSelector",
+		"GetPatternActions",
+		"InvokePattern",
+		"ActivateWindow",
+		"ToggleFollowCursor",
+		"RefreshWindows",
+	}
+
+	for _, methodName := range boundMethods {
+		method, ok := appType.MethodByName(methodName)
+		if !ok {
+			t.Fatalf("missing ViewerApp method %q", methodName)
+		}
+
+		if method.Type.NumIn() != 2 {
+			t.Fatalf("%s must accept exactly one request argument; got %d parameters", methodName, method.Type.NumIn()-1)
+		}
+		if method.Type.In(1).Implements(contextType) {
+			t.Fatalf("%s must not accept context.Context", methodName)
+		}
+		if method.Type.NumOut() != 2 || !method.Type.Out(1).Implements(responseType) {
+			t.Fatalf("%s must return (response, error)", methodName)
+		}
+	}
 }
 
 func TestViewerApp_MethodPassthroughAndErrorMapping(t *testing.T) {
 	t.Parallel()
 
 	t.Run("passthrough", func(t *testing.T) {
-		app := NewViewerApp(&passthroughService{})
-		if _, err := app.RefreshWindows(inspect.RefreshWindowsRequest{}); err != nil {
-			t.Fatal(err)
+		svc := &contractService{}
+		app := NewViewerApp(svc)
+		runtimeCtx := context.WithValue(context.Background(), struct{}{}, "runtime")
+		app.runtimeCtx = runtimeCtx
+
+		tests := []struct {
+			name       string
+			call       func() error
+			method     string
+			req        any
+			expectsSvc bool
+		}{
+			{name: "RefreshWindows", call: func() error { _, err := app.RefreshWindows(inspect.RefreshWindowsRequest{Filter: "note"}); return err }, method: "RefreshWindows", req: inspect.RefreshWindowsRequest{Filter: "note"}, expectsSvc: true},
+			{name: "ListWindows", call: func() error { _, err := app.ListWindows(inspect.ListWindowsRequest{}); return err }, method: "ListWindows", expectsSvc: true, req: inspect.ListWindowsRequest{}},
+			{name: "InspectWindow", call: func() error { _, err := app.InspectWindow(inspect.InspectWindowRequest{HWND: "0x1"}); return err }, method: "InspectWindow", expectsSvc: true, req: inspect.InspectWindowRequest{HWND: "0x1"}},
+			{name: "GetTreeRoot", call: func() error { _, err := app.GetTreeRoot(inspect.GetTreeRootRequest{HWND: "0x1"}); return err }, method: "GetTreeRoot", expectsSvc: true, req: inspect.GetTreeRootRequest{HWND: "0x1"}},
+			{name: "GetNodeChildren", call: func() error { _, err := app.GetNodeChildren(inspect.GetNodeChildrenRequest{NodeID: "n1"}); return err }, method: "GetNodeChildren", expectsSvc: true, req: inspect.GetNodeChildrenRequest{NodeID: "n1"}},
+			{name: "SelectNode", call: func() error { _, err := app.SelectNode(inspect.SelectNodeRequest{NodeID: "n1"}); return err }, method: "SelectNode", expectsSvc: true, req: inspect.SelectNodeRequest{NodeID: "n1"}},
+			{name: "GetNodeDetails", call: func() error { _, err := app.GetNodeDetails(inspect.GetNodeDetailsRequest{NodeID: "n1"}); return err }, method: "GetNodeDetails", expectsSvc: true, req: inspect.GetNodeDetailsRequest{NodeID: "n1"}},
+			{name: "GetFocusedElement", call: func() error { _, err := app.GetFocusedElement(inspect.GetFocusedElementRequest{}); return err }, method: "GetFocusedElement", expectsSvc: true, req: inspect.GetFocusedElementRequest{}},
+			{name: "GetElementUnderCursor", call: func() error { _, err := app.GetElementUnderCursor(inspect.GetElementUnderCursorRequest{}); return err }, method: "GetElementUnderCursor", expectsSvc: true, req: inspect.GetElementUnderCursorRequest{}},
+			{name: "HighlightNode", call: func() error { _, err := app.HighlightNode(inspect.HighlightNodeRequest{NodeID: "n1"}); return err }, method: "HighlightNode", expectsSvc: true, req: inspect.HighlightNodeRequest{NodeID: "n1"}},
+			{name: "ClearHighlight", call: func() error { _, err := app.ClearHighlight(inspect.ClearHighlightRequest{}); return err }, method: "ClearHighlight", expectsSvc: true, req: inspect.ClearHighlightRequest{}},
+			{name: "GetPatternActions", call: func() error {
+				_, err := app.GetPatternActions(inspect.GetPatternActionsRequest{NodeID: "n1"})
+				return err
+			}, method: "GetPatternActions", expectsSvc: true, req: inspect.GetPatternActionsRequest{NodeID: "n1"}},
+			{name: "InvokePattern", call: func() error {
+				_, err := app.InvokePattern(inspect.InvokePatternRequest{NodeID: "n1", Action: "invoke"})
+				return err
+			}, method: "InvokePattern", expectsSvc: true, req: inspect.InvokePatternRequest{NodeID: "n1", Action: "invoke"}},
+			{name: "ActivateWindow", call: func() error { _, err := app.ActivateWindow(inspect.ActivateWindowRequest{HWND: "0x1"}); return err }, method: "ActivateWindow", expectsSvc: true, req: inspect.ActivateWindowRequest{HWND: "0x1"}},
+			{name: "ToggleFollowCursor", call: func() error {
+				_, err := app.ToggleFollowCursor(inspect.ToggleFollowCursorRequest{Enabled: true})
+				return err
+			}, method: "ToggleFollowCursor", req: inspect.ToggleFollowCursorRequest{Enabled: true}, expectsSvc: false},
+			{name: "CopyBestSelector", call: func() error {
+				_, err := app.CopyBestSelector(inspect.CopyBestSelectorRequest{NodeID: "n1"})
+				return err
+			}, method: "CopyBestSelector", expectsSvc: true, req: inspect.CopyBestSelectorRequest{NodeID: "n1"}},
 		}
-		if _, err := app.InspectWindow(inspect.InspectWindowRequest{HWND: "0x1"}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := app.GetTreeRoot(inspect.GetTreeRootRequest{HWND: "0x1"}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := app.GetNodeChildren(inspect.GetNodeChildrenRequest{NodeID: "n1"}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := app.SelectNode(inspect.SelectNodeRequest{NodeID: "n1"}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := app.GetNodeDetails(inspect.GetNodeDetailsRequest{NodeID: "n1"}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := app.HighlightNode(inspect.HighlightNodeRequest{NodeID: "n1"}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := app.ClearHighlight(inspect.ClearHighlightRequest{}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := app.GetPatternActions(inspect.GetPatternActionsRequest{NodeID: "n1"}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := app.InvokePattern(inspect.InvokePatternRequest{NodeID: "n1", Action: "invoke"}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := app.ActivateWindow(inspect.ActivateWindowRequest{HWND: "0x1"}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := app.ToggleFollowCursor(inspect.ToggleFollowCursorRequest{Enabled: true}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := app.CopyBestSelector(inspect.CopyBestSelectorRequest{NodeID: "n1"}); err != nil {
-			t.Fatal(err)
+
+		expectedCalls := 0
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				before := len(svc.calls)
+				if err := tc.call(); err != nil {
+					t.Fatalf("%s returned error: %v", tc.name, err)
+				}
+				if tc.expectsSvc {
+					expectedCalls++
+					if got := len(svc.calls); got != expectedCalls {
+						t.Fatalf("expected %d service calls, got %d", expectedCalls, got)
+					}
+					last := svc.calls[len(svc.calls)-1]
+					if last.method != tc.method {
+						t.Fatalf("expected method %s got %s", tc.method, last.method)
+					}
+					if !reflect.DeepEqual(last.req, tc.req) {
+						t.Fatalf("expected req %#v got %#v", tc.req, last.req)
+					}
+					if last.ctx != runtimeCtx {
+						t.Fatalf("expected runtime context to be forwarded")
+					}
+					return
+				}
+				if got := len(svc.calls); got != before {
+					t.Fatalf("expected no immediate service call for %s", tc.name)
+				}
+			})
 		}
 	})
 
 	t.Run("error_passthrough", func(t *testing.T) {
 		want := errors.New("service boom")
-		app := NewViewerApp(&passthroughService{err: want})
+		app := NewViewerApp(&contractService{err: want})
 		_, err := app.RefreshWindows(inspect.RefreshWindowsRequest{})
 		if !errors.Is(err, want) {
 			t.Fatalf("expected forwarded error, got %v", err)

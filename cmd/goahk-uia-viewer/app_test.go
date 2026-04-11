@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ type fakeInspectService struct {
 	underCursorValues []inspect.TreeNodeDTO
 	inspectWindowReqs []inspect.InspectWindowRequest
 	inspectWindowResp inspect.InspectWindowResponse
+	refreshReqs       []inspect.RefreshWindowsRequest
 	clearCalls        int
 }
 
@@ -80,7 +82,10 @@ func (f *fakeInspectService) ActivateWindow(context.Context, inspect.ActivateWin
 func (f *fakeInspectService) ToggleFollowCursor(context.Context, inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
 	return inspect.ToggleFollowCursorResponse{}, nil
 }
-func (f *fakeInspectService) RefreshWindows(context.Context, inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
+func (f *fakeInspectService) RefreshWindows(_ context.Context, req inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
+	f.mu.Lock()
+	f.refreshReqs = append(f.refreshReqs, req)
+	f.mu.Unlock()
 	return inspect.RefreshWindowsResponse{}, nil
 }
 
@@ -218,5 +223,34 @@ func TestViewerApp_OnShutdown_DisablesFollowCursorAndEmitter(t *testing.T) {
 	}
 	if resp.Enabled {
 		t.Fatalf("expected follow cursor to remain disabled after shutdown")
+	}
+}
+
+func TestViewerApp_ExportedBoundMethods_AcceptSingleRequestAtRuntime(t *testing.T) {
+	svc := &fakeInspectService{}
+	app := NewViewerApp(svc)
+
+	refresh := reflect.ValueOf(app).MethodByName("RefreshWindows")
+	if !refresh.IsValid() {
+		t.Fatalf("RefreshWindows method not found")
+	}
+	if refresh.Type().NumIn() != 1 {
+		t.Fatalf("expected RefreshWindows to accept one request argument, got %d", refresh.Type().NumIn())
+	}
+
+	req := inspect.RefreshWindowsRequest{Filter: "startup", VisibleOnly: true, TitleOnly: false}
+	out := refresh.Call([]reflect.Value{reflect.ValueOf(req)})
+	if len(out) != 2 {
+		t.Fatalf("expected two return values, got %d", len(out))
+	}
+	if err, _ := out[1].Interface().(error); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := len(svc.refreshReqs); got != 1 {
+		t.Fatalf("expected one RefreshWindows service call, got %d", got)
+	}
+	if svc.refreshReqs[0] != req {
+		t.Fatalf("expected request %+v, got %+v", req, svc.refreshReqs[0])
 	}
 }
