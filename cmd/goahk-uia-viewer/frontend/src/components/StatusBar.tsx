@@ -7,9 +7,11 @@ type StatusBarProps = {
   preferStageFailure?: boolean;
   path: string;
   selector: string;
+  hasDetails?: boolean;
+  onCopySelector?: () => Promise<{ selector: string; clipboardUpdated: boolean }>;
 };
 
-export default function StatusBar({ statusText, errorText, preferStageFailure = false, path, selector }: StatusBarProps) {
+export default function StatusBar({ statusText, errorText, preferStageFailure = false, path, selector, hasDetails = false, onCopySelector }: StatusBarProps) {
   const [toastMessage, setToastMessage] = useState('');
   const status = preferStageFailure ? (errorText || statusText) : (statusText || errorText);
 
@@ -30,13 +32,34 @@ export default function StatusBar({ statusText, errorText, preferStageFailure = 
     }
   }
 
+  async function copySelector() {
+    try {
+      if (onCopySelector) {
+        const result = await onCopySelector();
+        const selectorText = result.selector || selector;
+        if (!selectorText) {
+          setToastMessage(hasDetails ? 'No selector available' : 'Selector unavailable');
+          return;
+        }
+        if (!result.clipboardUpdated) {
+          await navigator.clipboard.writeText(statusCopySource(selectorText));
+        }
+        setToastMessage('Selector copied');
+        return;
+      }
+      await copyValue(selector, 'Selector');
+    } catch {
+      setToastMessage('Failed to copy selector');
+    }
+  }
+
   return (
     <div className="footer-status">
       <span>{status}</span>
       <button type="button" className="status-copy" onClick={() => void copyValue(path, 'Path')}>
         <code>{path}</code>
       </button>
-      <button type="button" className="status-copy" onClick={() => void copyValue(selector, 'Selector')}>
+      <button type="button" className="status-copy" onClick={() => void copySelector()}>
         Copy selector
       </button>
       {toastMessage ? (

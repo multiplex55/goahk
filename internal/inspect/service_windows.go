@@ -115,8 +115,21 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 		return GetNodeDetailsResponse{}, err
 	}
 	path := p.nodePath(ctx, req.NodeID)
+	if len(path) == 0 {
+		path = []TreeNodeDTO{{
+			NodeID:       selected.NodeID,
+			Name:         selected.Name,
+			ControlType:  selected.ControlType,
+			ClassName:    selected.ClassName,
+			ParentNodeID: selected.ParentNodeID,
+		}}
+	}
 	windowInfo := p.windowInfoForSelection(ctx, selected.ProcessID)
 	bestSelector := selectorToCanonicalString(selected.BestSelector)
+	statusText := "Loaded node details"
+	if strings.TrimSpace(selected.Name) != "" {
+		statusText = "Loaded node details: " + selected.Name
+	}
 	return GetNodeDetailsResponse{
 		WindowInfo: windowInfo,
 		Element: ElementPropertiesDTO{
@@ -142,7 +155,7 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 		},
 		Properties:   properties,
 		Patterns:     patterns,
-		StatusText:   selected.Name,
+		StatusText:   statusText,
 		BestSelector: bestSelector,
 		Path:         path,
 		SelectorPath: SelectorPathDTO{

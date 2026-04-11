@@ -26,6 +26,7 @@ function makeBindings(overrides?: Partial<InspectBindings>): InspectBindings {
       action,
       nodeID
     })),
+    CopyBestSelector: vi.fn().mockResolvedValue({ selector: '#copied', clipboardUpdated: false }),
     HighlightNode: vi.fn().mockResolvedValue({ highlighted: true }),
     ClearHighlight: vi.fn().mockResolvedValue({ cleared: true }),
     ToggleFollowCursor: vi.fn().mockImplementation(async ({ enabled }) => ({ enabled })),
@@ -133,6 +134,21 @@ describe('inspectStore', () => {
     expect(store.getState().properties).toEqual([{ name: 'AutomationId', value: 'node-22' }]);
     expect(store.getState().statusText).toBe('Details node-22');
     expect(store.getState().selectorText).toBe('#node-22');
+  });
+
+  it('prioritizes backend copy selector result and status semantics', async () => {
+    const bindings = makeBindings({
+      CopyBestSelector: vi.fn().mockResolvedValue({ selector: '#backend', clipboardUpdated: true })
+    });
+    const store = createInspectStore(bindings);
+    await store.selectNode('node-22');
+
+    const resp = await store.copyBestSelector();
+
+    expect(bindings.CopyBestSelector).toHaveBeenCalledWith({ nodeID: 'node-22' });
+    expect(resp).toEqual({ selector: '#backend', clipboardUpdated: true });
+    expect(store.getState().selectorText).toBe('#backend');
+    expect(store.getState().statusText).toBe('Selector copied (backend)');
   });
 
   it('Flow 4: expanding a node lazily loads children and reuses cache', async () => {

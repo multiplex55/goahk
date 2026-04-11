@@ -158,6 +158,9 @@ func TestWindowsProvider_NodeAndPatternMethods(t *testing.T) {
 			if err == nil && (resp.WindowInfo.HWND == "" || resp.Element.ControlType == "" || len(resp.Path) == 0 || resp.SelectorPath.BestSelector == nil) {
 				return errors.New("missing canonical detail fields")
 			}
+			if err == nil && resp.StatusText == "" {
+				return errors.New("missing status text")
+			}
 			return err
 		}},
 		{name: "GetPatternActions", fn: func(ctx context.Context) error {
@@ -210,6 +213,34 @@ func TestWindowsProvider_NodeAndPatternMethods(t *testing.T) {
 				t.Fatalf("expected stale cache for invalid node id, got %v", err)
 			}
 		})
+	}
+}
+
+func TestWindowsProvider_GetNodeDetailsStatusAndPathFallbacks(t *testing.T) {
+	deps := &fakeAdapter{
+		root: &uiaElement{Ref: "root", Name: "Root"},
+		byRef: map[string]*uiaElement{
+			"root": {Ref: "root", Name: "Root", ControlType: "Window"},
+		},
+	}
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+
+	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"})
+	if err != nil {
+		t.Fatalf("GetTreeRoot failed: %v", err)
+	}
+	resp, err := provider.GetNodeDetails(context.Background(), GetNodeDetailsRequest{NodeID: root.Root.NodeID})
+	if err != nil {
+		t.Fatalf("GetNodeDetails failed: %v", err)
+	}
+	if resp.StatusText != "Loaded node details: Root" {
+		t.Fatalf("expected canonical status text, got %q", resp.StatusText)
+	}
+	if len(resp.Path) == 0 || resp.Path[len(resp.Path)-1].NodeID != root.Root.NodeID {
+		t.Fatalf("expected populated path ending in selected node, got %+v", resp.Path)
+	}
+	if _, err := provider.GetNodeDetails(context.Background(), GetNodeDetailsRequest{NodeID: "node:missing"}); !errors.Is(err, ErrStaleCache) {
+		t.Fatalf("expected stale cache on missing node details, got %v", err)
 	}
 }
 
