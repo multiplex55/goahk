@@ -101,7 +101,15 @@ func (p *windowsProvider) SelectNode(ctx context.Context, req SelectNodeRequest)
 		return SelectNodeResponse{}, err
 	}
 	_ = p.highlights.ClearOnDeselection(ctx, selected)
-	return SelectNodeResponse{Selected: TreeNodeDTO{NodeID: selected.NodeID, Name: selected.Name, ControlType: selected.ControlType, ClassName: selected.ClassName}}, nil
+	return SelectNodeResponse{Selected: TreeNodeDTO{
+		NodeID:               selected.NodeID,
+		NodeId:               selected.NodeID,
+		HWND:                 selected.HWND,
+		Name:                 selected.Name,
+		ControlType:          selected.ControlType,
+		LocalizedControlType: selected.LocalizedControlType,
+		ClassName:            selected.ClassName,
+	}}, nil
 }
 
 func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetailsRequest) (GetNodeDetailsResponse, error) {
@@ -117,11 +125,14 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 	path := p.nodePath(ctx, req.NodeID)
 	if len(path) == 0 {
 		path = []TreeNodeDTO{{
-			NodeID:       selected.NodeID,
-			Name:         selected.Name,
-			ControlType:  selected.ControlType,
-			ClassName:    selected.ClassName,
-			ParentNodeID: selected.ParentNodeID,
+			NodeID:               selected.NodeID,
+			NodeId:               selected.NodeID,
+			HWND:                 selected.HWND,
+			Name:                 selected.Name,
+			ControlType:          selected.ControlType,
+			LocalizedControlType: selected.LocalizedControlType,
+			ClassName:            selected.ClassName,
+			ParentNodeID:         selected.ParentNodeID,
 		}}
 	}
 	windowInfo := p.windowInfoForSelection(ctx, selected.ProcessID)
@@ -133,6 +144,9 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 	return GetNodeDetailsResponse{
 		WindowInfo: windowInfo,
 		Element: ElementPropertiesDTO{
+			NodeID:               selected.NodeID,
+			NodeId:               selected.NodeID,
+			HWND:                 selected.HWND,
 			ControlType:          selected.ControlType,
 			LocalizedControlType: selected.LocalizedControlType,
 			Name:                 selected.Name,
@@ -225,11 +239,14 @@ func (p *windowsProvider) nodePath(ctx context.Context, nodeID string) []TreeNod
 			break
 		}
 		reversed = append(reversed, TreeNodeDTO{
-			NodeID:       details.NodeID,
-			Name:         details.Name,
-			ControlType:  details.ControlType,
-			ClassName:    details.ClassName,
-			ParentNodeID: details.ParentNodeID,
+			NodeID:               details.NodeID,
+			NodeId:               details.NodeID,
+			HWND:                 details.HWND,
+			Name:                 details.Name,
+			ControlType:          details.ControlType,
+			LocalizedControlType: details.LocalizedControlType,
+			ClassName:            details.ClassName,
+			ParentNodeID:         details.ParentNodeID,
 		})
 		current = details.ParentNodeID
 	}
