@@ -51,6 +51,7 @@ export type InspectStoreState = {
   patterns: InspectPattern[];
   statusText: string;
   selectorText: string;
+  nodeDetails?: NodeDetailsResponse;
   filter: string;
   followCursor: boolean;
   followCursorBusy: boolean;
@@ -74,12 +75,18 @@ const formatStageFailure = (stage: string, err: unknown) => {
 };
 
 type NodeDetailsResponse = {
-  windowInfo?: InspectWindow;
+  windowInfo?: WindowInfoDetails;
+  element?: ElementDetails;
   properties: InspectProperty[];
   patterns: InspectPattern[];
   statusText?: string;
   bestSelector?: string;
   path?: InspectTreeNode[];
+  selectorPath?: {
+    bestSelector?: Selector;
+    fullPath?: InspectTreeNode[];
+    selectorSuggestions?: SelectorCandidate[];
+  };
 };
 
 export type InspectBindings = {
@@ -138,6 +145,7 @@ export function createInspectStore(
     patterns: [],
     statusText: 'Ready',
     selectorText: '',
+    nodeDetails: undefined,
     filter: '',
     followCursor: false,
     followCursorBusy: false,
@@ -303,6 +311,7 @@ export function createInspectStore(
         properties,
         patterns,
         selectorText: details.bestSelector ?? '',
+        nodeDetails: details,
         selectedPath: details.path ?? seededPath,
         statusText: details.statusText ?? `Selected window ${windowID}`
       });
@@ -319,6 +328,7 @@ export function createInspectStore(
         properties: [],
         patterns: [],
         selectorText: '',
+        nodeDetails: undefined,
         statusText: typeof err === 'object' && err !== null && 'statusText' in err ? String((err as { statusText: string }).statusText) : 'Failed to load window'
       });
     }
@@ -341,6 +351,7 @@ export function createInspectStore(
         properties: details.properties ?? [],
         patterns: details.patterns ?? [],
         selectorText: details.bestSelector ?? '',
+        nodeDetails: details,
         selectedPath: details.path ?? state.selectedPath,
         statusText: details.statusText ?? `Selected node ${nodeID}`,
         loadingNode: false
@@ -357,6 +368,7 @@ export function createInspectStore(
         properties: [],
         patterns: [],
         selectorText: '',
+        nodeDetails: undefined,
         statusText: 'Failed to select node'
       });
     }
@@ -509,3 +521,4 @@ export function createInspectStore(
     selectPreviousTreeNode: () => selectTreeNodeByDelta(-1)
   };
 }
+import { ElementDetails, Selector, SelectorCandidate, WindowInfoDetails } from '../types';

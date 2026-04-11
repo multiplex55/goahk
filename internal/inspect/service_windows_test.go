@@ -130,7 +130,9 @@ func TestWindowsProvider_NodeAndPatternMethods(t *testing.T) {
 			"root": {Ref: "root", Name: "Root", ControlType: "Button", ClassName: "Btn", AutomationID: "ok", SupportedPatterns: []string{"Invoke", "Value"}},
 		},
 	}
-	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{
+		windows: []window.Info{{HWND: 0x1, Title: "Sample", Class: "SampleClass", Exe: "sample.exe", PID: 404}},
+	}).(*windowsProvider)
 	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"})
 	if err != nil {
 		t.Fatalf("GetTreeRoot: %v", err)
@@ -152,6 +154,9 @@ func TestWindowsProvider_NodeAndPatternMethods(t *testing.T) {
 			resp, err := provider.GetNodeDetails(ctx, GetNodeDetailsRequest{NodeID: nodeID})
 			if err == nil && (len(resp.Properties) == 0 || len(resp.Patterns) == 0) {
 				return errors.New("missing node details")
+			}
+			if err == nil && (resp.WindowInfo.HWND == "" || resp.Element.ControlType == "" || len(resp.Path) == 0 || resp.SelectorPath.BestSelector == nil) {
+				return errors.New("missing canonical detail fields")
 			}
 			return err
 		}},

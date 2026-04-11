@@ -47,9 +47,13 @@ type uiaElement struct {
 	FrameworkID          string
 	ProcessID            int
 	HelpText             *string
+	AccessKey            *string
+	AcceleratorKey       *string
 	Status               *string
 	Value                *string
+	ItemType             *string
 	ItemStatus           *string
+	IsRequiredForForm    bool
 	LabeledBy            *string
 	BoundingRect         *uiaRect
 	IsEnabled            bool
@@ -263,7 +267,12 @@ func (p *providerCore) getPatternActions(ctx context.Context, nodeID string) ([]
 	}
 	actions := make([]PatternActionDTO, 0, len(selected.Patterns))
 	for _, a := range selected.Patterns {
-		actions = append(actions, PatternActionDTO{Name: a.Action, PayloadSchema: a.PayloadSchema})
+		actions = append(actions, PatternActionDTO{
+			Name:          a.Action,
+			Pattern:       a.Pattern,
+			DisplayName:   a.DisplayName,
+			PayloadSchema: a.PayloadSchema,
+		})
 	}
 	return actions, nil
 }
@@ -453,7 +462,8 @@ func toInspectElement(nodeID, parentNodeID string, el *uiaElement) InspectElemen
 		NodeID: nodeID, RuntimeID: strings.TrimSpace(el.RuntimeID), ParentNodeID: parentNodeID,
 		Name: el.Name, LocalizedControlType: normalizeLocalizedControlType(el.LocalizedControlType, el.ControlType), ControlType: normalizeControlType(el.ControlType, el.LocalizedControlType),
 		AutomationID: el.AutomationID, ClassName: el.ClassName, FrameworkID: el.FrameworkID, ProcessID: el.ProcessID,
-		HelpText: el.HelpText, Status: el.Status, Value: el.Value, ItemStatus: el.ItemStatus, LabeledBy: el.LabeledBy,
+		HelpText: el.HelpText, AccessKey: el.AccessKey, AcceleratorKey: el.AcceleratorKey, Status: el.Status, Value: el.Value,
+		ItemType: el.ItemType, ItemStatus: el.ItemStatus, IsRequiredForForm: el.IsRequiredForForm, LabeledBy: el.LabeledBy,
 		BoundingRect: toRect(el.BoundingRect), IsEnabled: el.IsEnabled, IsKeyboardFocusable: el.IsKeyboardFocusable, HasKeyboardFocus: el.HasKeyboardFocus,
 		IsOffscreen: el.IsOffscreen, IsContentElement: el.IsContentElement, IsControlElement: el.IsControlElement, IsPassword: el.IsPassword,
 		Patterns: patternActionsFromSupported(el.SupportedPatterns), BestSelector: best, SelectorSuggestions: alts,

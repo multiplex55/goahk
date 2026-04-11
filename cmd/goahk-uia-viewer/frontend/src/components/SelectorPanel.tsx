@@ -1,12 +1,18 @@
 import { statusCopySource } from '../copySource';
+import { Selector, SelectorCandidate } from '../types';
 import { NotifyFn } from './PropertyGrid';
 
 type SelectorPanelProps = {
   selector: string;
+  selectorPath?: {
+    bestSelector?: Selector;
+    fullPath?: { nodeID: string; name?: string }[];
+    selectorSuggestions?: SelectorCandidate[];
+  };
   onNotify?: NotifyFn;
 };
 
-export default function SelectorPanel({ selector, onNotify }: SelectorPanelProps) {
+export default function SelectorPanel({ selector, selectorPath, onNotify }: SelectorPanelProps) {
   const hasSelector = selector.trim().length > 0;
 
   async function copySelector() {
@@ -27,6 +33,18 @@ export default function SelectorPanel({ selector, onNotify }: SelectorPanelProps
           Copy Selector
         </button>
       </div>
+      {selectorPath?.fullPath?.length ? (
+        <p>Path: {selectorPath.fullPath.map((item) => item.name || item.nodeID).join(' > ')}</p>
+      ) : null}
+      {selectorPath?.selectorSuggestions?.length ? (
+        <ul>
+          {selectorPath.selectorSuggestions.map((candidate) => (
+            <li key={`${candidate.rank}-${candidate.source ?? 'selector'}`}>
+              #{candidate.rank} {candidate.source ?? 'selector'}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }

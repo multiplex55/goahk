@@ -93,9 +93,13 @@ type InspectElement struct {
 	FrameworkID          string              `json:"frameworkId,omitempty"`
 	ProcessID            int                 `json:"processId,omitempty"`
 	HelpText             *string             `json:"helpText,omitempty"`
+	AccessKey            *string             `json:"accessKey,omitempty"`
+	AcceleratorKey       *string             `json:"acceleratorKey,omitempty"`
 	Status               *string             `json:"status,omitempty"`
 	Value                *string             `json:"value,omitempty"`
+	ItemType             *string             `json:"itemType,omitempty"`
 	ItemStatus           *string             `json:"itemStatus,omitempty"`
+	IsRequiredForForm    bool                `json:"isRequiredForForm"`
 	LabeledBy            *string             `json:"labeledBy,omitempty"`
 	BoundingRect         *Rect               `json:"boundingRect,omitempty"`
 	IsEnabled            bool                `json:"isEnabled"`
