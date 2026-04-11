@@ -52,6 +52,47 @@ describe('inspectStore', () => {
     expect(store.getState().statusText).toContain('Loaded');
   });
 
+
+
+  it('startup refresh path succeeds with one-arg RefreshWindows contract', async () => {
+    const bindings = makeBindings({
+      RefreshWindows: vi.fn().mockImplementation(async (req: { filter: string; visibleOnly: boolean; titleOnly: boolean }) => ({
+        windows: [{ hwnd: `w-${req.filter || 'all'}`, title: 'Ready' }]
+      }))
+    });
+    const store = createInspectStore(bindings);
+
+    await store.refreshWindows();
+
+    expect(bindings.RefreshWindows).toHaveBeenCalledTimes(1);
+    expect((bindings.RefreshWindows as any).mock.calls[0]).toHaveLength(1);
+    expect((bindings.RefreshWindows as any).mock.calls[0][0]).toEqual({ filter: '', visibleOnly: true, titleOnly: false });
+    expect(store.getState().windows[0].hwnd).toBe('w-all');
+    expect(store.getState().statusText).toContain('Loaded 1 windows');
+  });
+
+  it('store sends exactly one request object per backend call path', async () => {
+    const bindings = makeBindings();
+    const store = createInspectStore(bindings, { followCursorDebounceMs: 1 });
+
+    await store.refreshWindows();
+    await store.selectWindow('w1');
+    await store.selectNode('node-42');
+    await store.expandNode('root-1');
+    await store.setFollowCursor(true);
+    store.applyBridgeEvent({ type: 'selection-changed', selectedNodeID: '' });
+
+    expect((bindings.ClearHighlight as any).mock.calls[0]).toHaveLength(1);
+    expect((bindings.RefreshWindows as any).mock.calls[0]).toHaveLength(1);
+    expect((bindings.InspectWindow as any).mock.calls[0]).toHaveLength(1);
+    expect((bindings.GetTreeRoot as any).mock.calls[0]).toHaveLength(1);
+    expect((bindings.GetNodeDetails as any).mock.calls[0]).toHaveLength(1);
+    expect((bindings.SelectNode as any).mock.calls[0]).toHaveLength(1);
+    expect((bindings.HighlightNode as any).mock.calls[0]).toHaveLength(1);
+    expect((bindings.GetNodeChildren as any).mock.calls[0]).toHaveLength(1);
+    expect((bindings.ToggleFollowCursor as any).mock.calls[0]).toHaveLength(1);
+  });
+
   it('Flow 2: selecting a window optionally activates and bootstraps root, properties, patterns', async () => {
     const bindings = makeBindings();
     const store = createInspectStore(bindings);
