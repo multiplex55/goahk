@@ -295,8 +295,6 @@ type unsupportedUIAAdapter struct{}
 
 func newUnsupportedUIAAdapter() uiaAdapter { return unsupportedUIAAdapter{} }
 
-func newNativeUIADeps() windowsUIADeps { return unsupportedUIADeps{} }
-
 type unsupportedUIADeps struct{}
 
 func (unsupportedUIADeps) ResolveWindowRoot(context.Context, string) (*uiaElement, error) {
