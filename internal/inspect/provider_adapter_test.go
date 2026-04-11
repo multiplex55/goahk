@@ -259,6 +259,55 @@ func TestProviderAdapter_EdgeCases(t *testing.T) {
 	}
 }
 
+func TestProviderAdapter_DetailsAndFocusCursorResolution(t *testing.T) {
+	adapter := &fakeAdapter{
+		root:    &uiaElement{Ref: "root", Name: "Root"},
+		focused: &uiaElement{Ref: "focus", Name: "Focused", SupportedPatterns: []string{"Invoke"}},
+		under:   &uiaElement{Ref: "under", Name: "Under", SupportedPatterns: []string{"Value"}},
+		cursorX: 7,
+		cursorY: 8,
+		byRef: map[string]*uiaElement{
+			"root":  {Ref: "root", Name: "Root", ControlType: "Button", AutomationID: "rootBtn", SupportedPatterns: []string{"Invoke", "Value"}},
+			"focus": {Ref: "focus", Name: "Focused", SupportedPatterns: []string{"Invoke"}},
+		},
+	}
+	core := newProviderCore(adapter)
+
+	root, err := core.treeRoot(context.Background(), "0x1", false)
+	if err != nil {
+		t.Fatalf("treeRoot: %v", err)
+	}
+	details, err := core.inspectByNodeID(context.Background(), root.NodeID)
+	if err != nil {
+		t.Fatalf("inspectByNodeID: %v", err)
+	}
+	if details.AutomationID != "rootBtn" {
+		t.Fatalf("expected automation id in node details, got %+v", details)
+	}
+	actions, err := core.getPatternActions(context.Background(), root.NodeID)
+	if err != nil {
+		t.Fatalf("getPatternActions: %v", err)
+	}
+	if len(actions) < 2 {
+		t.Fatalf("expected invoke/value actions, got %+v", actions)
+	}
+
+	focused, err := core.focused(context.Background())
+	if err != nil {
+		t.Fatalf("focused: %v", err)
+	}
+	if focused.NodeID == "" {
+		t.Fatalf("focused element should resolve node id")
+	}
+	under, err := core.underCursor(context.Background())
+	if err != nil {
+		t.Fatalf("underCursor: %v", err)
+	}
+	if under.NodeID == "" {
+		t.Fatalf("under-cursor element should resolve node id")
+	}
+}
+
 func TestProviderAdapter_InvokePatternDispatcher(t *testing.T) {
 	t.Parallel()
 

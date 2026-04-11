@@ -34,13 +34,13 @@ func (f *fakeWindowAdapter) ActivateWindow(_ context.Context, hwnd window.HWND) 
 }
 
 func TestWindowsProvider_InspectAndTreeCacheBehavior(t *testing.T) {
-	adapter := &fakeAdapter{
+	deps := &fakeAdapter{
 		root: &uiaElement{Ref: "root", Name: "Root"},
 		kids: map[string][]*uiaElement{
 			"root": {{Ref: "c1", ParentRef: "root", Name: "Child"}},
 		},
 	}
-	provider := newWindowsProviderWithDeps(adapter, &fakeWindowAdapter{}).(*windowsProvider)
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
 
 	rootResp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Refresh: false})
 	if err != nil {
@@ -55,7 +55,7 @@ func TestWindowsProvider_InspectAndTreeCacheBehavior(t *testing.T) {
 	if _, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: rootResp.Root.NodeID}); err != nil {
 		t.Fatalf("GetNodeChildren after InspectWindow failed: %v", err)
 	}
-	if got := adapter.childrenCallCount["root"]; got != 1 {
+	if got := deps.childrenCallCount["root"]; got != 1 {
 		t.Fatalf("expected cached children after InspectWindow (refresh=false path), calls=%d", got)
 	}
 
@@ -65,7 +65,7 @@ func TestWindowsProvider_InspectAndTreeCacheBehavior(t *testing.T) {
 	if _, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: rootResp.Root.NodeID}); err != nil {
 		t.Fatalf("GetNodeChildren after refresh failed: %v", err)
 	}
-	if got := adapter.childrenCallCount["root"]; got != 2 {
+	if got := deps.childrenCallCount["root"]; got != 2 {
 		t.Fatalf("expected children to reload after refresh invalidates cache, calls=%d", got)
 	}
 }
@@ -124,13 +124,13 @@ func TestWindowsProvider_WindowListingAndRefreshFilters(t *testing.T) {
 }
 
 func TestWindowsProvider_NodeAndPatternMethods(t *testing.T) {
-	adapter := &fakeAdapter{
+	deps := &fakeAdapter{
 		root: &uiaElement{Ref: "root", Name: "Root", SupportedPatterns: []string{"Invoke"}},
 		byRef: map[string]*uiaElement{
 			"root": {Ref: "root", Name: "Root", ControlType: "Button", ClassName: "Btn", AutomationID: "ok", SupportedPatterns: []string{"Invoke", "Value"}},
 		},
 	}
-	provider := newWindowsProviderWithDeps(adapter, &fakeWindowAdapter{}).(*windowsProvider)
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
 	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"})
 	if err != nil {
 		t.Fatalf("GetTreeRoot: %v", err)
@@ -209,14 +209,23 @@ func TestWindowsProvider_NodeAndPatternMethods(t *testing.T) {
 }
 
 func TestWindowsProvider_ActivateAndFollowCursor(t *testing.T) {
-	adapter := &fakeAdapter{
+	deps := &fakeAdapter{
 		root:    &uiaElement{Ref: "root", Name: "Root"},
+		focused: &uiaElement{Ref: "focused", Name: "Focused"},
 		under:   &uiaElement{Ref: "under", Name: "Under Cursor"},
 		cursorX: 10,
 		cursorY: 10,
 	}
 	windows := &fakeWindowAdapter{}
-	provider := newWindowsProviderWithDeps(adapter, windows).(*windowsProvider)
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), windows).(*windowsProvider)
+
+	focused, err := provider.GetFocusedElement(context.Background(), GetFocusedElementRequest{})
+	if err != nil {
+		t.Fatalf("GetFocusedElement: %v", err)
+	}
+	if focused.Element.NodeID == "" {
+		t.Fatalf("expected focused element node id")
+	}
 
 	if _, err := provider.ToggleFollowCursor(context.Background(), ToggleFollowCursorRequest{Enabled: true}); err != nil {
 		t.Fatalf("enable follow cursor: %v", err)
@@ -250,6 +259,25 @@ func TestWindowsProvider_ActivateAndFollowCursor(t *testing.T) {
 	}
 	if _, err := provider.ActivateWindow(context.Background(), ActivateWindowRequest{HWND: "nope"}); !errors.Is(err, ErrInvalidNodeID) {
 		t.Fatalf("expected invalid node id for invalid hwnd, got %v", err)
+	}
+}
+
+func TestWindowsProvider_UIAErrorMappingAndNilFallbacks(t *testing.T) {
+	provider := newWindowsProviderWithDeps(nil, &fakeWindowAdapter{}).(*windowsProvider)
+	if _, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"}); !errors.Is(err, ErrProviderActionUnsupported) {
+		t.Fatalf("expected unsupported adapter fallback when nil deps provided, got %v", err)
+	}
+
+	staleDeps := &fakeAdapter{focusErr: errUIAElementNotAvailable}
+	provider = newWindowsProviderWithDeps(newUIAAdapter(staleDeps), &fakeWindowAdapter{}).(*windowsProvider)
+	if _, err := provider.GetFocusedElement(context.Background(), GetFocusedElementRequest{}); !errors.Is(err, ErrStaleCache) {
+		t.Fatalf("expected stale cache mapping for element-not-available, got %v", err)
+	}
+
+	nilDeps := &fakeAdapter{pointErr: errUIANilElement}
+	provider = newWindowsProviderWithDeps(newUIAAdapter(nilDeps), &fakeWindowAdapter{}).(*windowsProvider)
+	if _, err := provider.GetElementUnderCursor(context.Background(), GetElementUnderCursorRequest{}); !errors.Is(err, ErrStaleCache) {
+		t.Fatalf("expected stale cache mapping for nil element error, got %v", err)
 	}
 }
 
