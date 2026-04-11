@@ -170,6 +170,38 @@ func TestUsageReliabilityLinksStayCurrent(t *testing.T) {
 	}
 }
 
+func TestBuildDocReferencesViewerScriptsAndGuide(t *testing.T) {
+	t.Parallel()
+
+	body, err := os.ReadFile(filepath.Join(".", "BUILD.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(BUILD.md) error = %v", err)
+	}
+	text := string(body)
+	mustContainAll(t, text,
+		"build\\dev-uia-viewer.bat",
+		"./build/dev-uia-viewer.sh",
+		"build\\build-uia-viewer.bat",
+		"./build/build-uia-viewer.sh",
+		"dist/goahk-uia-viewer",
+	)
+}
+
+func TestUIAViewerDocContainsRequiredSections(t *testing.T) {
+	t.Parallel()
+
+	body, err := os.ReadFile(filepath.Join(".", "uia-viewer.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(uia-viewer.md) error = %v", err)
+	}
+	mustContainAll(t, string(body),
+		"## Architecture",
+		"## API contract",
+		"## Pane responsibilities",
+		"## Troubleshooting",
+	)
+}
+
 func TestStopGuidanceIsCanonicalAndExplicit(t *testing.T) {
 	t.Parallel()
 
