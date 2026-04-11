@@ -18,6 +18,7 @@ function makeBindings(overrides?: Partial<InspectBindings>): InspectBindings {
       properties: [{ name: 'AutomationId', value: nodeID }],
       patterns: [{ name: 'Invoke' }],
       statusText: `Details ${nodeID}`,
+      bestSelector: `#${nodeID}`,
       path: [{ nodeID: 'root-1', hasChildren: true }, { nodeID, hasChildren: false }]
     })),
     HighlightNode: vi.fn().mockResolvedValue({ highlighted: true }),
@@ -109,8 +110,10 @@ describe('inspectStore', () => {
     expect(bindings.GetTreeRoot).toHaveBeenCalledWith({ hwnd: 'w1', refresh: true });
     expect(store.getState().treeNodes.map((node) => node.nodeID)).toContain('root-1');
     expect(store.getState().selectedNodeID).toBe('root-1');
+    expect(store.getState().selectedPath.map((node) => node.nodeID)).toEqual(['root-1', 'root-1']);
     expect(store.getState().properties[0].value).toBe('root-1');
     expect(store.getState().patterns[0].name).toBe('Invoke');
+    expect(store.getState().selectorText).toBe('#root-1');
   });
 
   it('Flow 3: selecting a node refreshes properties, patterns, status, and highlight', async () => {
@@ -124,7 +127,7 @@ describe('inspectStore', () => {
     expect(store.getState().selectedNodeID).toBe('node-22');
     expect(store.getState().properties).toEqual([{ name: 'AutomationId', value: 'node-22' }]);
     expect(store.getState().statusText).toBe('Details node-22');
-    expect(store.getState().selectorText).toBe('');
+    expect(store.getState().selectorText).toBe('#node-22');
   });
 
   it('Flow 4: expanding a node lazily loads children and reuses cache', async () => {
@@ -160,15 +163,14 @@ describe('inspectStore', () => {
   it('ignores stale window selection response when rapid selection changes occur', async () => {
     let resolveSlow: ((value: { properties: { name: string; value: string }[]; patterns: { name: string }[]; statusText: string }) => void) | undefined;
     const bindings = makeBindings({
-      GetNodeDetails: vi
-        .fn()
-        .mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
-              resolveSlow = resolve as typeof resolveSlow;
-            })
-        )
-        .mockResolvedValueOnce({ properties: [{ name: 'AutomationId', value: 'root-2' }], patterns: [{ name: 'Focus' }], statusText: 'Details root-2', path: [{ nodeID: 'root-2', hasChildren: true }] }),
+      GetNodeDetails: vi.fn().mockImplementation(async ({ nodeID }) => {
+        if (nodeID === 'root-1') {
+          return await new Promise((resolve) => {
+            resolveSlow = resolve as typeof resolveSlow;
+          });
+        }
+        return { properties: [{ name: 'AutomationId', value: 'root-2' }], patterns: [{ name: 'Focus' }], statusText: 'Details root-2', path: [{ nodeID: 'root-2', hasChildren: true }] };
+      }),
       InspectWindow: vi
         .fn()
         .mockResolvedValueOnce({ rootNodeID: 'root-1' })
@@ -190,6 +192,49 @@ describe('inspectStore', () => {
     expect(store.getState().selectedWindowID).toBe('w2');
     expect(store.getState().selectedNodeID).toBe('root-2');
     expect(store.getState().properties[0].value).toBe('root-2');
+  });
+
+  it('stale window failure cannot clobber a newer successful selection', async () => {
+    let rejectSlow: ((err: unknown) => void) | undefined;
+    const bindings = makeBindings({
+      GetNodeDetails: vi.fn().mockImplementation(async ({ nodeID }) => {
+        if (nodeID === 'root-1') {
+          return await new Promise((_, reject) => {
+            rejectSlow = reject;
+          });
+        }
+        return {
+          properties: [{ name: 'AutomationId', value: 'root-2' }],
+          patterns: [{ name: 'Value' }],
+          statusText: 'Details root-2',
+          bestSelector: '#root-2',
+          path: [{ nodeID: 'root-2', hasChildren: true }]
+        };
+      }),
+      InspectWindow: vi
+        .fn()
+        .mockResolvedValueOnce({ rootNodeID: 'root-1' })
+        .mockResolvedValueOnce({ rootNodeID: 'root-2' }),
+      GetTreeRoot: vi
+        .fn()
+        .mockResolvedValueOnce({ root: { nodeID: 'root-1', hasChildren: true } })
+        .mockResolvedValueOnce({ root: { nodeID: 'root-2', hasChildren: true } })
+    });
+    const store = createInspectStore(bindings);
+
+    const first = store.selectWindow('w1');
+    const second = store.selectWindow('w2');
+    await second;
+
+    rejectSlow?.(new Error('first failed late'));
+    await first;
+
+    expect(store.getState().selectedWindowID).toBe('w2');
+    expect(store.getState().selectedNodeID).toBe('root-2');
+    expect(store.getState().properties).toEqual([{ name: 'AutomationId', value: 'root-2' }]);
+    expect(store.getState().patterns).toEqual([{ name: 'Value' }]);
+    expect(store.getState().selectorText).toBe('#root-2');
+    expect(store.getState().errorText).toBe('');
   });
 
   it('backend error path sets error state and clears stale selection', async () => {
@@ -242,8 +287,11 @@ describe('inspectStore', () => {
     expect(store.getState().statusText).toBe(expectedStatus);
     expect(store.getState().errorText).toBe(expectedError);
     expect(store.getState().selectedNodeID).toBe('');
+    expect(store.getState().selectedPath).toEqual([]);
+    expect(store.getState().treeNodes).toEqual([]);
     expect(store.getState().properties).toEqual([]);
     expect(store.getState().patterns).toEqual([]);
+    expect(store.getState().selectorText).toBe('');
   });
 
   it('applies bridge follow-cursor events and updates selection/tree/highlight path', async () => {

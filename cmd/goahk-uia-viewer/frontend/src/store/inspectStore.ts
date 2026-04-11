@@ -67,6 +67,7 @@ export type InspectStoreState = {
 const formatStageFailure = (stage: string, err: unknown) => {
   const reason = err instanceof Error ? err.message : String(err);
   return {
+    stage,
     statusText: stage,
     errorText: `${stage}: ${reason}`
   };
@@ -241,12 +242,6 @@ export function createInspectStore(
     setState({
       selectedWindowID: windowID,
       loadingWindow: true,
-      selectedNodeID: '',
-      selectedPath: [],
-      treeNodes: [],
-      properties: [],
-      patterns: [],
-      selectorText: '',
       errorText: '',
       statusText: 'Loading window...'
     });
@@ -254,11 +249,17 @@ export function createInspectStore(
     try {
       if (state.activateOnSelect && bindings.ActivateWindow) {
         await bindings.ActivateWindow({ hwnd: windowID });
+        if (token !== windowSelectionToken) {
+          return;
+        }
       }
 
       let inspectResp: { window?: InspectWindow; rootNodeID?: string };
       try {
         inspectResp = await bindings.InspectWindow({ hwnd: windowID });
+        if (token !== windowSelectionToken) {
+          return;
+        }
       } catch (err) {
         throw formatStageFailure('Failed InspectWindow', err);
       }
@@ -266,19 +267,25 @@ export function createInspectStore(
       let rootResp: { root: InspectTreeNode };
       try {
         rootResp = await bindings.GetTreeRoot({ hwnd: windowID, refresh: true });
+        if (token !== windowSelectionToken) {
+          return;
+        }
       } catch (err) {
         throw formatStageFailure('Failed GetTreeRoot', err);
       }
 
       const rootNode = rootResp.root;
-      upsertNode(rootNode);
+      const seededTreeNodes: InspectTreeNode[] = [rootNode];
 
       const selectedNodeID = inspectResp.rootNodeID || rootNode.nodeID;
-      setState({ selectedNodeID, selectedPath: [rootNode] });
+      const seededPath: InspectTreeNode[] = [rootNode];
 
       let details: NodeDetailsResponse;
       try {
         details = await bindings.GetNodeDetails({ nodeID: selectedNodeID });
+        if (token !== windowSelectionToken) {
+          return;
+        }
       } catch (err) {
         throw formatStageFailure('Failed GetNodeDetails', err);
       }
@@ -292,10 +299,11 @@ export function createInspectStore(
       setState({
         selectedNodeID,
         loadingWindow: false,
+        treeNodes: seededTreeNodes,
         properties,
         patterns,
         selectorText: details.bestSelector ?? '',
-        selectedPath: details.path ?? state.selectedPath,
+        selectedPath: details.path ?? seededPath,
         statusText: details.statusText ?? `Selected window ${windowID}`
       });
     } catch (err) {
@@ -305,6 +313,7 @@ export function createInspectStore(
       setState({
         loadingWindow: false,
         errorText: typeof err === 'object' && err !== null && 'errorText' in err ? String((err as { errorText: string }).errorText) : (err instanceof Error ? err.message : String(err)),
+        treeNodes: [],
         selectedNodeID: '',
         selectedPath: [],
         properties: [],
