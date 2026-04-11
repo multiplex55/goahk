@@ -12,6 +12,7 @@ import {
   ToggleFollowCursor
 } from './wailsjs/wailsjs/go/main/ViewerApp';
 import { InspectBindings } from './store/inspectStore';
+import { ElementDetails, Selector, SelectorCandidate, WindowInfoDetails } from './types';
 
 const toError = (err: unknown, fallback: string): Error => {
   if (err instanceof Error && err.message) {
@@ -67,15 +68,28 @@ export function createInspectBindings(): InspectBindings {
     },
     GetNodeDetails: async (req: inspect.GetNodeDetailsRequest) => {
       const response = await call(() => GetNodeDetails(req), 'Failed to load node details');
-      const dto = (response ?? {}) as Record<string, unknown>;
+      const dto = (response ?? {}) as unknown as {
+        windowInfo?: WindowInfoDetails;
+        element?: ElementDetails;
+        properties?: { name: string; value: string }[];
+        patterns?: { name: string; payloadSchema?: string }[];
+        statusText?: string;
+        bestSelector?: string;
+        path?: { nodeID: string; hasChildren: boolean; name?: string; parentNodeID?: string }[];
+        selectorPath?: {
+          bestSelector?: Selector;
+          fullPath?: { nodeID: string; hasChildren: boolean; name?: string; parentNodeID?: string }[];
+          selectorSuggestions?: SelectorCandidate[];
+        };
+      };
       return {
         windowInfo: dto.windowInfo,
         element: dto.element,
-        properties: Array.isArray(dto.properties) ? dto.properties : [],
-        patterns: Array.isArray(dto.patterns) ? dto.patterns : [],
+        properties: dto.properties ?? [],
+        patterns: dto.patterns ?? [],
         statusText: dto.statusText,
         bestSelector: dto.bestSelector,
-        path: Array.isArray(dto.path) ? dto.path : [],
+        path: dto.path ?? [],
         selectorPath: dto.selectorPath
       };
     },
