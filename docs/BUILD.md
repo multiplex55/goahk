@@ -158,6 +158,38 @@ build\build.bat
 - Main packaged binary output: `dist/goahk`
 - Additional packaging metadata/assets are maintained in `build/`.
 
+### Viewer dev
+
+Run the UIA viewer in Wails dev mode from the repository root:
+
+```powershell
+build\dev-uia-viewer.bat
+```
+
+```bash
+./build/dev-uia-viewer.sh
+```
+
+Both scripts resolve the repo root and app directory (`cmd/goahk-uia-viewer`) and ensure `dist/goahk-uia-viewer` exists before starting `wails dev`.
+
+### Viewer build
+
+Build a clean UIA viewer artifact set and copy outputs into `dist/goahk-uia-viewer`:
+
+```powershell
+build\build-uia-viewer.bat
+```
+
+```bash
+./build/build-uia-viewer.sh
+```
+
+Both scripts run:
+
+- `wails build -clean -o goahk-uia-viewer`
+- copy files from `cmd/goahk-uia-viewer/build/bin` into `dist/goahk-uia-viewer`.
+
+
 ## 5) Validation checklist
 
 After building, run this smoke checklist:
