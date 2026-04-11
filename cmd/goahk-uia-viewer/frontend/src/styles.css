@@ -109,7 +109,46 @@ body {
 
 .splitter {
   background: #e5e7eb;
+  touch-action: none;
+}
+
+.splitter:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -1px;
+}
+
+.splitter-vertical {
   cursor: col-resize;
+}
+
+.splitter-horizontal {
+  cursor: row-resize;
+}
+
+.splitter-dragging {
+  background: #cbd5e1;
+}
+
+body.splitter-global-drag-col,
+body.splitter-global-drag-col * {
+  cursor: col-resize !important;
+}
+
+body.splitter-global-drag-row,
+body.splitter-global-drag-row * {
+  cursor: row-resize !important;
+}
+
+.details-middle-split {
+  display: grid;
+  min-height: 0;
+  height: min(65vh, 700px);
+}
+
+.details-properties-scroll,
+.details-patterns-scroll {
+  overflow: auto;
+  min-height: 0;
 }
 
 .footer-controls {
