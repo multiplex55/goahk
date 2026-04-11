@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react';
 import { statusCopySource } from '../copySource';
 
 type StatusBarProps = {
-  status: string;
+  statusText: string;
+  errorText: string;
+  preferStageFailure?: boolean;
   path: string;
   selector: string;
 };
 
-export default function StatusBar({ status, path, selector }: StatusBarProps) {
+export default function StatusBar({ statusText, errorText, preferStageFailure = false, path, selector }: StatusBarProps) {
   const [toastMessage, setToastMessage] = useState('');
+  const status = preferStageFailure ? (errorText || statusText) : (statusText || errorText);
 
   useEffect(() => {
     if (!toastMessage) {

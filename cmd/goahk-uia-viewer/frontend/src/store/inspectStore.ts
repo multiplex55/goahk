@@ -64,6 +64,14 @@ export type InspectStoreState = {
   errorText: string;
 };
 
+const formatStageFailure = (stage: string, err: unknown) => {
+  const reason = err instanceof Error ? err.message : String(err);
+  return {
+    statusText: stage,
+    errorText: `${stage}: ${reason}`
+  };
+};
+
 type NodeDetailsResponse = {
   windowInfo?: InspectWindow;
   properties: InspectProperty[];
@@ -248,15 +256,32 @@ export function createInspectStore(
         await bindings.ActivateWindow({ hwnd: windowID });
       }
 
-      const inspectResp = await bindings.InspectWindow({ hwnd: windowID });
-      const rootResp = await bindings.GetTreeRoot({ hwnd: windowID, refresh: true });
+      let inspectResp: { window?: InspectWindow; rootNodeID?: string };
+      try {
+        inspectResp = await bindings.InspectWindow({ hwnd: windowID });
+      } catch (err) {
+        throw formatStageFailure('Failed InspectWindow', err);
+      }
+
+      let rootResp: { root: InspectTreeNode };
+      try {
+        rootResp = await bindings.GetTreeRoot({ hwnd: windowID, refresh: true });
+      } catch (err) {
+        throw formatStageFailure('Failed GetTreeRoot', err);
+      }
+
       const rootNode = rootResp.root;
       upsertNode(rootNode);
 
       const selectedNodeID = inspectResp.rootNodeID || rootNode.nodeID;
       setState({ selectedNodeID, selectedPath: [rootNode] });
 
-      const details = await bindings.GetNodeDetails({ nodeID: selectedNodeID });
+      let details: NodeDetailsResponse;
+      try {
+        details = await bindings.GetNodeDetails({ nodeID: selectedNodeID });
+      } catch (err) {
+        throw formatStageFailure('Failed GetNodeDetails', err);
+      }
       const patterns = details.patterns ?? [];
       const properties = details.properties ?? [];
 
@@ -279,13 +304,13 @@ export function createInspectStore(
       }
       setState({
         loadingWindow: false,
-        errorText: err instanceof Error ? err.message : String(err),
+        errorText: typeof err === 'object' && err !== null && 'errorText' in err ? String((err as { errorText: string }).errorText) : (err instanceof Error ? err.message : String(err)),
         selectedNodeID: '',
         selectedPath: [],
         properties: [],
         patterns: [],
         selectorText: '',
-        statusText: 'Failed to load window'
+        statusText: typeof err === 'object' && err !== null && 'statusText' in err ? String((err as { statusText: string }).statusText) : 'Failed to load window'
       });
     }
   };

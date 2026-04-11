@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"goahk/internal/inspect"
@@ -217,4 +219,127 @@ func TestViewerApp_MethodPassthroughAndErrorMapping(t *testing.T) {
 			t.Fatalf("expected forwarded error, got %v", err)
 		}
 	})
+}
+
+func TestViewerApp_WindowSelectionLoggingAndErrorPassthrough(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		call             func(app *ViewerApp) error
+		wantRequestLog   string
+		wantResponseLog  string
+		wantErrorLog     string
+		serviceErr       error
+		wantForwardedErr error
+	}{
+		{
+			name: "InspectWindow success",
+			call: func(app *ViewerApp) error {
+				_, err := app.InspectWindow(inspect.InspectWindowRequest{HWND: "0x44"})
+				return err
+			},
+			wantRequestLog:  "method=InspectWindow phase=request hwnd=0x44",
+			wantResponseLog: "method=InspectWindow phase=response hwnd=0x44 rootNodeID=root-1",
+		},
+		{
+			name: "InspectWindow error",
+			call: func(app *ViewerApp) error {
+				_, err := app.InspectWindow(inspect.InspectWindowRequest{HWND: "0x44"})
+				return err
+			},
+			wantRequestLog:   "method=InspectWindow phase=request hwnd=0x44",
+			wantErrorLog:     "method=InspectWindow phase=error hwnd=0x44 errorType=ErrProviderActionUnsupported",
+			serviceErr:       inspect.ErrProviderActionUnsupported,
+			wantForwardedErr: inspect.ErrProviderActionUnsupported,
+		},
+		{
+			name: "GetTreeRoot success",
+			call: func(app *ViewerApp) error {
+				_, err := app.GetTreeRoot(inspect.GetTreeRootRequest{HWND: "0x21", Refresh: true})
+				return err
+			},
+			wantRequestLog:  "method=GetTreeRoot phase=request hwnd=0x21 refresh=true",
+			wantResponseLog: "method=GetTreeRoot phase=response hwnd=0x21 nodeID=root-1",
+		},
+		{
+			name: "GetTreeRoot error",
+			call: func(app *ViewerApp) error {
+				_, err := app.GetTreeRoot(inspect.GetTreeRootRequest{HWND: "0x21"})
+				return err
+			},
+			wantRequestLog:   "method=GetTreeRoot phase=request hwnd=0x21 refresh=false",
+			wantErrorLog:     "method=GetTreeRoot phase=error hwnd=0x21 errorType=ErrStaleCache",
+			serviceErr:       inspect.ErrStaleCache,
+			wantForwardedErr: inspect.ErrStaleCache,
+		},
+		{
+			name: "GetNodeDetails success",
+			call: func(app *ViewerApp) error {
+				_, err := app.GetNodeDetails(inspect.GetNodeDetailsRequest{NodeID: "node-1"})
+				return err
+			},
+			wantRequestLog:  "method=GetNodeDetails phase=request nodeID=node-1",
+			wantResponseLog: "method=GetNodeDetails phase=response nodeID=node-1",
+		},
+		{
+			name: "GetNodeDetails error",
+			call: func(app *ViewerApp) error {
+				_, err := app.GetNodeDetails(inspect.GetNodeDetailsRequest{NodeID: "node-1"})
+				return err
+			},
+			wantRequestLog:   "method=GetNodeDetails phase=request nodeID=node-1",
+			wantErrorLog:     "method=GetNodeDetails phase=error nodeID=node-1 errorType=ErrProviderActionUnsupported",
+			serviceErr:       inspect.ErrProviderActionUnsupported,
+			wantForwardedErr: inspect.ErrProviderActionUnsupported,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var debugLogs []string
+			var errorLogs []string
+
+			app := NewViewerApp(&contractService{err: tc.serviceErr})
+			app.logDebugf = func(_ context.Context, format string, args ...any) {
+				debugLogs = append(debugLogs, renderLog(format, args...))
+			}
+			app.logErrorf = func(_ context.Context, format string, args ...any) {
+				errorLogs = append(errorLogs, renderLog(format, args...))
+			}
+
+			err := tc.call(app)
+			if tc.wantForwardedErr != nil {
+				if !errors.Is(err, tc.wantForwardedErr) {
+					t.Fatalf("expected forwarded error %v, got %v", tc.wantForwardedErr, err)
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			assertContainsLog(t, debugLogs, tc.wantRequestLog)
+			if tc.wantResponseLog != "" {
+				assertContainsLog(t, debugLogs, tc.wantResponseLog)
+			}
+			if tc.wantErrorLog != "" {
+				assertContainsLog(t, errorLogs, tc.wantErrorLog)
+			}
+		})
+	}
+}
+
+func renderLog(format string, args ...any) string {
+	return strings.TrimSpace(fmt.Sprintf(format, args...))
+}
+
+func assertContainsLog(t *testing.T, logs []string, needle string) {
+	t.Helper()
+	for _, line := range logs {
+		if strings.Contains(line, needle) {
+			return
+		}
+	}
+	t.Fatalf("did not find log containing %q in %v", needle, logs)
 }
