@@ -30,12 +30,12 @@ type windowsProvider struct {
 }
 
 func newWindowsProvider() WindowsProvider {
-	return newWindowsProviderWithDeps(newUnsupportedUIAAdapter(), window.NewOSProvider())
+	return newWindowsProviderWithDeps(newUIAAdapter(newNativeUIADeps()), window.NewOSProvider())
 }
 
 func newWindowsProviderWithDeps(adapter uiaAdapter, windows windowAdapter) WindowsProvider {
 	if adapter == nil {
-		adapter = newUnsupportedUIAAdapter()
+		adapter = newUIAAdapter(nil)
 	}
 	if windows == nil {
 		windows = window.NewOSProvider()
@@ -295,48 +295,98 @@ type unsupportedUIAAdapter struct{}
 
 func newUnsupportedUIAAdapter() uiaAdapter { return unsupportedUIAAdapter{} }
 
-func (unsupportedUIAAdapter) ResolveWindowRoot(context.Context, string) (*uiaElement, error) {
+func newNativeUIADeps() windowsUIADeps { return unsupportedUIADeps{} }
+
+type unsupportedUIADeps struct{}
+
+func (unsupportedUIADeps) ResolveWindowRoot(context.Context, string) (*uiaElement, error) {
 	return nil, ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) GetFocusedElement(context.Context) (*uiaElement, error) {
+func (unsupportedUIADeps) GetFocusedElement(context.Context) (*uiaElement, error) {
 	return nil, ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) GetCursorPosition(context.Context) (int, int, error) {
+func (unsupportedUIADeps) GetCursorPosition(context.Context) (int, int, error) {
 	return 0, 0, ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) ElementFromPoint(context.Context, int, int) (*uiaElement, error) {
+func (unsupportedUIADeps) ElementFromPoint(context.Context, int, int) (*uiaElement, error) {
 	return nil, ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) GetElementByRef(context.Context, string) (*uiaElement, error) {
+func (unsupportedUIADeps) GetElementByRef(context.Context, string) (*uiaElement, error) {
 	return nil, ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) GetParent(context.Context, string) (*uiaElement, error) {
+func (unsupportedUIADeps) GetParent(context.Context, string) (*uiaElement, error) {
 	return nil, ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) GetChildren(context.Context, string) ([]*uiaElement, error) {
+func (unsupportedUIADeps) GetChildren(context.Context, string) ([]*uiaElement, error) {
 	return nil, ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) GetChildCount(context.Context, string) (int, bool, error) {
+func (unsupportedUIADeps) GetChildCount(context.Context, string) (int, bool, error) {
 	return 0, false, nil
 }
-func (unsupportedUIAAdapter) Invoke(context.Context, string) error {
+func (unsupportedUIADeps) Invoke(context.Context, string) error {
 	return ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) Select(context.Context, string) error {
+func (unsupportedUIADeps) Select(context.Context, string) error {
 	return ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) SetValue(context.Context, string, string) error {
+func (unsupportedUIADeps) SetValue(context.Context, string, string) error {
 	return ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) DoDefaultAction(context.Context, string) error {
+func (unsupportedUIADeps) DoDefaultAction(context.Context, string) error {
 	return ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) Toggle(context.Context, string) error {
+func (unsupportedUIADeps) Toggle(context.Context, string) error {
 	return ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) Expand(context.Context, string) error {
+func (unsupportedUIADeps) Expand(context.Context, string) error {
 	return ErrProviderActionUnsupported
 }
-func (unsupportedUIAAdapter) Collapse(context.Context, string) error {
+func (unsupportedUIADeps) Collapse(context.Context, string) error {
 	return ErrProviderActionUnsupported
+}
+
+func (unsupportedUIAAdapter) ResolveWindowRoot(ctx context.Context, hwnd string) (*uiaElement, error) {
+	return unsupportedUIADeps{}.ResolveWindowRoot(ctx, hwnd)
+}
+func (unsupportedUIAAdapter) GetFocusedElement(ctx context.Context) (*uiaElement, error) {
+	return unsupportedUIADeps{}.GetFocusedElement(ctx)
+}
+func (unsupportedUIAAdapter) GetCursorPosition(ctx context.Context) (int, int, error) {
+	return unsupportedUIADeps{}.GetCursorPosition(ctx)
+}
+func (unsupportedUIAAdapter) ElementFromPoint(ctx context.Context, x, y int) (*uiaElement, error) {
+	return unsupportedUIADeps{}.ElementFromPoint(ctx, x, y)
+}
+func (unsupportedUIAAdapter) GetElementByRef(ctx context.Context, ref string) (*uiaElement, error) {
+	return unsupportedUIADeps{}.GetElementByRef(ctx, ref)
+}
+func (unsupportedUIAAdapter) GetParent(ctx context.Context, ref string) (*uiaElement, error) {
+	return unsupportedUIADeps{}.GetParent(ctx, ref)
+}
+func (unsupportedUIAAdapter) GetChildren(ctx context.Context, ref string) ([]*uiaElement, error) {
+	return unsupportedUIADeps{}.GetChildren(ctx, ref)
+}
+func (unsupportedUIAAdapter) GetChildCount(ctx context.Context, ref string) (int, bool, error) {
+	return unsupportedUIADeps{}.GetChildCount(ctx, ref)
+}
+func (unsupportedUIAAdapter) Invoke(ctx context.Context, ref string) error {
+	return unsupportedUIADeps{}.Invoke(ctx, ref)
+}
+func (unsupportedUIAAdapter) Select(ctx context.Context, ref string) error {
+	return unsupportedUIADeps{}.Select(ctx, ref)
+}
+func (unsupportedUIAAdapter) SetValue(ctx context.Context, ref, value string) error {
+	return unsupportedUIADeps{}.SetValue(ctx, ref, value)
+}
+func (unsupportedUIAAdapter) DoDefaultAction(ctx context.Context, ref string) error {
+	return unsupportedUIADeps{}.DoDefaultAction(ctx, ref)
+}
+func (unsupportedUIAAdapter) Toggle(ctx context.Context, ref string) error {
+	return unsupportedUIADeps{}.Toggle(ctx, ref)
+}
+func (unsupportedUIAAdapter) Expand(ctx context.Context, ref string) error {
+	return unsupportedUIADeps{}.Expand(ctx, ref)
+}
+func (unsupportedUIAAdapter) Collapse(ctx context.Context, ref string) error {
+	return unsupportedUIADeps{}.Collapse(ctx, ref)
 }
