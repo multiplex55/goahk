@@ -89,7 +89,12 @@ export default function App() {
           <WindowInfoPanel
             windowTitle={snapshot.windows.find((window) => window.hwnd === snapshot.selectedWindowID)?.title ?? 'Unknown Window'}
             properties={snapshot.properties}
-            selectorText={snapshot.selectorText}
+            details={{
+              bestSelector: snapshot.selectorText,
+              windowInfo: snapshot.nodeDetails?.windowInfo,
+              element: snapshot.nodeDetails?.element,
+              selectorPath: snapshot.nodeDetails?.selectorPath
+            }}
             patternActions={snapshot.patterns.map((pattern) => ({
               id: pattern.name,
               label: pattern.name,

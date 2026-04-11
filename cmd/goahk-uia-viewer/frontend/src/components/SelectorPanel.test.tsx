@@ -8,7 +8,16 @@ describe('SelectorPanel', () => {
     const onNotify = vi.fn();
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
 
-    render(<SelectorPanel selector="type=Button" onNotify={onNotify} />);
+    render(
+      <SelectorPanel
+        selector="type=Button"
+        selectorPath={{
+          fullPath: [{ nodeID: 'node:root', name: 'Root' }, { nodeID: 'node:child', name: 'Child' }],
+          selectorSuggestions: [{ rank: 1, selector: { automationId: 'ok' }, source: 'automationId' }]
+        }}
+        onNotify={onNotify}
+      />
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Copy Selector' }));
@@ -16,5 +25,7 @@ describe('SelectorPanel', () => {
 
     expect(writeText).toHaveBeenCalledWith('type=Button');
     expect(onNotify).toHaveBeenCalledWith('Selector copied', 'success');
+    expect(screen.getByText('Path: Root > Child')).toBeInTheDocument();
+    expect(screen.getByText('#1 automationId')).toBeInTheDocument();
   });
 });

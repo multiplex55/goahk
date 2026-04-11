@@ -9,7 +9,7 @@ describe('WindowInfoPanel', () => {
         windowTitle="Calculator"
         properties={[{ name: 'Name', value: 'Calculator' }]}
         patternActions={[{ id: 'invoke', label: 'Invoke', supported: true }]}
-        selectorText="name=Calculator"
+        details={{ bestSelector: 'name=Calculator', selectorPath: { fullPath: [{ nodeID: 'node:root', name: 'Calculator' }] } }}
         onInvokePattern={vi.fn()}
       />
     );

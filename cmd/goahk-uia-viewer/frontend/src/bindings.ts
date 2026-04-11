@@ -67,13 +67,16 @@ export function createInspectBindings(): InspectBindings {
     },
     GetNodeDetails: async (req: inspect.GetNodeDetailsRequest) => {
       const response = await call(() => GetNodeDetails(req), 'Failed to load node details');
+      const dto = (response ?? {}) as Record<string, unknown>;
       return {
-        windowInfo: response?.windowInfo,
-        properties: Array.isArray(response?.properties) ? response.properties : [],
-        patterns: Array.isArray(response?.patterns) ? response.patterns : [],
-        statusText: response?.statusText,
-        bestSelector: response?.bestSelector,
-        path: Array.isArray(response?.path) ? response.path : []
+        windowInfo: dto.windowInfo,
+        element: dto.element,
+        properties: Array.isArray(dto.properties) ? dto.properties : [],
+        patterns: Array.isArray(dto.patterns) ? dto.patterns : [],
+        statusText: dto.statusText,
+        bestSelector: dto.bestSelector,
+        path: Array.isArray(dto.path) ? dto.path : [],
+        selectorPath: dto.selectorPath
       };
     },
     HighlightNode: async (req: inspect.HighlightNodeRequest) => {

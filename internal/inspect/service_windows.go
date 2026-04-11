@@ -109,31 +109,159 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 	if err != nil {
 		return GetNodeDetailsResponse{}, err
 	}
-	properties := []PropertyDTO{
-		{Name: "name", Value: selected.Name},
-		{Name: "controlType", Value: selected.ControlType},
-		{Name: "className", Value: selected.ClassName},
-	}
-	if selected.AutomationID != "" {
-		properties = append(properties, PropertyDTO{Name: "automationId", Value: selected.AutomationID})
-	}
+	properties := buildPropertyList(selected)
 	patterns, err := p.core.getPatternActions(ctx, req.NodeID)
 	if err != nil {
 		return GetNodeDetailsResponse{}, err
 	}
-	bestSelector := ""
-	if selected.BestSelector != nil {
-		bestSelector = selected.BestSelector.AutomationID
-		if bestSelector == "" {
-			bestSelector = selected.BestSelector.Name
-		}
-	}
+	path := p.nodePath(ctx, req.NodeID)
+	windowInfo := p.windowInfoForSelection(ctx, selected.ProcessID)
+	bestSelector := selectorToCanonicalString(selected.BestSelector)
 	return GetNodeDetailsResponse{
+		WindowInfo: windowInfo,
+		Element: ElementPropertiesDTO{
+			ControlType:          selected.ControlType,
+			LocalizedControlType: selected.LocalizedControlType,
+			Name:                 selected.Name,
+			Value:                ptrString(selected.Value),
+			AutomationID:         selected.AutomationID,
+			Bounds:               selected.BoundingRect,
+			HelpText:             ptrString(selected.HelpText),
+			AccessKey:            ptrString(selected.AccessKey),
+			AcceleratorKey:       ptrString(selected.AcceleratorKey),
+			IsKeyboardFocusable:  selected.IsKeyboardFocusable,
+			HasKeyboardFocus:     selected.HasKeyboardFocus,
+			ItemType:             ptrString(selected.ItemType),
+			ItemStatus:           ptrString(selected.ItemStatus),
+			IsEnabled:            selected.IsEnabled,
+			IsPassword:           selected.IsPassword,
+			IsOffscreen:          selected.IsOffscreen,
+			FrameworkID:          selected.FrameworkID,
+			IsRequiredForForm:    selected.IsRequiredForForm,
+			Status:               ptrString(selected.Status),
+		},
 		Properties:   properties,
 		Patterns:     patterns,
 		StatusText:   selected.Name,
 		BestSelector: bestSelector,
+		Path:         path,
+		SelectorPath: SelectorPathDTO{
+			BestSelector:        selected.BestSelector,
+			FullPath:            path,
+			SelectorSuggestions: selected.SelectorSuggestions,
+		},
 	}, nil
+}
+
+func buildPropertyList(selected InspectElement) []PropertyDTO {
+	properties := []PropertyDTO{
+		{Name: "name", Value: selected.Name},
+		{Name: "controlType", Value: selected.ControlType},
+		{Name: "localizedControlType", Value: selected.LocalizedControlType},
+		{Name: "automationId", Value: selected.AutomationID},
+		{Name: "className", Value: selected.ClassName},
+		{Name: "frameworkId", Value: selected.FrameworkID},
+		{Name: "value", Value: ptrString(selected.Value)},
+		{Name: "helpText", Value: ptrString(selected.HelpText)},
+		{Name: "accessKey", Value: ptrString(selected.AccessKey)},
+		{Name: "acceleratorKey", Value: ptrString(selected.AcceleratorKey)},
+		{Name: "status", Value: ptrString(selected.Status)},
+		{Name: "itemType", Value: ptrString(selected.ItemType)},
+		{Name: "itemStatus", Value: ptrString(selected.ItemStatus)},
+		{Name: "isRequiredForForm", Value: strconv.FormatBool(selected.IsRequiredForForm)},
+	}
+	return properties
+}
+
+func ptrString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func selectorToCanonicalString(sel *Selector) string {
+	if sel == nil {
+		return ""
+	}
+	parts := make([]string, 0, 5)
+	if sel.AutomationID != "" {
+		parts = append(parts, "automationId="+sel.AutomationID)
+	}
+	if sel.Name != "" {
+		parts = append(parts, "name="+sel.Name)
+	}
+	if sel.ControlType != "" {
+		parts = append(parts, "controlType="+sel.ControlType)
+	}
+	if sel.ClassName != "" {
+		parts = append(parts, "className="+sel.ClassName)
+	}
+	if sel.FrameworkID != "" {
+		parts = append(parts, "frameworkId="+sel.FrameworkID)
+	}
+	return strings.Join(parts, ";")
+}
+
+func (p *windowsProvider) nodePath(ctx context.Context, nodeID string) []TreeNodeDTO {
+	var reversed []TreeNodeDTO
+	current := nodeID
+	for i := 0; i < 256 && current != ""; i++ {
+		details, err := p.core.inspectByNodeID(ctx, current)
+		if err != nil {
+			break
+		}
+		reversed = append(reversed, TreeNodeDTO{
+			NodeID:       details.NodeID,
+			Name:         details.Name,
+			ControlType:  details.ControlType,
+			ClassName:    details.ClassName,
+			ParentNodeID: details.ParentNodeID,
+		})
+		current = details.ParentNodeID
+	}
+	for i, j := 0, len(reversed)-1; i < j; i, j = i+1, j-1 {
+		reversed[i], reversed[j] = reversed[j], reversed[i]
+	}
+	return reversed
+}
+
+func (p *windowsProvider) windowInfoForSelection(ctx context.Context, processID int) WindowInfoDTO {
+	hwnd := p.core.childrenCache.window()
+	info := WindowInfoDTO{HWND: hwnd}
+	if hwnd == "" {
+		return info
+	}
+	infos, err := p.windows.EnumerateWindows(ctx)
+	if err != nil {
+		return info
+	}
+	for _, candidate := range infos {
+		if candidate.HWND.String() != hwnd {
+			continue
+		}
+		info.Title = candidate.Title
+		info.Text = candidate.Title
+		info.Class = candidate.Class
+		info.Process = candidate.Exe
+		info.PID = int(candidate.PID)
+		if processID > 0 {
+			info.PID = processID
+		}
+		if candidate.Rect != nil {
+			info.Rect = &Rect{
+				Left:   candidate.Rect.Left,
+				Top:    candidate.Rect.Top,
+				Width:  candidate.Rect.Width(),
+				Height: candidate.Rect.Height(),
+			}
+		}
+		return info
+	}
+	if processID > 0 {
+		info.PID = processID
+	}
+	return info
 }
 
 func (p *windowsProvider) GetFocusedElement(ctx context.Context, req GetFocusedElementRequest) (GetFocusedElementResponse, error) {

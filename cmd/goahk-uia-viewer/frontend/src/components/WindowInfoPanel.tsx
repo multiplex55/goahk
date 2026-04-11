@@ -3,13 +3,13 @@ import PropertyGrid, { NotifyFn } from './PropertyGrid';
 import SelectorPanel from './SelectorPanel';
 import Splitter from './Splitter';
 import useSplitter from '../hooks/useSplitter';
-import { PatternAction, PropertyItem } from '../types';
+import { NodeDetailsView, PatternAction, PropertyItem } from '../types';
 
 type WindowInfoPanelProps = {
   windowTitle: string;
   properties: PropertyItem[];
   patternActions: PatternAction[];
-  selectorText: string;
+  details?: NodeDetailsView;
   onInvokePattern: (id: string, payload?: string) => Promise<void> | void;
   onNotify?: NotifyFn;
   enableMiddleSplitter?: boolean;
@@ -19,7 +19,7 @@ export default function WindowInfoPanel({
   windowTitle,
   properties,
   patternActions,
-  selectorText,
+  details,
   onInvokePattern,
   onNotify,
   enableMiddleSplitter = false
@@ -34,7 +34,7 @@ export default function WindowInfoPanel({
   const propertiesAndPatterns = enableMiddleSplitter ? (
     <div className="details-middle-split" style={{ gridTemplateRows: `${patternSectionSplitter.sizePx}px 6px minmax(120px, 1fr)` }}>
       <div className="details-properties-scroll">
-        <PropertyGrid properties={properties} onNotify={onNotify} />
+        <PropertyGrid properties={properties} element={details?.element} onNotify={onNotify} />
       </div>
       <Splitter
         ariaLabel="Resize properties and patterns"
@@ -50,7 +50,7 @@ export default function WindowInfoPanel({
     </div>
   ) : (
     <>
-      <PropertyGrid properties={properties} onNotify={onNotify} />
+      <PropertyGrid properties={properties} element={details?.element} onNotify={onNotify} />
       <PatternPanel actions={patternActions} onInvokePattern={onInvokePattern} onNotify={onNotify} />
     </>
   );
@@ -60,7 +60,7 @@ export default function WindowInfoPanel({
       <h2>Window Info</h2>
       <p className="window-info">{windowTitle}</p>
       {propertiesAndPatterns}
-      <SelectorPanel selector={selectorText} onNotify={onNotify} />
+      <SelectorPanel selector={details?.bestSelector ?? ''} selectorPath={details?.selectorPath} onNotify={onNotify} />
     </section>
   );
 }

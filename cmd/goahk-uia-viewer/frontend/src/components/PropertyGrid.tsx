@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { propertyCopySource } from '../copySource';
-import { PropertyItem } from '../types';
+import { ElementDetails, PropertyItem } from '../types';
 
 export type NotifyFn = (message: string, variant?: 'success' | 'error') => void;
 
 type PropertyGridProps = {
   properties: PropertyItem[];
+  element?: ElementDetails;
   onNotify?: NotifyFn;
 };
 
-export default function PropertyGrid({ properties, onNotify }: PropertyGridProps) {
+export default function PropertyGrid({ properties, element, onNotify }: PropertyGridProps) {
   const [selectedName, setSelectedName] = useState<string | null>(null);
 
   async function copyProperty(property: PropertyItem) {
@@ -25,6 +26,7 @@ export default function PropertyGrid({ properties, onNotify }: PropertyGridProps
   return (
     <section aria-label="property grid">
       <h3>Properties</h3>
+      {element?.name ? <p className="window-info">{element.name} ({element.controlType ?? 'Unknown'})</p> : null}
       <dl className="property-grid">
         {properties.map((property) => (
           <div

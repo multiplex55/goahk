@@ -22,11 +22,17 @@ func TestCanonicalDTO_JSONFieldNames(t *testing.T) {
 			Patterns: []string{"Invoke"}, ChildCount: &childCount,
 		},
 		Details: GetNodeDetailsResponse{
-			WindowInfo: WindowSummary{HWND: "0x1", Title: "Notepad"},
+			WindowInfo: WindowInfoDTO{HWND: "0x1", Title: "Notepad", Text: "Notepad", Class: "Notepad", Process: "notepad.exe", PID: 100},
+			Element:    ElementPropertiesDTO{Name: "Root", ControlType: "Window", IsEnabled: true},
 			Properties: []PropertyDTO{{Name: "name", Value: "Root"}},
-			Patterns:   []PatternActionDTO{{Name: "invoke"}},
+			Patterns:   []PatternActionDTO{{Name: "invoke", Pattern: "Invoke", DisplayName: "Invoke"}},
 			StatusText: "ok", BestSelector: "#main",
 			Path: []TreeNodeDTO{{NodeID: "node-root", Name: "Root", HasChildren: true}},
+			SelectorPath: SelectorPathDTO{
+				BestSelector:        &Selector{AutomationID: "main"},
+				FullPath:            []TreeNodeDTO{{NodeID: "node-root", Name: "Root", HasChildren: true}},
+				SelectorSuggestions: []SelectorCandidate{{Rank: 1, Selector: Selector{AutomationID: "main"}}},
+			},
 		},
 	}
 
@@ -55,6 +61,12 @@ func TestCanonicalDTO_JSONFieldNames(t *testing.T) {
 	details := decoded["details"].(map[string]any)
 	if _, ok := details["windowInfo"]; !ok {
 		t.Fatalf("missing windowInfo in details payload: %s", string(b))
+	}
+	if _, ok := details["element"]; !ok {
+		t.Fatalf("missing element in details payload: %s", string(b))
+	}
+	if _, ok := details["selectorPath"]; !ok {
+		t.Fatalf("missing selectorPath in details payload: %s", string(b))
 	}
 }
 

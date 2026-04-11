@@ -142,13 +142,53 @@ type PropertyDTO struct {
 	Value string `json:"value"`
 }
 
+type WindowInfoDTO struct {
+	Title   string `json:"title,omitempty"`
+	HWND    string `json:"hwnd,omitempty"`
+	Text    string `json:"text,omitempty"`
+	Rect    *Rect  `json:"rect,omitempty"`
+	Class   string `json:"class,omitempty"`
+	Process string `json:"process,omitempty"`
+	PID     int    `json:"pid,omitempty"`
+}
+
+type ElementPropertiesDTO struct {
+	ControlType          string `json:"controlType,omitempty"`
+	LocalizedControlType string `json:"localizedControlType,omitempty"`
+	Name                 string `json:"name,omitempty"`
+	Value                string `json:"value,omitempty"`
+	AutomationID         string `json:"automationId,omitempty"`
+	Bounds               *Rect  `json:"bounds,omitempty"`
+	HelpText             string `json:"helpText,omitempty"`
+	AccessKey            string `json:"accessKey,omitempty"`
+	AcceleratorKey       string `json:"acceleratorKey,omitempty"`
+	IsKeyboardFocusable  bool   `json:"isKeyboardFocusable"`
+	HasKeyboardFocus     bool   `json:"hasKeyboardFocus"`
+	ItemType             string `json:"itemType,omitempty"`
+	ItemStatus           string `json:"itemStatus,omitempty"`
+	IsEnabled            bool   `json:"isEnabled"`
+	IsPassword           bool   `json:"isPassword"`
+	IsOffscreen          bool   `json:"isOffscreen"`
+	FrameworkID          string `json:"frameworkId,omitempty"`
+	IsRequiredForForm    bool   `json:"isRequiredForForm"`
+	Status               string `json:"status,omitempty"`
+}
+
+type SelectorPathDTO struct {
+	BestSelector        *Selector           `json:"bestSelector,omitempty"`
+	FullPath            []TreeNodeDTO       `json:"fullPath,omitempty"`
+	SelectorSuggestions []SelectorCandidate `json:"selectorSuggestions,omitempty"`
+}
+
 type GetNodeDetailsResponse struct {
-	WindowInfo   WindowSummary      `json:"windowInfo"`
-	Properties   []PropertyDTO      `json:"properties"`
-	Patterns     []PatternActionDTO `json:"patterns"`
-	StatusText   string             `json:"statusText,omitempty"`
-	BestSelector string             `json:"bestSelector,omitempty"`
-	Path         []TreeNodeDTO      `json:"path,omitempty"`
+	WindowInfo   WindowInfoDTO        `json:"windowInfo"`
+	Element      ElementPropertiesDTO `json:"element"`
+	Properties   []PropertyDTO        `json:"properties"`
+	Patterns     []PatternActionDTO   `json:"patterns"`
+	StatusText   string               `json:"statusText,omitempty"`
+	BestSelector string               `json:"bestSelector,omitempty"`
+	Path         []TreeNodeDTO        `json:"path,omitempty"`
+	SelectorPath SelectorPathDTO      `json:"selectorPath"`
 }
 
 type GetFocusedElementRequest struct{}
@@ -187,6 +227,8 @@ type GetPatternActionsRequest struct {
 }
 type PatternActionDTO struct {
 	Name          string `json:"name"`
+	Pattern       string `json:"pattern,omitempty"`
+	DisplayName   string `json:"displayName,omitempty"`
 	PayloadSchema string `json:"payloadSchema,omitempty"`
 }
 type GetPatternActionsResponse struct {

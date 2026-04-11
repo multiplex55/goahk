@@ -28,7 +28,7 @@ describe('createInspectBindings', () => {
     viewerAppFns.GetTreeRoot.mockResolvedValue({ root: { nodeID: 'root', hasChildren: true } });
     viewerAppFns.GetNodeChildren.mockResolvedValue({ parentNodeID: 'n1', children: [] });
     viewerAppFns.SelectNode.mockResolvedValue({ selected: { nodeID: 'n1', hasChildren: false } });
-    viewerAppFns.GetNodeDetails.mockResolvedValue({ properties: [], patterns: [], path: [] });
+    viewerAppFns.GetNodeDetails.mockResolvedValue({ properties: [], patterns: [], path: [], selectorPath: {} });
     viewerAppFns.HighlightNode.mockResolvedValue({ highlighted: true });
     viewerAppFns.ClearHighlight.mockResolvedValue({ cleared: true });
     viewerAppFns.ToggleFollowCursor.mockResolvedValue({ enabled: true });
@@ -99,11 +99,13 @@ describe('createInspectBindings', () => {
     await expect(bindings.GetNodeChildren({ nodeID: 'n1' })).resolves.toEqual({ parentNodeID: 'n1', children: [] });
     await expect(bindings.GetNodeDetails({ nodeID: 'n1' })).resolves.toEqual({
       windowInfo: undefined,
+      element: undefined,
       properties: [],
       patterns: [],
       statusText: undefined,
       bestSelector: undefined,
-      path: []
+      path: [],
+      selectorPath: undefined
     });
     await expect(bindings.HighlightNode({ nodeID: 'n1' })).resolves.toEqual({ highlighted: false });
     await expect(bindings.ClearHighlight?.({})).resolves.toEqual({ cleared: false });
