@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import useSplitter from './hooks/useSplitter';
 import FooterControls, { FooterState } from './components/FooterControls';
 import StatusBar from './components/StatusBar';
 import TreePane from './components/TreePane';
@@ -30,8 +31,18 @@ export default function App() {
   const store = useMemo(() => createInspectStore(createInspectBindings()), []);
   const [snapshot, setSnapshot] = useState(store.getState());
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  const [leftWidthPx, setLeftWidthPx] = useState(300);
-  const [middleWidthPx, setMiddleWidthPx] = useState(420);
+  const leftSplitter = useSplitter({
+    storageKey: 'goahk:uiviewer:left-width',
+    defaultSizePx: 300,
+    minSizePx: 220,
+    maxSizePx: 720
+  });
+  const middleSplitter = useSplitter({
+    storageKey: 'goahk:uiviewer:middle-width',
+    defaultSizePx: 420,
+    minSizePx: 220,
+    maxSizePx: 720
+  });
 
   useEffect(() => store.subscribe(setSnapshot), [store]);
 
@@ -51,11 +62,11 @@ export default function App() {
   return (
     <div className="app-shell">
       <ThreeColumnLayout
-        leftWidthPx={leftWidthPx}
-        middleWidthPx={middleWidthPx}
+        leftWidthPx={leftSplitter.sizePx}
+        middleWidthPx={middleSplitter.sizePx}
         onResize={({ leftWidthPx: nextLeft, middleWidthPx: nextMiddle }) => {
-          setLeftWidthPx(nextLeft);
-          setMiddleWidthPx(nextMiddle);
+          leftSplitter.setSizePx(nextLeft);
+          middleSplitter.setSizePx(nextMiddle);
         }}
         left={
           <WindowListPane
@@ -87,6 +98,7 @@ export default function App() {
                 statusText: payload ? `Executed ${id} with payload` : `Executed ${id}`
               }));
             }}
+            enableMiddleSplitter
           />
         }
         right={

@@ -51,9 +51,21 @@ export default function ThreeColumnLayout({
   return (
     <main className="three-column-layout" style={style}>
       {left}
-      <Splitter ariaLabel="Resize window list pane" onDrag={dragLeft} />
+      <Splitter
+        ariaLabel="Resize window list pane"
+        valueMin={minPaneWidthPx}
+        valueMax={maxPaneWidthPx}
+        valueNow={boundedLeft}
+        onDrag={dragLeft}
+      />
       {middle}
-      <Splitter ariaLabel="Resize details pane" onDrag={dragMiddle} />
+      <Splitter
+        ariaLabel="Resize details pane"
+        valueMin={minPaneWidthPx}
+        valueMax={maxPaneWidthPx}
+        valueNow={boundedMiddle}
+        onDrag={dragMiddle}
+      />
       {right}
     </main>
   );
