@@ -295,3 +295,50 @@ func TestWindowsProvider_MethodErrorsPropagate(t *testing.T) {
 		t.Fatalf("expected refresh windows error")
 	}
 }
+
+func TestWindowsProvider_InvokePatternDispatchesToAdapterActions(t *testing.T) {
+	deps := &fakeAdapter{
+		root: &uiaElement{
+			Ref:               "root",
+			Name:              "Root",
+			SupportedPatterns: []string{"Invoke", "SelectionItem", "Value", "Toggle", "ExpandCollapse"},
+		},
+		byRef: map[string]*uiaElement{
+			"root": {
+				Ref:               "root",
+				Name:              "Root",
+				SupportedPatterns: []string{"Invoke", "SelectionItem", "Value", "Toggle", "ExpandCollapse"},
+			},
+		},
+	}
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"})
+	if err != nil {
+		t.Fatalf("GetTreeRoot: %v", err)
+	}
+	nodeID := root.Root.NodeID
+
+	actions := []InvokePatternRequest{
+		{NodeID: nodeID, Action: "invoke"},
+		{NodeID: nodeID, Action: "select"},
+		{NodeID: nodeID, Action: "setValue", Payload: map[string]any{"value": "abc"}},
+		{NodeID: nodeID, Action: "toggle"},
+		{NodeID: nodeID, Action: "expand"},
+		{NodeID: nodeID, Action: "collapse"},
+	}
+	for _, req := range actions {
+		if _, err := provider.InvokePattern(context.Background(), req); err != nil {
+			t.Fatalf("InvokePattern %s failed: %v", req.Action, err)
+		}
+	}
+
+	if deps.invokeCount != 1 || deps.selectCount != 1 || deps.setValueCount != 1 {
+		t.Fatalf("expected invoke/select/setValue dispatch count 1 each, got invoke=%d select=%d setValue=%d", deps.invokeCount, deps.selectCount, deps.setValueCount)
+	}
+	if deps.toggleCount != 1 || deps.expandCount != 1 || deps.collapseCount != 1 {
+		t.Fatalf("expected toggle/expand/collapse dispatch count 1 each, got toggle=%d expand=%d collapse=%d", deps.toggleCount, deps.expandCount, deps.collapseCount)
+	}
+	if deps.lastSetValue != "abc" {
+		t.Fatalf("expected setValue payload forwarded, got %q", deps.lastSetValue)
+	}
+}

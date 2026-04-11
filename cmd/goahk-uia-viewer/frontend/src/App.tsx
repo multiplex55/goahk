@@ -98,13 +98,10 @@ export default function App() {
               id: pattern.name,
               label: pattern.name,
               requiresInput: !!pattern.payloadSchema,
-              supported: true
+              supported: pattern.supported !== false
             }))}
             onInvokePattern={async (id, payload) => {
-              setSnapshot((current) => ({
-                ...current,
-                statusText: payload ? `Executed ${id} with payload` : `Executed ${id}`
-              }));
+              await store.invokePatternAction(id, payload);
             }}
             enableMiddleSplitter
           />

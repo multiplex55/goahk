@@ -52,4 +52,20 @@ describe('PatternPanel', () => {
 
     expect(onNotify).toHaveBeenCalledWith('Invoke failed', 'error');
   });
+
+  it('does not render payload prompt for non-input actions and sends no payload', async () => {
+    const onInvokePattern = vi.fn().mockResolvedValue(undefined);
+    render(
+      <PatternPanel
+        actions={[{ id: 'toggle', label: 'Toggle', supported: true, requiresInput: false }]}
+        onInvokePattern={onInvokePattern}
+      />
+    );
+
+    expect(screen.queryByLabelText('Toggle payload')).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Toggle' }));
+    });
+    expect(onInvokePattern).toHaveBeenCalledWith('toggle');
+  });
 });

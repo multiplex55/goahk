@@ -24,9 +24,15 @@ type fakeAdapter struct {
 	invokeErr         error
 	selectErr         error
 	setValueErr       error
+	toggleErr         error
+	expandErr         error
+	collapseErr       error
 	invokeCount       int
 	selectCount       int
 	setValueCount     int
+	toggleCount       int
+	expandCount       int
+	collapseCount     int
 	lastSetValue      string
 }
 
@@ -91,9 +97,27 @@ func (f *fakeAdapter) SetValue(_ context.Context, _ string, value string) error 
 func (f *fakeAdapter) DoDefaultAction(context.Context, string) error {
 	return ErrProviderActionUnsupported
 }
-func (f *fakeAdapter) Toggle(context.Context, string) error   { return ErrProviderActionUnsupported }
-func (f *fakeAdapter) Expand(context.Context, string) error   { return ErrProviderActionUnsupported }
-func (f *fakeAdapter) Collapse(context.Context, string) error { return ErrProviderActionUnsupported }
+func (f *fakeAdapter) Toggle(context.Context, string) error {
+	f.toggleCount++
+	if f.toggleErr != nil {
+		return f.toggleErr
+	}
+	return nil
+}
+func (f *fakeAdapter) Expand(context.Context, string) error {
+	f.expandCount++
+	if f.expandErr != nil {
+		return f.expandErr
+	}
+	return nil
+}
+func (f *fakeAdapter) Collapse(context.Context, string) error {
+	f.collapseCount++
+	if f.collapseErr != nil {
+		return f.collapseErr
+	}
+	return nil
+}
 
 func TestProviderAdapter_PropertyMappingAndNormalization(t *testing.T) {
 	help := "h"

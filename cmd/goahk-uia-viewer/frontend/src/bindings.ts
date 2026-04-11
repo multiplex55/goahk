@@ -7,6 +7,7 @@ import {
   GetTreeRoot,
   HighlightNode,
   InspectWindow,
+  InvokePattern,
   RefreshWindows,
   SelectNode,
   ToggleFollowCursor
@@ -85,17 +86,26 @@ export function createInspectBindings(): InspectBindings {
       return {
         windowInfo: dto.windowInfo,
         element: dto.element,
-        properties: dto.properties ?? [],
-        patterns: dto.patterns ?? [],
+        properties: Array.isArray(dto.properties) ? dto.properties : [],
+        patterns: Array.isArray(dto.patterns) ? dto.patterns : [],
         statusText: dto.statusText,
         bestSelector: dto.bestSelector,
-        path: dto.path ?? [],
+        path: Array.isArray(dto.path) ? dto.path : [],
         selectorPath: dto.selectorPath
       };
     },
     HighlightNode: async (req: inspect.HighlightNodeRequest) => {
       const response = await call(() => HighlightNode(req), 'Failed to highlight node');
       return { highlighted: !!response?.highlighted };
+    },
+    InvokePattern: async (req: inspect.InvokePatternRequest) => {
+      const response = await call(() => InvokePattern(req), 'Failed to invoke pattern action');
+      return {
+        invoked: !!response?.invoked,
+        action: response?.action ?? req.action,
+        nodeID: response?.nodeID ?? req.nodeID,
+        result: response?.result
+      };
     },
     ClearHighlight: async (req: inspect.ClearHighlightRequest = {}) => {
       const response = await call(() => ClearHighlight(req), 'Failed to clear highlight');
