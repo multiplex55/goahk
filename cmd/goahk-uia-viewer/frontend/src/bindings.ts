@@ -1,40 +1,17 @@
+import type { inspect } from './wailsjs/wailsjs/go/models';
+import {
+  ActivateWindow,
+  ClearHighlight,
+  GetNodeChildren,
+  GetNodeDetails,
+  GetTreeRoot,
+  HighlightNode,
+  InspectWindow,
+  RefreshWindows,
+  SelectNode,
+  ToggleFollowCursor
+} from './wailsjs/wailsjs/go/main/ViewerApp';
 import { InspectBindings } from './store/inspectStore';
-
-type ViewerApi = {
-  RefreshWindows?: (req: { filter: string; visibleOnly: boolean; titleOnly: boolean }) => Promise<{ windows?: unknown[] }>;
-  InspectWindow?: (req: { hwnd: string }) => Promise<{ window?: unknown; rootNodeID?: string }>;
-  GetTreeRoot?: (req: { hwnd: string; refresh?: boolean }) => Promise<{ root?: unknown }>;
-  GetNodeChildren?: (req: { nodeID: string }) => Promise<{ parentNodeID?: string; children?: unknown[] }>;
-  SelectNode?: (req: { nodeID: string }) => Promise<{ selected?: unknown }>;
-  GetNodeDetails?: (req: { nodeID: string }) => Promise<{
-    windowInfo?: unknown;
-    properties?: unknown[];
-    patterns?: unknown[];
-    statusText?: string;
-    bestSelector?: string;
-    path?: unknown[];
-  }>;
-  HighlightNode?: (req: { nodeID: string }) => Promise<{ highlighted?: boolean }>;
-  ClearHighlight?: (req?: Record<string, never>) => Promise<{ cleared?: boolean }>;
-  ToggleFollowCursor?: (req: { enabled: boolean }) => Promise<{ enabled?: boolean }>;
-  ActivateWindow?: (req: { hwnd: string }) => Promise<{ activated?: boolean }>;
-};
-
-type WailsWindow = Window & {
-  go?: {
-    main?: {
-      ViewerApp?: ViewerApi;
-    };
-  };
-};
-
-const getViewerApi = (): ViewerApi => {
-  const api = (window as WailsWindow).go?.main?.ViewerApp;
-  if (!api) {
-    throw new Error('Viewer backend is unavailable');
-  }
-  return api;
-};
 
 const toError = (err: unknown, fallback: string): Error => {
   if (err instanceof Error && err.message) {
@@ -49,16 +26,9 @@ const toError = (err: unknown, fallback: string): Error => {
   return new Error(fallback);
 };
 
-const call = async <T>(name: string, fn: (() => Promise<T> | undefined) | undefined, fallbackMessage: string): Promise<T> => {
-  if (!fn) {
-    throw new Error(`${name} is not available in backend`);
-  }
+const call = async <T>(fn: () => Promise<T>, fallbackMessage: string): Promise<T> => {
   try {
-    const result = fn();
-    if (!result) {
-      throw new Error(`${name} is not available in backend`);
-    }
-    return await result;
+    return await fn();
   } catch (err) {
     throw toError(err, fallbackMessage);
   }
@@ -66,70 +36,60 @@ const call = async <T>(name: string, fn: (() => Promise<T> | undefined) | undefi
 
 export function createInspectBindings(): InspectBindings {
   return {
-    RefreshWindows: async (req) => {
-      const api = getViewerApi();
-      const response = await call('RefreshWindows', () => api.RefreshWindows?.(req), 'Failed to refresh windows');
-      return { windows: Array.isArray(response?.windows) ? (response.windows as any[]) : [] };
+    RefreshWindows: async (req: inspect.RefreshWindowsRequest) => {
+      const response = await call(() => RefreshWindows(req), 'Failed to refresh windows');
+      return { windows: Array.isArray(response?.windows) ? response.windows : [] };
     },
-    InspectWindow: async (req) => {
-      const api = getViewerApi();
-      const response = await call('InspectWindow', () => api.InspectWindow?.(req), 'Failed to inspect window');
-      return { window: response?.window as any, rootNodeID: response?.rootNodeID };
+    InspectWindow: async (req: inspect.InspectWindowRequest) => {
+      const response = await call(() => InspectWindow(req), 'Failed to inspect window');
+      return { window: response?.window, rootNodeID: response?.rootNodeID };
     },
-    GetTreeRoot: async (req) => {
-      const api = getViewerApi();
-      const response = await call('GetTreeRoot', () => api.GetTreeRoot?.(req), 'Failed to load tree root');
+    GetTreeRoot: async (req: inspect.GetTreeRootRequest) => {
+      const response = await call(() => GetTreeRoot(req), 'Failed to load tree root');
       if (!response?.root) {
         throw new Error('Tree root response was empty');
       }
-      return { root: response.root as any };
+      return { root: response.root };
     },
-    GetNodeChildren: async (req) => {
-      const api = getViewerApi();
-      const response = await call('GetNodeChildren', () => api.GetNodeChildren?.(req), 'Failed to load node children');
+    GetNodeChildren: async (req: inspect.GetNodeChildrenRequest) => {
+      const response = await call(() => GetNodeChildren(req), 'Failed to load node children');
       return {
         parentNodeID: response?.parentNodeID ?? req.nodeID,
-        children: Array.isArray(response?.children) ? (response.children as any[]) : []
+        children: Array.isArray(response?.children) ? response.children : []
       };
     },
-    SelectNode: async (req) => {
-      const api = getViewerApi();
-      const response = await call('SelectNode', () => api.SelectNode?.(req), 'Failed to select node');
+    SelectNode: async (req: inspect.SelectNodeRequest) => {
+      const response = await call(() => SelectNode(req), 'Failed to select node');
       if (!response?.selected) {
         throw new Error('Selected node response was empty');
       }
-      return { selected: response.selected as any };
+      return { selected: response.selected };
     },
-    GetNodeDetails: async (req) => {
-      const api = getViewerApi();
-      const response = await call('GetNodeDetails', () => api.GetNodeDetails?.(req), 'Failed to load node details');
+    GetNodeDetails: async (req: inspect.GetNodeDetailsRequest) => {
+      const response = await call(() => GetNodeDetails(req), 'Failed to load node details');
       return {
-        windowInfo: response?.windowInfo as any,
-        properties: Array.isArray(response?.properties) ? (response.properties as any[]) : [],
-        patterns: Array.isArray(response?.patterns) ? (response.patterns as any[]) : [],
+        windowInfo: response?.windowInfo,
+        properties: Array.isArray(response?.properties) ? response.properties : [],
+        patterns: Array.isArray(response?.patterns) ? response.patterns : [],
         statusText: response?.statusText,
         bestSelector: response?.bestSelector,
-        path: Array.isArray(response?.path) ? (response.path as any[]) : []
+        path: Array.isArray(response?.path) ? response.path : []
       };
     },
-    HighlightNode: async (req) => {
-      const api = getViewerApi();
-      const response = await call('HighlightNode', () => api.HighlightNode?.(req), 'Failed to highlight node');
+    HighlightNode: async (req: inspect.HighlightNodeRequest) => {
+      const response = await call(() => HighlightNode(req), 'Failed to highlight node');
       return { highlighted: !!response?.highlighted };
     },
-    ClearHighlight: async (req) => {
-      const api = getViewerApi();
-      const response = await call('ClearHighlight', () => api.ClearHighlight?.(req), 'Failed to clear highlight');
+    ClearHighlight: async (req: inspect.ClearHighlightRequest = {}) => {
+      const response = await call(() => ClearHighlight(req), 'Failed to clear highlight');
       return { cleared: !!response?.cleared };
     },
-    ToggleFollowCursor: async (req) => {
-      const api = getViewerApi();
-      const response = await call('ToggleFollowCursor', () => api.ToggleFollowCursor?.(req), 'Failed to toggle follow cursor');
+    ToggleFollowCursor: async (req: inspect.ToggleFollowCursorRequest) => {
+      const response = await call(() => ToggleFollowCursor(req), 'Failed to toggle follow cursor');
       return { enabled: !!response?.enabled };
     },
-    ActivateWindow: async (req) => {
-      const api = getViewerApi();
-      const response = await call('ActivateWindow', () => api.ActivateWindow?.(req), 'Failed to activate window');
+    ActivateWindow: async (req: inspect.ActivateWindowRequest) => {
+      const response = await call(() => ActivateWindow(req), 'Failed to activate window');
       return { activated: !!response?.activated };
     }
   };
