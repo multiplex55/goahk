@@ -46,3 +46,31 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+/cmd/goahk-uia-viewer/frontend/node_modules
+/cmd/goahk-uia-viewer/build
+/cmd/goahk-uia-viewer/frontend/src/wailsjs
+cmd/goahk-uia-viewer/frontend/tsconfig.tsbuildinfo
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/runtime/runtime.js
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/runtime/runtime.d.ts
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/runtime/package.json
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/go/models.ts
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/go/main/ViewerApp.js
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/go/main/ViewerApp.d.ts
+cmd/goahk-uia-viewer/frontend/package.json.md5
+cmd/goahk-uia-viewer/frontend/dist/index.html
+cmd/goahk-uia-viewer/frontend/dist/assets/index-Xw4Knr3c.css
+cmd/goahk-uia-viewer/frontend/dist/assets/index-DAJSyLnQ.js
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/runtime/runtime.js
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/runtime/runtime.d.ts
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/runtime/package.json
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/go/models.ts
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/go/main/ViewerApp.js
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/go/main/ViewerApp.d.ts
+cmd/goahk-uia-viewer/frontend/dist/index.html
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/runtime/runtime.js
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/runtime/runtime.d.ts
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/runtime/package.json
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/go/models.ts
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/go/main/ViewerApp.js
+cmd/goahk-uia-viewer/frontend/src/wailsjs/wailsjs/go/main/ViewerApp.d.ts
+cmd/goahk-uia-viewer/frontend/dist/index.html
