@@ -108,7 +108,7 @@ describe('inspectStore', () => {
     expect(inspectWindowArg).toEqual({ hwnd: 'w1' });
     expect('refresh' in inspectWindowArg).toBe(false);
     expect(bindings.GetTreeRoot).toHaveBeenCalledWith({ hwnd: 'w1', refresh: true });
-    expect(store.getState().treeNodes.map((node) => node.nodeID)).toContain('root-1');
+    expect(Object.keys(store.getState().nodesByID)).toContain('root-1');
     expect(store.getState().selectedNodeID).toBe('root-1');
     expect(store.getState().selectedPath.map((node) => node.nodeID)).toEqual(['root-1', 'root-1']);
     expect(store.getState().properties[0].value).toBe('root-1');
@@ -136,9 +136,63 @@ describe('inspectStore', () => {
 
     await store.expandNode('root-1');
     await store.expandNode('root-1');
+    await store.expandNode('root-1');
 
     expect(bindings.GetNodeChildren).toHaveBeenCalledTimes(1);
-    expect(store.getState().treeNodes.map((node) => node.nodeID)).toContain('child-1');
+    expect(store.getState().childrenByParentID['root-1']).toEqual(['child-1']);
+  });
+
+  it('repeated expand/collapse cycles fetch children only once per parent', async () => {
+    const bindings = makeBindings();
+    const store = createInspectStore(bindings);
+
+    await store.expandNode('root-1'); // expand + fetch
+    await store.expandNode('root-1'); // collapse
+    await store.expandNode('root-1'); // expand from cache
+
+    expect(bindings.GetNodeChildren).toHaveBeenCalledTimes(1);
+    expect(store.getState().expandedByID['root-1']).toBe(true);
+    expect(store.getState().childrenLoadedByID['root-1']).toBe(true);
+  });
+
+  it('refresh invalidates only requested branch cache and preserves sibling cache', async () => {
+    const bindings = makeBindings({
+      GetNodeChildren: vi
+        .fn()
+        .mockResolvedValueOnce({
+          parentNodeID: 'root-1',
+          children: [
+            { nodeID: 'child-a', name: 'Child A', hasChildren: true },
+            { nodeID: 'child-b', name: 'Child B', hasChildren: true }
+          ]
+        })
+        .mockResolvedValueOnce({
+          parentNodeID: 'child-a',
+          children: [{ nodeID: 'leaf-a1', name: 'Leaf A1', hasChildren: false }]
+        })
+        .mockResolvedValueOnce({
+          parentNodeID: 'child-b',
+          children: [{ nodeID: 'leaf-b1', name: 'Leaf B1', hasChildren: false }]
+        })
+        .mockResolvedValueOnce({
+          parentNodeID: 'child-a',
+          children: [{ nodeID: 'leaf-a2', name: 'Leaf A2', hasChildren: false }]
+        })
+    });
+    const store = createInspectStore(bindings);
+
+    await store.expandNode('root-1');
+    await store.expandNode('child-a');
+    await store.expandNode('child-b');
+    await store.expandNode('child-a', { refresh: true });
+    await store.expandNode('child-b'); // collapse
+    await store.expandNode('child-b'); // expand from cache
+
+    expect(bindings.GetNodeChildren).toHaveBeenCalledTimes(4);
+    expect(store.getState().childrenByParentID['child-a']).toEqual(['leaf-a2']);
+    expect(store.getState().childrenByParentID['child-b']).toEqual(['leaf-b1']);
+    expect(store.getState().childrenLoadedByID['child-a']).toBe(true);
+    expect(store.getState().childrenLoadedByID['child-b']).toBe(true);
   });
 
   it('debounces filter input so rapid typing performs one refresh', async () => {
@@ -288,7 +342,8 @@ describe('inspectStore', () => {
     expect(store.getState().errorText).toBe(expectedError);
     expect(store.getState().selectedNodeID).toBe('');
     expect(store.getState().selectedPath).toEqual([]);
-    expect(store.getState().treeNodes).toEqual([]);
+    expect(store.getState().nodesByID).toEqual({});
+    expect(store.getState().childrenByParentID).toEqual({});
     expect(store.getState().properties).toEqual([]);
     expect(store.getState().patterns).toEqual([]);
     expect(store.getState().selectorText).toBe('');

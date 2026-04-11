@@ -46,7 +46,10 @@ export type InspectStoreState = {
   selectedWindowID: string;
   selectedNodeID: string;
   selectedPath: InspectTreeNode[];
-  treeNodes: InspectTreeNode[];
+  nodesByID: Record<string, InspectTreeNode>;
+  childrenByParentID: Record<string, string[]>;
+  expandedByID: Record<string, boolean>;
+  childrenLoadedByID: Record<string, boolean>;
   properties: InspectProperty[];
   patterns: InspectPattern[];
   statusText: string;
@@ -113,7 +116,7 @@ export type InspectStore = {
   refreshWindows: () => Promise<void>;
   selectWindow: (windowID: string) => Promise<void>;
   selectNode: (nodeID: string) => Promise<void>;
-  expandNode: (nodeID: string) => Promise<void>;
+  expandNode: (nodeID: string, opts?: { refresh?: boolean }) => Promise<void>;
   applyBridgeEvent: (event: InspectBridgeEvent) => void;
   selectNextWindow: () => Promise<void>;
   selectPreviousWindow: () => Promise<void>;
@@ -130,6 +133,7 @@ export function createInspectStore(
     cancel?: (timer: ReturnType<typeof setTimeout>) => void;
   }
 ): InspectStore {
+  const ROOT_PARENT_ID = '__root__';
   const debounceMs = opts?.debounceMs ?? 200;
   const followCursorDebounceMs = opts?.followCursorDebounceMs ?? 80;
   const schedule = opts?.schedule ?? ((cb, delay) => setTimeout(cb, delay));
@@ -140,7 +144,10 @@ export function createInspectStore(
     selectedWindowID: '',
     selectedNodeID: '',
     selectedPath: [],
-    treeNodes: [],
+    nodesByID: {},
+    childrenByParentID: {},
+    expandedByID: {},
+    childrenLoadedByID: {},
     properties: [],
     patterns: [],
     statusText: 'Ready',
@@ -166,7 +173,6 @@ export function createInspectStore(
   let windowSelectionToken = 0;
   let nodeSelectionToken = 0;
   let lastAppliedBridgeEventID = 0;
-  const childrenLoaded = new Set<string>();
   const listeners = new Set<(nextState: InspectStoreState) => void>();
 
   const setState = (patch: Partial<InspectStoreState>) => {
@@ -175,17 +181,57 @@ export function createInspectStore(
   };
 
   const upsertNode = (node: InspectTreeNode) => {
-    const idx = state.treeNodes.findIndex((existing) => existing.nodeID === node.nodeID);
-    if (idx === -1) {
-      state = { ...state, treeNodes: [...state.treeNodes, node] };
-      listeners.forEach((listener) => listener(state));
-      return;
+    setState({ nodesByID: { ...state.nodesByID, [node.nodeID]: { ...state.nodesByID[node.nodeID], ...node } } });
+  };
+
+  const getDescendantIDs = (parentID: string): string[] => {
+    const descendants: string[] = [];
+    const stack = [...(state.childrenByParentID[parentID] ?? [])];
+    while (stack.length) {
+      const current = stack.pop()!;
+      descendants.push(current);
+      stack.push(...(state.childrenByParentID[current] ?? []));
+    }
+    return descendants;
+  };
+
+  const invalidateBranchCache = (parentID: string) => {
+    const descendants = getDescendantIDs(parentID);
+    const nextNodesByID = { ...state.nodesByID };
+    const nextChildrenByParentID = { ...state.childrenByParentID };
+    const nextChildrenLoadedByID = { ...state.childrenLoadedByID };
+    const nextExpandedByID = { ...state.expandedByID };
+
+    for (const descendantID of descendants) {
+      delete nextNodesByID[descendantID];
+      delete nextChildrenByParentID[descendantID];
+      delete nextChildrenLoadedByID[descendantID];
+      nextExpandedByID[descendantID] = false;
     }
 
-    const next = [...state.treeNodes];
-    next[idx] = { ...next[idx], ...node };
-    state = { ...state, treeNodes: next };
-    listeners.forEach((listener) => listener(state));
+    delete nextChildrenByParentID[parentID];
+    nextChildrenLoadedByID[parentID] = false;
+
+    setState({
+      nodesByID: nextNodesByID,
+      childrenByParentID: nextChildrenByParentID,
+      childrenLoadedByID: nextChildrenLoadedByID,
+      expandedByID: nextExpandedByID
+    });
+  };
+
+  const getVisibleNodeIDs = (): string[] => {
+    const ordered: string[] = [];
+    const walk = (parentID: string) => {
+      for (const childID of state.childrenByParentID[parentID] ?? []) {
+        ordered.push(childID);
+        if (state.expandedByID[childID]) {
+          walk(childID);
+        }
+      }
+    };
+    walk(ROOT_PARENT_ID);
+    return ordered;
   };
 
   const applyFollowCursorEvent = async (event: FollowCursorBridgeEvent) => {
@@ -283,7 +329,10 @@ export function createInspectStore(
       }
 
       const rootNode = rootResp.root;
-      const seededTreeNodes: InspectTreeNode[] = [rootNode];
+      const seededNodesByID: Record<string, InspectTreeNode> = { [rootNode.nodeID]: rootNode };
+      const seededChildrenByParentID: Record<string, string[]> = { [ROOT_PARENT_ID]: [rootNode.nodeID] };
+      const seededChildrenLoadedByID: Record<string, boolean> = {};
+      const seededExpandedByID: Record<string, boolean> = { [rootNode.nodeID]: false };
 
       const selectedNodeID = inspectResp.rootNodeID || rootNode.nodeID;
       const seededPath: InspectTreeNode[] = [rootNode];
@@ -307,7 +356,10 @@ export function createInspectStore(
       setState({
         selectedNodeID,
         loadingWindow: false,
-        treeNodes: seededTreeNodes,
+        nodesByID: seededNodesByID,
+        childrenByParentID: seededChildrenByParentID,
+        childrenLoadedByID: seededChildrenLoadedByID,
+        expandedByID: seededExpandedByID,
         properties,
         patterns,
         selectorText: details.bestSelector ?? '',
@@ -322,7 +374,10 @@ export function createInspectStore(
       setState({
         loadingWindow: false,
         errorText: typeof err === 'object' && err !== null && 'errorText' in err ? String((err as { errorText: string }).errorText) : (err instanceof Error ? err.message : String(err)),
-        treeNodes: [],
+        nodesByID: {},
+        childrenByParentID: {},
+        expandedByID: {},
+        childrenLoadedByID: {},
         selectedNodeID: '',
         selectedPath: [],
         properties: [],
@@ -374,8 +429,20 @@ export function createInspectStore(
     }
   };
 
-  const expandNode = async (nodeID: string) => {
-    if (childrenLoaded.has(nodeID) || state.loadingChildren[nodeID]) {
+  const expandNode = async (nodeID: string, opts?: { refresh?: boolean }) => {
+    const refresh = opts?.refresh ?? false;
+    const isExpanded = !!state.expandedByID[nodeID];
+    if (isExpanded && !refresh) {
+      setState({ expandedByID: { ...state.expandedByID, [nodeID]: false } });
+      return;
+    }
+
+    if (refresh) {
+      invalidateBranchCache(nodeID);
+    }
+
+    setState({ expandedByID: { ...state.expandedByID, [nodeID]: true } });
+    if (state.childrenLoadedByID[nodeID] || state.loadingChildren[nodeID]) {
       return;
     }
 
@@ -386,20 +453,17 @@ export function createInspectStore(
       if (resp.parentNodeID !== nodeID) {
         return;
       }
-
-      const merged = [...state.treeNodes];
+      const nextNodesByID = { ...state.nodesByID };
+      const childIDs: string[] = [];
       for (const child of resp.children) {
-        const idx = merged.findIndex((existing) => existing.nodeID === child.nodeID);
-        if (idx === -1) {
-          merged.push({ ...child, parentNodeID: nodeID });
-        } else {
-          merged[idx] = { ...merged[idx], ...child, parentNodeID: nodeID };
-        }
+        const childID = child.nodeID;
+        childIDs.push(childID);
+        nextNodesByID[childID] = { ...nextNodesByID[childID], ...child, parentNodeID: nodeID };
       }
-
-      childrenLoaded.add(nodeID);
       setState({
-        treeNodes: merged,
+        nodesByID: nextNodesByID,
+        childrenByParentID: { ...state.childrenByParentID, [nodeID]: childIDs },
+        childrenLoadedByID: { ...state.childrenLoadedByID, [nodeID]: true },
         loadingChildren: { ...state.loadingChildren, [nodeID]: false },
         statusText: `Expanded ${nodeID}`
       });
@@ -486,14 +550,15 @@ export function createInspectStore(
   };
 
   const selectTreeNodeByDelta = async (delta: number) => {
-    if (!state.treeNodes.length) {
+    const visibleNodeIDs = getVisibleNodeIDs();
+    if (!visibleNodeIDs.length) {
       return;
     }
-    const currentIndex = Math.max(0, state.treeNodes.findIndex((node) => node.nodeID === state.selectedNodeID));
-    const nextIndex = Math.min(state.treeNodes.length - 1, Math.max(0, currentIndex + delta));
-    const nextNode = state.treeNodes[nextIndex];
-    if (nextNode && nextNode.nodeID !== state.selectedNodeID) {
-      await selectNode(nextNode.nodeID);
+    const currentIndex = Math.max(0, visibleNodeIDs.findIndex((nodeID) => nodeID === state.selectedNodeID));
+    const nextIndex = Math.min(visibleNodeIDs.length - 1, Math.max(0, currentIndex + delta));
+    const nextNodeID = visibleNodeIDs[nextIndex];
+    if (nextNodeID && nextNodeID !== state.selectedNodeID) {
+      await selectNode(nextNodeID);
     }
   };
 

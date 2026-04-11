@@ -34,7 +34,6 @@ function subscribeFollowCursor(store: InspectStore): (() => void) | undefined {
 export default function App() {
   const store = useMemo(() => createInspectStore(createInspectBindings()), []);
   const [snapshot, setSnapshot] = useState(store.getState());
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const leftSplitter = useSplitter({
     storageKey: 'goahk:uiviewer:left-width',
     defaultSizePx: 300,
@@ -112,23 +111,17 @@ export default function App() {
         }
         right={
           <TreePane
-            rootNodes={snapshot.treeNodes.map((node) => ({ id: node.nodeID, name: node.name ?? node.nodeID, hasChildren: node.hasChildren }))}
-            expandedNodeIds={expandedNodes}
+            nodesByID={Object.fromEntries(
+              Object.entries(snapshot.nodesByID).map(([id, node]) => [id, { id, name: node.name ?? node.nodeID, hasChildren: node.hasChildren }])
+            )}
+            childrenByParentID={snapshot.childrenByParentID}
+            expandedByID={snapshot.expandedByID}
             selectedNodeId={snapshot.selectedNodeID}
             onSelectNode={(id) => {
               void store.selectNode(id);
             }}
             onToggleNode={(id) => {
-              setExpandedNodes((current) => {
-                const next = new Set(current);
-                if (next.has(id)) {
-                  next.delete(id);
-                } else {
-                  next.add(id);
-                  void store.expandNode(id);
-                }
-                return next;
-              });
+              void store.expandNode(id);
             }}
           />
         }
