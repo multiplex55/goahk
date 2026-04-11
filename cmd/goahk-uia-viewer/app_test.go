@@ -16,6 +16,7 @@ type fakeInspectService struct {
 	underCursorValues []inspect.TreeNodeDTO
 	inspectWindowReqs []inspect.InspectWindowRequest
 	inspectWindowResp inspect.InspectWindowResponse
+	clearCalls        int
 }
 
 func (f *fakeInspectService) ListWindows(context.Context, inspect.ListWindowsRequest) (inspect.ListWindowsResponse, error) {
@@ -59,6 +60,9 @@ func (f *fakeInspectService) HighlightNode(context.Context, inspect.HighlightNod
 	return inspect.HighlightNodeResponse{}, nil
 }
 func (f *fakeInspectService) ClearHighlight(context.Context, inspect.ClearHighlightRequest) (inspect.ClearHighlightResponse, error) {
+	f.mu.Lock()
+	f.clearCalls++
+	f.mu.Unlock()
 	return inspect.ClearHighlightResponse{}, nil
 }
 func (f *fakeInspectService) CopyBestSelector(context.Context, inspect.CopyBestSelectorRequest) (inspect.CopyBestSelectorResponse, error) {
@@ -203,6 +207,9 @@ func TestViewerApp_OnShutdown_DisablesFollowCursorAndEmitter(t *testing.T) {
 
 	if app.emitEvent != nil {
 		t.Fatalf("expected emitter to be cleared on shutdown")
+	}
+	if svc.clearCalls == 0 {
+		t.Fatalf("expected highlight to be cleared during shutdown")
 	}
 
 	resp, err := app.ToggleFollowCursor(context.Background(), inspect.ToggleFollowCursorRequest{Enabled: false})

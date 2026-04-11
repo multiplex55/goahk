@@ -83,6 +83,53 @@ func TestHighlightController_Lifecycle(t *testing.T) {
 		}
 	})
 
+	t.Run("clear before rehighlighting a different node", func(t *testing.T) {
+		overlay := &mockOverlay{screen: &Rect{Left: 0, Top: 0, Width: 500, Height: 500}}
+		controller := newHighlightController(overlay)
+
+		_, _ = controller.ShowNode(context.Background(), "node:1", InspectElement{BoundingRect: &Rect{Left: 10, Top: 20, Width: 100, Height: 50}}, "0x1")
+		_, err := controller.ShowNode(context.Background(), "node:2", InspectElement{BoundingRect: &Rect{Left: 20, Top: 30, Width: 80, Height: 40}}, "0x1")
+		if err != nil {
+			t.Fatalf("ShowNode error: %v", err)
+		}
+		if overlay.clearCalls != 1 {
+			t.Fatalf("expected clear-before-rehighlight, got %d clear calls", overlay.clearCalls)
+		}
+		if len(overlay.showCalls) != 2 {
+			t.Fatalf("expected two show calls, got %d", len(overlay.showCalls))
+		}
+	})
+
+	t.Run("selection change to no selectable rect clears highlight", func(t *testing.T) {
+		overlay := &mockOverlay{}
+		controller := newHighlightController(overlay)
+		_, _ = controller.ShowNode(context.Background(), "node:1", InspectElement{BoundingRect: &Rect{Left: 10, Top: 20, Width: 100, Height: 50}}, "0x1")
+
+		err := controller.ClearOnDeselection(context.Background(), InspectElement{})
+		if err != nil {
+			t.Fatalf("ClearOnDeselection error: %v", err)
+		}
+		if overlay.clearCalls == 0 {
+			t.Fatalf("expected clear call on deselection")
+		}
+	})
+
+	t.Run("refresh-triggered clear is idempotent", func(t *testing.T) {
+		overlay := &mockOverlay{}
+		controller := newHighlightController(overlay)
+		_, _ = controller.ShowNode(context.Background(), "node:1", InspectElement{BoundingRect: &Rect{Left: 10, Top: 20, Width: 100, Height: 50}}, "0x1")
+
+		if err := controller.Clear(context.Background()); err != nil {
+			t.Fatalf("first Clear error: %v", err)
+		}
+		if err := controller.Clear(context.Background()); err != nil {
+			t.Fatalf("second Clear error: %v", err)
+		}
+		if overlay.clearCalls != 2 {
+			t.Fatalf("expected two clear calls, got %d", overlay.clearCalls)
+		}
+	})
+
 	t.Run("ignore invalid bounds safely", func(t *testing.T) {
 		overlay := &mockOverlay{screen: &Rect{Left: 0, Top: 0, Width: 100, Height: 100}}
 		controller := newHighlightController(overlay)
@@ -100,6 +147,21 @@ func TestHighlightController_Lifecycle(t *testing.T) {
 			t.Fatalf("expected clear to be called for invalid bounds")
 		}
 	})
+}
+
+func TestHighlightController_NoopOverlaySafety(t *testing.T) {
+	controller := newHighlightController(nil)
+
+	highlighted, err := controller.ShowNode(context.Background(), "node:1", InspectElement{BoundingRect: &Rect{Left: 1, Top: 1, Width: 10, Height: 10}}, "0x1")
+	if err != nil {
+		t.Fatalf("ShowNode with noop overlay error: %v", err)
+	}
+	if !highlighted {
+		t.Fatalf("expected noop overlay path to report highlighted")
+	}
+	if err := controller.Clear(context.Background()); err != nil {
+		t.Fatalf("Clear with noop overlay error: %v", err)
+	}
 }
 
 func TestHighlightController_ConcurrencySafety(t *testing.T) {
