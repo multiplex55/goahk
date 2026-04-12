@@ -77,6 +77,8 @@ export type InspectStoreState = {
   nodeDetails?: NodeDetailsResponse;
   filter: string;
   followCursor: boolean;
+  followCursorPaused: boolean;
+  followCursorLocked: boolean;
   followCursorBusy: boolean;
   visibleOnly: boolean;
   titleOnly: boolean;
@@ -86,6 +88,14 @@ export type InspectStoreState = {
   loadingNode: boolean;
   loadingChildren: Record<string, boolean>;
   errorText: string;
+  diagnostics?: {
+    stage?: string;
+    errorCode?: string;
+    hresult?: string;
+    message?: string;
+    fallbackMode?: 'UIA_TREE' | 'WINDOW_TREE';
+    privilegeHint?: string;
+  };
 };
 
 const formatStageFailure = (stage: string, err: unknown) => {
@@ -111,6 +121,7 @@ type NodeDetailsResponse = {
     selectorSuggestions?: SelectorCandidate[];
   };
   selectorOptions?: SelectorResolution;
+  accPath?: string;
 };
 
 export type InspectBindings = {
@@ -123,6 +134,7 @@ export type InspectBindings = {
   }): Promise<{
     root: InspectTreeNode;
     state?: { activeMode?: 'UIA_TREE' | 'WINDOW_TREE'; fallbackUsed?: boolean; failureStage?: string; guidanceText?: string };
+    diagnostics?: InspectStoreState['diagnostics'];
   }>;
   GetNodeChildren(req: { nodeID: string }): Promise<{ parentNodeID: string; children: InspectTreeNode[] }>;
   SelectNode(req: { nodeID: string }): Promise<{ selected: InspectTreeNode }>;
@@ -142,7 +154,19 @@ export type InspectBindings = {
   HighlightNode(req: { nodeID: string }): Promise<{ highlighted: boolean }>;
   ClearHighlight?(req?: Record<string, never>): Promise<{ cleared: boolean }>;
   ToggleFollowCursor?(req: { enabled: boolean }): Promise<{ enabled: boolean }>;
+  PauseFollowCursor?(): Promise<{ paused: boolean }>;
+  ResumeFollowCursor?(): Promise<{ paused: boolean }>;
+  LockFollowCursor?(req: { nodeID?: string }): Promise<{ locked: boolean; nodeID?: string }>;
+  UnlockFollowCursor?(): Promise<{ locked: boolean }>;
   ActivateWindow?(req: { hwnd: string }): Promise<{ activated: boolean }>;
+  RefreshTreeRoot?(req: { hwnd: string; mode?: 'UIA_TREE' | 'WINDOW_TREE' }): Promise<{
+    root: InspectTreeNode;
+    state?: { activeMode?: 'UIA_TREE' | 'WINDOW_TREE'; fallbackUsed?: boolean; failureStage?: string; guidanceText?: string };
+    diagnostics?: InspectStoreState['diagnostics'];
+  }>;
+  RefreshNodeChildren?(req: { nodeID: string }): Promise<{ parentNodeID: string; children: InspectTreeNode[] }>;
+  RefreshNodeDetails?(req: { nodeID: string }): Promise<{ details: NodeDetailsResponse }>;
+  GetDiagnostics?(): Promise<{ diagnostics?: InspectStoreState['diagnostics'] }>;
 };
 
 export type InspectStore = {
@@ -151,10 +175,17 @@ export type InspectStore = {
   setFilterInput: (value: string) => void;
   setInspectionMode: (value: 'UIA_TREE' | 'WINDOW_TREE') => void;
   setFollowCursor: (value: boolean) => Promise<void>;
+  pauseFollowCursor: () => Promise<void>;
+  resumeFollowCursor: () => Promise<void>;
+  lockFollowCursor: () => Promise<void>;
+  unlockFollowCursor: () => Promise<void>;
   setVisibleOnly: (value: boolean) => void;
   setTitleOnly: (value: boolean) => void;
   setActivateOnSelect: (value: boolean) => void;
   refreshWindows: () => Promise<void>;
+  refreshSelectedRoot: () => Promise<void>;
+  refreshSelectedNodeChildren: () => Promise<void>;
+  refreshSelectedNodeDetails: () => Promise<void>;
   selectWindow: (windowID: string) => Promise<void>;
   selectNode: (nodeID: string) => Promise<void>;
   expandNode: (nodeID: string, opts?: { refresh?: boolean }) => Promise<void>;
@@ -200,6 +231,8 @@ export function createInspectStore(
     nodeDetails: undefined,
     filter: '',
     followCursor: false,
+    followCursorPaused: false,
+    followCursorLocked: false,
     followCursorBusy: false,
     visibleOnly: true,
     titleOnly: false,
@@ -208,7 +241,8 @@ export function createInspectStore(
     loadingWindow: false,
     loadingNode: false,
     loadingChildren: {},
-    errorText: ''
+    errorText: '',
+    diagnostics: undefined
   };
 
   let pendingFilterTimer: ReturnType<typeof setTimeout> | undefined;
@@ -366,6 +400,7 @@ export function createInspectStore(
       let rootResp: {
         root: InspectTreeNode;
         state?: { activeMode?: 'UIA_TREE' | 'WINDOW_TREE'; fallbackUsed?: boolean; failureStage?: string; guidanceText?: string };
+        diagnostics?: InspectStoreState['diagnostics'];
       };
       try {
         rootResp = await bindings.GetTreeRoot({ hwnd: windowID, refresh: true, mode: state.inspectionMode });
@@ -401,9 +436,19 @@ export function createInspectStore(
         return;
       }
 
+      const normalizedFallbackState = rootResp.state
+        ? {
+            activeMode: rootResp.state.activeMode ?? state.inspectionMode,
+            fallbackUsed: rootResp.state.fallbackUsed ?? false,
+            failureStage: rootResp.state.failureStage,
+            guidanceText: rootResp.state.guidanceText
+          }
+        : undefined;
+
       setState({
         inspectionMode: rootResp.state?.activeMode ?? state.inspectionMode,
-        fallbackState: rootResp.state,
+        fallbackState: normalizedFallbackState,
+        diagnostics: rootResp.diagnostics,
         selectedNodeID,
         loadingWindow: false,
         nodesByID: seededNodesByID,
@@ -435,6 +480,7 @@ export function createInspectStore(
         selectorText: '',
         fallbackState: undefined,
         nodeDetails: undefined,
+        diagnostics: undefined,
         statusText: typeof err === 'object' && err !== null && 'statusText' in err ? String((err as { statusText: string }).statusText) : 'Failed to load window'
       });
     }
@@ -622,7 +668,7 @@ export function createInspectStore(
     try {
       if (bindings.ToggleFollowCursor) {
         const resp = await bindings.ToggleFollowCursor({ enabled: value });
-        setState({ followCursor: resp.enabled, followCursorBusy: false, statusText: resp.enabled ? 'Follow cursor enabled' : 'Follow cursor disabled' });
+        setState({ followCursor: resp.enabled, followCursorBusy: false, followCursorPaused: false, statusText: resp.enabled ? 'Follow cursor enabled' : 'Follow cursor disabled' });
       } else {
         setState({ followCursor: value, followCursorBusy: false });
       }
@@ -633,6 +679,79 @@ export function createInspectStore(
         statusText: 'Failed to toggle follow cursor'
       });
     }
+  };
+
+  const pauseFollowCursor = async () => {
+    if (!bindings.PauseFollowCursor) return;
+    const resp = await bindings.PauseFollowCursor();
+    setState({ followCursorPaused: !!resp.paused, statusText: 'Follow cursor paused' });
+  };
+
+  const resumeFollowCursor = async () => {
+    if (!bindings.ResumeFollowCursor) return;
+    const resp = await bindings.ResumeFollowCursor();
+    setState({ followCursorPaused: !!resp.paused, statusText: 'Follow cursor resumed' });
+  };
+
+  const lockFollowCursor = async () => {
+    if (!bindings.LockFollowCursor) return;
+    const resp = await bindings.LockFollowCursor({ nodeID: state.selectedNodeID || undefined });
+    setState({ followCursorLocked: !!resp.locked, statusText: resp.locked ? 'Follow cursor locked' : state.statusText });
+  };
+
+  const unlockFollowCursor = async () => {
+    if (!bindings.UnlockFollowCursor) return;
+    const resp = await bindings.UnlockFollowCursor();
+    setState({ followCursorLocked: !!resp.locked, statusText: 'Follow cursor unlocked' });
+  };
+
+  const refreshSelectedRoot = async () => {
+    if (!state.selectedWindowID) return;
+    if (!bindings.RefreshTreeRoot) {
+      await selectWindow(state.selectedWindowID);
+      return;
+    }
+    const resp = await bindings.RefreshTreeRoot({ hwnd: state.selectedWindowID, mode: state.inspectionMode });
+    const root = resp.root;
+    setState({
+      nodesByID: { [root.nodeID]: root },
+      childrenByParentID: { [ROOT_PARENT_ID]: [root.nodeID] },
+      childrenLoadedByID: {},
+      expandedByID: { [root.nodeID]: false },
+      selectedNodeID: root.nodeID,
+      diagnostics: resp.diagnostics,
+      statusText: 'Refreshed selected root'
+    });
+    await selectNode(root.nodeID);
+  };
+
+  const refreshSelectedNodeChildren = async () => {
+    const nodeID = state.selectedNodeID;
+    if (!nodeID) return;
+    if (bindings.RefreshNodeChildren) {
+      const resp = await bindings.RefreshNodeChildren({ nodeID });
+      const childIDs: string[] = [];
+      const nextNodesByID = { ...state.nodesByID };
+      for (const child of resp.children) {
+        childIDs.push(child.nodeID);
+        nextNodesByID[child.nodeID] = child;
+      }
+      setState({ nodesByID: nextNodesByID, childrenByParentID: { ...state.childrenByParentID, [nodeID]: childIDs }, childrenLoadedByID: { ...state.childrenLoadedByID, [nodeID]: true }, statusText: 'Refreshed node children' });
+      return;
+    }
+    await expandNode(nodeID, { refresh: true });
+  };
+
+  const refreshSelectedNodeDetails = async () => {
+    const nodeID = state.selectedNodeID;
+    if (!nodeID) return;
+    if (bindings.RefreshNodeDetails) {
+      const resp = await bindings.RefreshNodeDetails({ nodeID });
+      const details = resp.details;
+      setState({ properties: details.properties ?? [], patterns: details.patterns ?? [], nodeDetails: details, selectorText: details.bestSelector ?? state.selectorText, statusText: 'Refreshed node details' });
+      return;
+    }
+    await refreshNodeDetails(nodeID);
   };
 
   const applyBridgeEvent = (event: InspectBridgeEvent) => {
@@ -701,6 +820,9 @@ export function createInspectStore(
       };
     },
     refreshWindows,
+    refreshSelectedRoot,
+    refreshSelectedNodeChildren,
+    refreshSelectedNodeDetails,
     selectWindow,
     selectNode,
     expandNode,
@@ -709,6 +831,10 @@ export function createInspectStore(
     setFilterInput,
     setInspectionMode: (value) => setState({ inspectionMode: value, fallbackState: undefined }),
     setFollowCursor,
+    pauseFollowCursor,
+    resumeFollowCursor,
+    lockFollowCursor,
+    unlockFollowCursor,
     setVisibleOnly: (value) => setState({ visibleOnly: value }),
     setTitleOnly: (value) => setState({ titleOnly: value }),
     setActivateOnSelect: (value) => setState({ activateOnSelect: value }),

@@ -60,7 +60,13 @@ export default function WindowInfoPanel({
       <h2>Window Info</h2>
       <p className="window-info">{windowTitle}</p>
       {propertiesAndPatterns}
-      <SelectorPanel selector={details?.bestSelector ?? ''} selectorPath={details?.selectorPath} selectorOptions={details?.selectorOptions} onNotify={onNotify} />
+      <SelectorPanel
+        selector={details?.bestSelector ?? ''}
+        selectorPath={details?.selectorPath}
+        selectorOptions={details?.selectorOptions}
+        accPath={details?.accPath}
+        onNotify={onNotify}
+      />
     </section>
   );
 }

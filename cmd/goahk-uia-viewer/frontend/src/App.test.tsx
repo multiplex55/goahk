@@ -20,6 +20,8 @@ const mockStore = {
     selectorText: '',
     filter: '',
     followCursor: false,
+    followCursorPaused: false,
+    followCursorLocked: false,
     followCursorBusy: false,
     visibleOnly: true,
     titleOnly: false,
@@ -28,8 +30,9 @@ const mockStore = {
     loadingWindow: false,
     loadingNode: false,
     loadingChildren: {},
-    errorText: ''
-  })),
+    errorText: '',
+    diagnostics: undefined
+  }) as any),
   subscribe: vi.fn(() => vi.fn()),
   refreshWindows: vi.fn().mockResolvedValue(undefined),
   selectWindow: vi.fn().mockResolvedValue(undefined),
@@ -40,9 +43,16 @@ const mockStore = {
   setFilterInput: vi.fn(),
   setInspectionMode: vi.fn(),
   setFollowCursor: vi.fn().mockResolvedValue(undefined),
+  pauseFollowCursor: vi.fn().mockResolvedValue(undefined),
+  resumeFollowCursor: vi.fn().mockResolvedValue(undefined),
+  lockFollowCursor: vi.fn().mockResolvedValue(undefined),
+  unlockFollowCursor: vi.fn().mockResolvedValue(undefined),
   setVisibleOnly: vi.fn(),
   setTitleOnly: vi.fn(),
   setActivateOnSelect: vi.fn(),
+  refreshSelectedRoot: vi.fn().mockResolvedValue(undefined),
+  refreshSelectedNodeChildren: vi.fn().mockResolvedValue(undefined),
+  refreshSelectedNodeDetails: vi.fn().mockResolvedValue(undefined),
   applyBridgeEvent: vi.fn(),
   selectNextWindow: vi.fn().mockResolvedValue(undefined),
   selectPreviousWindow: vi.fn().mockResolvedValue(undefined),
@@ -82,7 +92,7 @@ describe('App boot flow', () => {
         failureStage: 'ResolveWindowRoot',
         guidanceText: 'UIA tree is unavailable.'
       }
-    });
+    } as any);
 
     render(<App />);
     expect(screen.getByRole('alert')).toHaveTextContent('UIA tree is unavailable.');

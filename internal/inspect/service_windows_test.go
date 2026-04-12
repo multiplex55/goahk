@@ -521,3 +521,93 @@ func TestWindowsProvider_InvokePatternDispatchesToAdapterActions(t *testing.T) {
 		t.Fatalf("expected setValue payload forwarded, got %q", deps.lastSetValue)
 	}
 }
+
+func TestWindowsProvider_FollowCursorPauseAndLock(t *testing.T) {
+	deps := &fakeAdapter{
+		root:        &uiaElement{Ref: "root", RuntimeID: "1", Name: "Root"},
+		underCursor: &uiaElement{Ref: "cursor", RuntimeID: "2", Name: "Cursor"},
+	}
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	if _, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"}); err != nil {
+		t.Fatalf("setup root: %v", err)
+	}
+	if _, err := provider.ToggleFollowCursor(context.Background(), ToggleFollowCursorRequest{Enabled: true}); err != nil {
+		t.Fatalf("enable follow: %v", err)
+	}
+	if _, err := provider.PauseFollowCursor(context.Background(), PauseFollowCursorRequest{}); err != nil {
+		t.Fatalf("pause follow: %v", err)
+	}
+	pausedResp, err := provider.GetElementUnderCursor(context.Background(), GetElementUnderCursorRequest{})
+	if err != nil {
+		t.Fatalf("under cursor when paused: %v", err)
+	}
+	if pausedResp.Element.NodeID != "" {
+		t.Fatalf("expected empty element while paused, got %+v", pausedResp.Element)
+	}
+	if _, err := provider.ResumeFollowCursor(context.Background(), ResumeFollowCursorRequest{}); err != nil {
+		t.Fatalf("resume follow: %v", err)
+	}
+	locked, err := provider.LockFollowCursor(context.Background(), LockFollowCursorRequest{})
+	if err != nil {
+		t.Fatalf("lock follow: %v", err)
+	}
+	if !locked.Locked || locked.NodeID == "" {
+		t.Fatalf("expected lock response with node id, got %+v", locked)
+	}
+	first, _ := provider.GetElementUnderCursor(context.Background(), GetElementUnderCursorRequest{})
+	second, _ := provider.GetElementUnderCursor(context.Background(), GetElementUnderCursorRequest{})
+	if first.Element.NodeID == "" || first.Element.NodeID != second.Element.NodeID {
+		t.Fatalf("expected locked node to stay stable: first=%+v second=%+v", first.Element, second.Element)
+	}
+	if _, err := provider.UnlockFollowCursor(context.Background(), UnlockFollowCursorRequest{}); err != nil {
+		t.Fatalf("unlock follow: %v", err)
+	}
+}
+
+func TestWindowsProvider_RefreshGranularityTargetsOnlyRequestedScope(t *testing.T) {
+	deps := &fakeAdapter{
+		root: &uiaElement{Ref: "root", RuntimeID: "1", Name: "Root"},
+		kids: map[string][]*uiaElement{
+			"root": {{Ref: "child", RuntimeID: "2", ParentRef: "root", Name: "Child"}},
+		},
+	}
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"})
+	if err != nil {
+		t.Fatalf("root: %v", err)
+	}
+	if _, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: root.Root.NodeID}); err != nil {
+		t.Fatalf("children: %v", err)
+	}
+	childrenCallsBefore := deps.childrenCallCount["root"]
+	rootCallsBefore := deps.resolveRootCalls
+
+	if _, err := provider.RefreshNodeChildren(context.Background(), RefreshNodeChildrenRequest{NodeID: root.Root.NodeID}); err != nil {
+		t.Fatalf("refresh children: %v", err)
+	}
+	if deps.childrenCallCount["root"] != childrenCallsBefore+1 {
+		t.Fatalf("expected only child scope reloaded, calls=%d->%d", childrenCallsBefore, deps.childrenCallCount["root"])
+	}
+	if deps.resolveRootCalls != rootCallsBefore {
+		t.Fatalf("did not expect root reload for child refresh, got %d->%d", rootCallsBefore, deps.resolveRootCalls)
+	}
+	if _, err := provider.RefreshNodeDetails(context.Background(), RefreshNodeDetailsRequest{NodeID: root.Root.NodeID}); err != nil {
+		t.Fatalf("refresh details: %v", err)
+	}
+	if deps.resolveRootCalls != rootCallsBefore {
+		t.Fatalf("did not expect root reload for detail refresh, got %d->%d", rootCallsBefore, deps.resolveRootCalls)
+	}
+}
+
+func TestDiagnosticsFromError_MapsAccessDenied(t *testing.T) {
+	diag := diagnosticsFromError("ResolveWindowRoot", errors.New("E_ACCESSDENIED"), "")
+	if diag == nil {
+		t.Fatalf("expected diagnostics payload")
+	}
+	if diag.ErrorCode != "access_denied" || diag.HResult != "0x80070005" {
+		t.Fatalf("unexpected diagnostics code mapping: %+v", diag)
+	}
+	if diag.PrivilegeHint == "" {
+		t.Fatalf("expected privilege hint")
+	}
+}

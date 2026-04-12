@@ -33,7 +33,15 @@ type Service interface {
 	InvokePattern(context.Context, InvokePatternRequest) (InvokePatternResponse, error)
 	ActivateWindow(context.Context, ActivateWindowRequest) (ActivateWindowResponse, error)
 	ToggleFollowCursor(context.Context, ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error)
+	PauseFollowCursor(context.Context, PauseFollowCursorRequest) (PauseFollowCursorResponse, error)
+	ResumeFollowCursor(context.Context, ResumeFollowCursorRequest) (ResumeFollowCursorResponse, error)
+	LockFollowCursor(context.Context, LockFollowCursorRequest) (LockFollowCursorResponse, error)
+	UnlockFollowCursor(context.Context, UnlockFollowCursorRequest) (UnlockFollowCursorResponse, error)
 	RefreshWindows(context.Context, RefreshWindowsRequest) (RefreshWindowsResponse, error)
+	RefreshTreeRoot(context.Context, RefreshTreeRootRequest) (RefreshTreeRootResponse, error)
+	RefreshNodeChildren(context.Context, RefreshNodeChildrenRequest) (RefreshNodeChildrenResponse, error)
+	RefreshNodeDetails(context.Context, RefreshNodeDetailsRequest) (RefreshNodeDetailsResponse, error)
+	GetDiagnostics(context.Context, GetDiagnosticsRequest) (GetDiagnosticsResponse, error)
 }
 
 type WindowsProvider interface {
@@ -52,7 +60,15 @@ type WindowsProvider interface {
 	InvokePattern(context.Context, InvokePatternRequest) (InvokePatternResponse, error)
 	ActivateWindow(context.Context, ActivateWindowRequest) (ActivateWindowResponse, error)
 	ToggleFollowCursor(context.Context, ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error)
+	PauseFollowCursor(context.Context, PauseFollowCursorRequest) (PauseFollowCursorResponse, error)
+	ResumeFollowCursor(context.Context, ResumeFollowCursorRequest) (ResumeFollowCursorResponse, error)
+	LockFollowCursor(context.Context, LockFollowCursorRequest) (LockFollowCursorResponse, error)
+	UnlockFollowCursor(context.Context, UnlockFollowCursorRequest) (UnlockFollowCursorResponse, error)
 	RefreshWindows(context.Context, RefreshWindowsRequest) (RefreshWindowsResponse, error)
+	RefreshTreeRoot(context.Context, RefreshTreeRootRequest) (RefreshTreeRootResponse, error)
+	RefreshNodeChildren(context.Context, RefreshNodeChildrenRequest) (RefreshNodeChildrenResponse, error)
+	RefreshNodeDetails(context.Context, RefreshNodeDetailsRequest) (RefreshNodeDetailsResponse, error)
+	GetDiagnostics(context.Context, GetDiagnosticsRequest) (GetDiagnosticsResponse, error)
 }
 
 type service struct {
@@ -71,6 +87,15 @@ type InspectModeState struct {
 	FallbackUsed bool        `json:"fallbackUsed"`
 	FailureStage string      `json:"failureStage,omitempty"`
 	GuidanceText string      `json:"guidanceText,omitempty"`
+}
+
+type InspectDiagnostics struct {
+	Stage         string      `json:"stage,omitempty"`
+	ErrorCode     string      `json:"errorCode,omitempty"`
+	HResult       string      `json:"hresult,omitempty"`
+	Message       string      `json:"message,omitempty"`
+	FallbackMode  InspectMode `json:"fallbackMode,omitempty"`
+	PrivilegeHint string      `json:"privilegeHint,omitempty"`
 }
 
 func NewService() Service {
@@ -143,8 +168,9 @@ type DebugMetaDTO struct {
 }
 
 type GetTreeRootResponse struct {
-	Root  TreeNodeDTO      `json:"root"`
-	State InspectModeState `json:"state"`
+	Root        TreeNodeDTO         `json:"root"`
+	State       InspectModeState    `json:"state"`
+	Diagnostics *InspectDiagnostics `json:"diagnostics,omitempty"`
 }
 
 type GetNodeChildrenRequest struct {
@@ -230,6 +256,7 @@ type GetNodeDetailsResponse struct {
 	Path            []TreeNodeDTO         `json:"path,omitempty"`
 	SelectorPath    SelectorPathDTO       `json:"selectorPath"`
 	SelectorOptions SelectorResolutionDTO `json:"selectorOptions,omitempty"`
+	ACCPath         string                `json:"accPath,omitempty"`
 }
 
 type GetFocusedElementRequest struct{}
@@ -354,6 +381,29 @@ type ToggleFollowCursorResponse struct {
 	Enabled bool `json:"enabled"`
 }
 
+type PauseFollowCursorRequest struct{}
+type PauseFollowCursorResponse struct {
+	Paused bool `json:"paused"`
+}
+
+type ResumeFollowCursorRequest struct{}
+type ResumeFollowCursorResponse struct {
+	Paused bool `json:"paused"`
+}
+
+type LockFollowCursorRequest struct {
+	NodeID string `json:"nodeID,omitempty"`
+}
+type LockFollowCursorResponse struct {
+	Locked bool   `json:"locked"`
+	NodeID string `json:"nodeID,omitempty"`
+}
+
+type UnlockFollowCursorRequest struct{}
+type UnlockFollowCursorResponse struct {
+	Locked bool `json:"locked"`
+}
+
 type RefreshWindowsRequest struct {
 	Filter      string `json:"filter,omitempty"`
 	VisibleOnly bool   `json:"visibleOnly"`
@@ -361,6 +411,36 @@ type RefreshWindowsRequest struct {
 }
 type RefreshWindowsResponse struct {
 	Windows []WindowSummary `json:"windows"`
+}
+
+type RefreshTreeRootRequest struct {
+	HWND string      `json:"hwnd"`
+	Mode InspectMode `json:"mode,omitempty"`
+}
+type RefreshTreeRootResponse struct {
+	Root        TreeNodeDTO         `json:"root"`
+	State       InspectModeState    `json:"state"`
+	Diagnostics *InspectDiagnostics `json:"diagnostics,omitempty"`
+}
+
+type RefreshNodeChildrenRequest struct {
+	NodeID string `json:"nodeID"`
+}
+type RefreshNodeChildrenResponse struct {
+	ParentNodeID string        `json:"parentNodeID"`
+	Children     []TreeNodeDTO `json:"children"`
+}
+
+type RefreshNodeDetailsRequest struct {
+	NodeID string `json:"nodeID"`
+}
+type RefreshNodeDetailsResponse struct {
+	Details GetNodeDetailsResponse `json:"details"`
+}
+
+type GetDiagnosticsRequest struct{}
+type GetDiagnosticsResponse struct {
+	Diagnostics *InspectDiagnostics `json:"diagnostics,omitempty"`
 }
 
 func (s service) ListWindows(ctx context.Context, req ListWindowsRequest) (ListWindowsResponse, error) {
@@ -485,8 +565,57 @@ func (s service) ToggleFollowCursor(ctx context.Context, req ToggleFollowCursorR
 	return resp, mapProviderError(err)
 }
 
+func (s service) PauseFollowCursor(ctx context.Context, req PauseFollowCursorRequest) (PauseFollowCursorResponse, error) {
+	resp, err := s.provider.PauseFollowCursor(ctx, req)
+	return resp, mapProviderError(err)
+}
+
+func (s service) ResumeFollowCursor(ctx context.Context, req ResumeFollowCursorRequest) (ResumeFollowCursorResponse, error) {
+	resp, err := s.provider.ResumeFollowCursor(ctx, req)
+	return resp, mapProviderError(err)
+}
+
+func (s service) LockFollowCursor(ctx context.Context, req LockFollowCursorRequest) (LockFollowCursorResponse, error) {
+	resp, err := s.provider.LockFollowCursor(ctx, req)
+	return resp, mapProviderError(err)
+}
+
+func (s service) UnlockFollowCursor(ctx context.Context, req UnlockFollowCursorRequest) (UnlockFollowCursorResponse, error) {
+	resp, err := s.provider.UnlockFollowCursor(ctx, req)
+	return resp, mapProviderError(err)
+}
+
 func (s service) RefreshWindows(ctx context.Context, req RefreshWindowsRequest) (RefreshWindowsResponse, error) {
 	resp, err := s.provider.RefreshWindows(ctx, req)
+	return resp, mapProviderError(err)
+}
+
+func (s service) RefreshTreeRoot(ctx context.Context, req RefreshTreeRootRequest) (RefreshTreeRootResponse, error) {
+	if req.HWND == "" {
+		return RefreshTreeRootResponse{}, ErrInvalidNodeID
+	}
+	resp, err := s.provider.RefreshTreeRoot(ctx, req)
+	return resp, mapProviderError(err)
+}
+
+func (s service) RefreshNodeChildren(ctx context.Context, req RefreshNodeChildrenRequest) (RefreshNodeChildrenResponse, error) {
+	if req.NodeID == "" {
+		return RefreshNodeChildrenResponse{}, ErrInvalidNodeID
+	}
+	resp, err := s.provider.RefreshNodeChildren(ctx, req)
+	return resp, mapProviderError(err)
+}
+
+func (s service) RefreshNodeDetails(ctx context.Context, req RefreshNodeDetailsRequest) (RefreshNodeDetailsResponse, error) {
+	if req.NodeID == "" {
+		return RefreshNodeDetailsResponse{}, ErrInvalidNodeID
+	}
+	resp, err := s.provider.RefreshNodeDetails(ctx, req)
+	return resp, mapProviderError(err)
+}
+
+func (s service) GetDiagnostics(ctx context.Context, req GetDiagnosticsRequest) (GetDiagnosticsResponse, error) {
+	resp, err := s.provider.GetDiagnostics(ctx, req)
 	return resp, mapProviderError(err)
 }
 

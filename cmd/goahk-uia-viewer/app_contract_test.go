@@ -87,9 +87,41 @@ func (s *contractService) ToggleFollowCursor(ctx context.Context, req inspect.To
 	s.record("ToggleFollowCursor", ctx, req)
 	return inspect.ToggleFollowCursorResponse{Enabled: req.Enabled}, s.err
 }
+func (s *contractService) PauseFollowCursor(ctx context.Context, req inspect.PauseFollowCursorRequest) (inspect.PauseFollowCursorResponse, error) {
+	s.record("PauseFollowCursor", ctx, req)
+	return inspect.PauseFollowCursorResponse{Paused: true}, s.err
+}
+func (s *contractService) ResumeFollowCursor(ctx context.Context, req inspect.ResumeFollowCursorRequest) (inspect.ResumeFollowCursorResponse, error) {
+	s.record("ResumeFollowCursor", ctx, req)
+	return inspect.ResumeFollowCursorResponse{Paused: false}, s.err
+}
+func (s *contractService) LockFollowCursor(ctx context.Context, req inspect.LockFollowCursorRequest) (inspect.LockFollowCursorResponse, error) {
+	s.record("LockFollowCursor", ctx, req)
+	return inspect.LockFollowCursorResponse{Locked: true, NodeID: req.NodeID}, s.err
+}
+func (s *contractService) UnlockFollowCursor(ctx context.Context, req inspect.UnlockFollowCursorRequest) (inspect.UnlockFollowCursorResponse, error) {
+	s.record("UnlockFollowCursor", ctx, req)
+	return inspect.UnlockFollowCursorResponse{Locked: false}, s.err
+}
 func (s *contractService) RefreshWindows(ctx context.Context, req inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
 	s.record("RefreshWindows", ctx, req)
 	return inspect.RefreshWindowsResponse{Windows: []inspect.WindowSummary{{HWND: "0x1"}}}, s.err
+}
+func (s *contractService) RefreshTreeRoot(ctx context.Context, req inspect.RefreshTreeRootRequest) (inspect.RefreshTreeRootResponse, error) {
+	s.record("RefreshTreeRoot", ctx, req)
+	return inspect.RefreshTreeRootResponse{}, s.err
+}
+func (s *contractService) RefreshNodeChildren(ctx context.Context, req inspect.RefreshNodeChildrenRequest) (inspect.RefreshNodeChildrenResponse, error) {
+	s.record("RefreshNodeChildren", ctx, req)
+	return inspect.RefreshNodeChildrenResponse{}, s.err
+}
+func (s *contractService) RefreshNodeDetails(ctx context.Context, req inspect.RefreshNodeDetailsRequest) (inspect.RefreshNodeDetailsResponse, error) {
+	s.record("RefreshNodeDetails", ctx, req)
+	return inspect.RefreshNodeDetailsResponse{}, s.err
+}
+func (s *contractService) GetDiagnostics(ctx context.Context, req inspect.GetDiagnosticsRequest) (inspect.GetDiagnosticsResponse, error) {
+	s.record("GetDiagnostics", ctx, req)
+	return inspect.GetDiagnosticsResponse{}, s.err
 }
 
 func TestViewerApp_WailsBoundMethods_HaveSingleRequestParameter(t *testing.T) {
@@ -114,7 +146,15 @@ func TestViewerApp_WailsBoundMethods_HaveSingleRequestParameter(t *testing.T) {
 		"InvokePattern",
 		"ActivateWindow",
 		"ToggleFollowCursor",
+		"PauseFollowCursor",
+		"ResumeFollowCursor",
+		"LockFollowCursor",
+		"UnlockFollowCursor",
 		"RefreshWindows",
+		"RefreshTreeRoot",
+		"RefreshNodeChildren",
+		"RefreshNodeDetails",
+		"GetDiagnostics",
 	}
 
 	for _, methodName := range boundMethods {

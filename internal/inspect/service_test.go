@@ -74,8 +74,32 @@ func (p *contractProvider) ActivateWindow(context.Context, ActivateWindowRequest
 func (p *contractProvider) ToggleFollowCursor(context.Context, ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error) {
 	return p.toggleFollowResp, p.err
 }
+func (p *contractProvider) PauseFollowCursor(context.Context, PauseFollowCursorRequest) (PauseFollowCursorResponse, error) {
+	return PauseFollowCursorResponse{Paused: true}, p.err
+}
+func (p *contractProvider) ResumeFollowCursor(context.Context, ResumeFollowCursorRequest) (ResumeFollowCursorResponse, error) {
+	return ResumeFollowCursorResponse{Paused: false}, p.err
+}
+func (p *contractProvider) LockFollowCursor(context.Context, LockFollowCursorRequest) (LockFollowCursorResponse, error) {
+	return LockFollowCursorResponse{Locked: true}, p.err
+}
+func (p *contractProvider) UnlockFollowCursor(context.Context, UnlockFollowCursorRequest) (UnlockFollowCursorResponse, error) {
+	return UnlockFollowCursorResponse{Locked: false}, p.err
+}
 func (p *contractProvider) RefreshWindows(context.Context, RefreshWindowsRequest) (RefreshWindowsResponse, error) {
 	return p.refreshWindowsResp, p.err
+}
+func (p *contractProvider) RefreshTreeRoot(context.Context, RefreshTreeRootRequest) (RefreshTreeRootResponse, error) {
+	return RefreshTreeRootResponse{}, p.err
+}
+func (p *contractProvider) RefreshNodeChildren(context.Context, RefreshNodeChildrenRequest) (RefreshNodeChildrenResponse, error) {
+	return RefreshNodeChildrenResponse{}, p.err
+}
+func (p *contractProvider) RefreshNodeDetails(context.Context, RefreshNodeDetailsRequest) (RefreshNodeDetailsResponse, error) {
+	return RefreshNodeDetailsResponse{}, p.err
+}
+func (p *contractProvider) GetDiagnostics(context.Context, GetDiagnosticsRequest) (GetDiagnosticsResponse, error) {
+	return GetDiagnosticsResponse{}, p.err
 }
 
 func TestService_MethodContracts(t *testing.T) {
