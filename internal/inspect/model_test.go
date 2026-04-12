@@ -2,6 +2,8 @@ package inspect
 
 import (
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 )
 
@@ -78,6 +80,61 @@ func TestCanonicalDTO_AliasCompatibility(t *testing.T) {
 	var _ TreeNodeCanonicalDTO = TreeNodeDTO{}
 	var _ NodeDetailsRequestDTO = GetNodeDetailsRequest{}
 	var _ NodeDetailsDTO = GetNodeDetailsResponse{}
+}
+
+func TestNodeRef_RoundTripPerProvider(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		ref  string
+		want parsedNodeRef
+	}{
+		{name: "uia", ref: makeUIANodeRef("s1", "a"), want: parsedNodeRef{Provider: nodeRefProviderUIA, Session: "s1", ID: "a"}},
+		{name: "window", ref: makeWindowNodeRef("0x2a"), want: parsedNodeRef{Provider: nodeRefProviderWin, ID: "0x2a"}},
+		{name: "acc", ref: makeACCNodeRef("sess", "42"), want: parsedNodeRef{Provider: nodeRefProviderACC, Session: "sess", ID: "42"}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseNodeRef(tc.ref)
+			if err != nil {
+				t.Fatalf("parseNodeRef(%q): %v", tc.ref, err)
+			}
+			if got != tc.want {
+				t.Fatalf("unexpected parsed ref: got=%+v want=%+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNodeRef_ParseRejectsCrossProviderShapes(t *testing.T) {
+	t.Parallel()
+	invalid := []string{
+		"hwnd:0x1",
+		"uia:sess",
+		"win:sess:id",
+		"acc::id",
+		"uia:sess:",
+	}
+	for _, ref := range invalid {
+		ref := ref
+		t.Run(ref, func(t *testing.T) {
+			t.Parallel()
+			_, err := parseNodeRef(ref)
+			if !errors.Is(err, ErrInvalidNodeRef) {
+				t.Fatalf("expected ErrInvalidNodeRef for %q, got %v", ref, err)
+			}
+		})
+	}
+}
+
+func TestNodeRefNotFoundError_ErrorMessage(t *testing.T) {
+	t.Parallel()
+	err := (&NodeRefNotFoundError{Provider: nodeRefProviderUIA, Ref: "uia:s:1"}).Error()
+	if !strings.Contains(err, "uia node ref not found") {
+		t.Fatalf("unexpected error text: %q", err)
+	}
 }
 
 func ptr(v string) *string { return &v }

@@ -5,8 +5,10 @@ package inspect
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"goahk/internal/window"
@@ -29,10 +31,29 @@ type nativeUIABridge interface {
 	Collapse(window.HWND) error
 }
 
-type nativeUIADeps struct{ bridge nativeUIABridge }
-
 func newNativeUIADeps() windowsUIADeps {
-	return &nativeUIADeps{bridge: newWin32UIABridge()}
+	return &nativeUIADeps{
+		bridge:        newWin32UIABridge(),
+		sessionID:     newUIASessionID(),
+		refToElement:  map[string]*uiaElement{},
+		keyToRefCache: map[string]string{},
+	}
+}
+
+var uiaSessionCounter atomic.Uint64
+
+func newUIASessionID() string {
+	return strconv.FormatUint(uiaSessionCounter.Add(1), 36)
+}
+
+type nativeUIADeps struct {
+	bridge nativeUIABridge
+
+	mu            sync.RWMutex
+	sessionID     string
+	refToElement  map[string]*uiaElement
+	keyToRefCache map[string]string
+	nextID        uint64
 }
 
 func (d *nativeUIADeps) ResolveWindowRoot(_ context.Context, hwnd string) (*uiaElement, error) {
@@ -47,22 +68,26 @@ func (d *nativeUIADeps) ResolveWindowRoot(_ context.Context, hwnd string) (*uiaE
 	if el == nil {
 		return nil, errUIANilElement
 	}
-	return el, nil
+	return d.registerElement(el), nil
 }
 
 func (d *nativeUIADeps) GetElementByRef(_ context.Context, ref string) (*uiaElement, error) {
-	hwnd, err := parseElementRef(ref)
+	el, err := d.lookupByRef(ref)
 	if err != nil {
 		return nil, errUIANilElement
 	}
-	el, err := d.bridge.ElementByHWND(hwnd)
+	hwnd, err := parseHWND(el.HWND)
+	if err != nil {
+		return nil, errUIANilElement
+	}
+	latest, err := d.bridge.ElementByHWND(hwnd)
 	if err != nil {
 		return nil, err
 	}
-	if el == nil {
+	if latest == nil {
 		return nil, errUIAElementNotAvailable
 	}
-	return el, nil
+	return d.registerElement(latest), nil
 }
 
 func (d *nativeUIADeps) GetChildren(context.Context, string) ([]*uiaElement, error) {
@@ -85,7 +110,11 @@ func (d *nativeUIADeps) GetFocusedElement(_ context.Context) (*uiaElement, error
 	if hwnd == 0 {
 		return nil, errUIAElementNotAvailable
 	}
-	return d.bridge.ElementByHWND(hwnd)
+	el, err := d.bridge.ElementByHWND(hwnd)
+	if err != nil {
+		return nil, err
+	}
+	return d.registerElement(el), nil
 }
 
 func (d *nativeUIADeps) GetCursorPosition(_ context.Context) (int, int, error) {
@@ -100,7 +129,11 @@ func (d *nativeUIADeps) ElementFromPoint(_ context.Context, x, y int) (*uiaEleme
 	if hwnd == 0 {
 		return nil, errUIAElementNotAvailable
 	}
-	return d.bridge.ElementByHWND(hwnd)
+	el, err := d.bridge.ElementByHWND(hwnd)
+	if err != nil {
+		return nil, err
+	}
+	return d.registerElement(el), nil
 }
 
 func (d *nativeUIADeps) Invoke(_ context.Context, ref string) error {
@@ -110,7 +143,7 @@ func (d *nativeUIADeps) Select(_ context.Context, ref string) error {
 	return d.withHWND(ref, d.bridge.Select)
 }
 func (d *nativeUIADeps) SetValue(_ context.Context, ref, value string) error {
-	hwnd, err := parseElementRef(ref)
+	hwnd, err := d.resolveHWND(ref)
 	if err != nil {
 		return errUIANilElement
 	}
@@ -130,22 +163,71 @@ func (d *nativeUIADeps) Collapse(_ context.Context, ref string) error {
 }
 
 func (d *nativeUIADeps) withHWND(ref string, fn func(window.HWND) error) error {
-	hwnd, err := parseElementRef(ref)
+	hwnd, err := d.resolveHWND(ref)
 	if err != nil {
 		return errUIANilElement
 	}
 	return fn(hwnd)
 }
 
-func parseElementRef(ref string) (window.HWND, error) {
-	trimmed := strings.TrimSpace(ref)
-	if !strings.HasPrefix(trimmed, "hwnd:") {
-		return 0, fmt.Errorf("unsupported ref")
+func (d *nativeUIADeps) resolveHWND(ref string) (window.HWND, error) {
+	el, err := d.lookupByRef(ref)
+	if err != nil {
+		return 0, err
 	}
-	return parseHWND(strings.TrimPrefix(trimmed, "hwnd:"))
+	return parseHWND(el.HWND)
 }
 
-func makeElementRef(hwnd window.HWND) string { return "hwnd:" + hwnd.String() }
+func (d *nativeUIADeps) lookupByRef(ref string) (*uiaElement, error) {
+	parsed, err := parseNodeRef(ref)
+	if err != nil || parsed.Provider != nodeRefProviderUIA || parsed.Session != d.sessionID {
+		return nil, ErrInvalidNodeRef
+	}
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	el, ok := d.refToElement[ref]
+	if !ok {
+		return nil, &NodeRefNotFoundError{Provider: nodeRefProviderUIA, Ref: ref}
+	}
+	return cloneUIAElement(el), nil
+}
+
+func (d *nativeUIADeps) registerElement(el *uiaElement) *uiaElement {
+	if el == nil {
+		return nil
+	}
+	key := d.cacheKeyForElement(el)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if existingRef, ok := d.keyToRefCache[key]; ok {
+		cloned := cloneUIAElement(el)
+		cloned.Ref = existingRef
+		d.refToElement[existingRef] = cloneUIAElement(cloned)
+		return cloned
+	}
+	d.nextID++
+	ref := makeUIANodeRef(d.sessionID, strconv.FormatUint(d.nextID, 36))
+	cloned := cloneUIAElement(el)
+	cloned.Ref = ref
+	d.keyToRefCache[key] = ref
+	d.refToElement[ref] = cloneUIAElement(cloned)
+	return cloned
+}
+
+func (d *nativeUIADeps) cacheKeyForElement(el *uiaElement) string {
+	if rid := strings.TrimSpace(el.RuntimeID); rid != "" {
+		return "rid:" + rid
+	}
+	return "hwnd:" + strings.TrimSpace(el.HWND)
+}
+
+func cloneUIAElement(el *uiaElement) *uiaElement {
+	if el == nil {
+		return nil
+	}
+	cloned := *el
+	return &cloned
+}
 
 type win32UIABridge struct{}
 
