@@ -57,7 +57,7 @@ export function createInspectBindings(): InspectBindings {
       if (!response?.root) {
         throw new Error('Tree root response was empty');
       }
-      return { root: normalizeNode(response.root) };
+      return { root: normalizeNode(response.root), state: response?.state };
     },
     GetNodeChildren: async (req: inspect.GetNodeChildrenRequest) => {
       const response = await call(() => GetNodeChildren(req), 'Failed to load node children');

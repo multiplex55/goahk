@@ -109,17 +109,53 @@ describe('inspectStore', () => {
 
     expect(bindings.ClearHighlight).toHaveBeenCalled();
     expect(bindings.ActivateWindow).toHaveBeenCalledWith({ hwnd: 'w1' });
-    expect(bindings.InspectWindow).toHaveBeenCalledWith({ hwnd: 'w1' });
+    expect(bindings.InspectWindow).toHaveBeenCalledWith({ hwnd: 'w1', mode: 'UIA_TREE' });
     const inspectWindowArg = (bindings.InspectWindow as any).mock.calls[0][0];
-    expect(inspectWindowArg).toEqual({ hwnd: 'w1' });
+    expect(inspectWindowArg).toEqual({ hwnd: 'w1', mode: 'UIA_TREE' });
     expect('refresh' in inspectWindowArg).toBe(false);
-    expect(bindings.GetTreeRoot).toHaveBeenCalledWith({ hwnd: 'w1', refresh: true });
+    expect(bindings.GetTreeRoot).toHaveBeenCalledWith({ hwnd: 'w1', refresh: true, mode: 'UIA_TREE' });
     expect(Object.keys(store.getState().nodesByID)).toContain('root-1');
     expect(store.getState().selectedNodeID).toBe('root-1');
     expect(store.getState().selectedPath.map((node) => node.nodeID)).toEqual(['root-1', 'root-1']);
     expect(store.getState().properties[0].value).toBe('root-1');
     expect(store.getState().patterns[0].name).toBe('Invoke');
     expect(store.getState().selectorText).toBe('#root-1');
+  });
+
+  it('tracks mode transitions and fallback state from GetTreeRoot', async () => {
+    const bindings = makeBindings({
+      GetTreeRoot: vi.fn().mockResolvedValue({
+        root: { nodeID: 'root-1', name: 'Root', hasChildren: true },
+        state: {
+          activeMode: 'WINDOW_TREE',
+          fallbackUsed: true,
+          failureStage: 'ResolveWindowRoot',
+          guidanceText: 'UIA tree is unavailable.'
+        }
+      })
+    });
+    const store = createInspectStore(bindings);
+
+    await store.selectWindow('w1');
+
+    expect(store.getState().inspectionMode).toBe('WINDOW_TREE');
+    expect(store.getState().fallbackState?.fallbackUsed).toBe(true);
+    expect(store.getState().fallbackState?.failureStage).toBe('ResolveWindowRoot');
+  });
+
+  it('does not retain fallback UI state on normal UIA success path', async () => {
+    const bindings = makeBindings({
+      GetTreeRoot: vi.fn().mockResolvedValue({
+        root: { nodeID: 'root-1', name: 'Root', hasChildren: true },
+        state: { activeMode: 'UIA_TREE', fallbackUsed: false }
+      })
+    });
+    const store = createInspectStore(bindings);
+    store.setInspectionMode('UIA_TREE');
+    await store.selectWindow('w1');
+
+    expect(store.getState().inspectionMode).toBe('UIA_TREE');
+    expect(store.getState().fallbackState?.fallbackUsed).toBe(false);
   });
 
   it('Flow 3: selecting a node refreshes properties, patterns, status, and highlight', async () => {

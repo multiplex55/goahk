@@ -1,10 +1,12 @@
-import { render, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 const mockStore = {
   getState: vi.fn(() => ({
     windows: [],
+    inspectionMode: 'UIA_TREE',
+    fallbackState: undefined,
     selectedWindowID: '',
     selectedNodeID: '',
     selectedPath: [],
@@ -36,6 +38,7 @@ const mockStore = {
   invokePatternAction: vi.fn().mockResolvedValue(undefined),
   copyBestSelector: vi.fn().mockResolvedValue({ selector: '', clipboardUpdated: false }),
   setFilterInput: vi.fn(),
+  setInspectionMode: vi.fn(),
   setFollowCursor: vi.fn().mockResolvedValue(undefined),
   setVisibleOnly: vi.fn(),
   setTitleOnly: vi.fn(),
@@ -66,5 +69,24 @@ describe('App boot flow', () => {
     await waitFor(() => {
       expect(mockStore.refreshWindows).toHaveBeenCalledTimes(1);
     });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows fallback banner and supports switch action', () => {
+    mockStore.getState.mockReturnValueOnce({
+      ...mockStore.getState(),
+      inspectionMode: 'UIA_TREE',
+      fallbackState: {
+        activeMode: 'WINDOW_TREE',
+        fallbackUsed: true,
+        failureStage: 'ResolveWindowRoot',
+        guidanceText: 'UIA tree is unavailable.'
+      }
+    });
+
+    render(<App />);
+    expect(screen.getByRole('alert')).toHaveTextContent('UIA tree is unavailable.');
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to Window Tree' }));
+    expect(mockStore.setInspectionMode).toHaveBeenCalledWith('WINDOW_TREE');
   });
 });

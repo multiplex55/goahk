@@ -42,6 +42,13 @@ export type SelectionBridgeEvent = {
 export type InspectBridgeEvent = FollowCursorBridgeEvent | SelectionBridgeEvent;
 
 export type InspectStoreState = {
+  inspectionMode: 'UIA_TREE' | 'WINDOW_TREE';
+  fallbackState?: {
+    activeMode: 'UIA_TREE' | 'WINDOW_TREE';
+    fallbackUsed: boolean;
+    failureStage?: string;
+    guidanceText?: string;
+  };
   windows: InspectWindow[];
   selectedWindowID: string;
   selectedNodeID: string;
@@ -94,8 +101,15 @@ type NodeDetailsResponse = {
 
 export type InspectBindings = {
   RefreshWindows(req: { filter: string; visibleOnly: boolean; titleOnly: boolean }): Promise<{ windows: InspectWindow[] }>;
-  InspectWindow(req: InspectWindowRequest): Promise<{ window?: InspectWindow; rootNodeID?: string }>;
-  GetTreeRoot(req: { hwnd: string; refresh?: boolean }): Promise<{ root: InspectTreeNode }>;
+  InspectWindow(req: InspectWindowRequest & { mode?: 'UIA_TREE' | 'WINDOW_TREE' }): Promise<{ window?: InspectWindow; rootNodeID?: string }>;
+  GetTreeRoot(req: {
+    hwnd: string;
+    refresh?: boolean;
+    mode?: 'UIA_TREE' | 'WINDOW_TREE';
+  }): Promise<{
+    root: InspectTreeNode;
+    state?: { activeMode?: 'UIA_TREE' | 'WINDOW_TREE'; fallbackUsed?: boolean; failureStage?: string; guidanceText?: string };
+  }>;
   GetNodeChildren(req: { nodeID: string }): Promise<{ parentNodeID: string; children: InspectTreeNode[] }>;
   SelectNode(req: { nodeID: string }): Promise<{ selected: InspectTreeNode }>;
   GetNodeDetails(req: { nodeID: string }): Promise<NodeDetailsResponse>;
@@ -111,6 +125,7 @@ export type InspectStore = {
   getState: () => InspectStoreState;
   subscribe: (listener: (state: InspectStoreState) => void) => () => void;
   setFilterInput: (value: string) => void;
+  setInspectionMode: (value: 'UIA_TREE' | 'WINDOW_TREE') => void;
   setFollowCursor: (value: boolean) => Promise<void>;
   setVisibleOnly: (value: boolean) => void;
   setTitleOnly: (value: boolean) => void;
@@ -144,6 +159,8 @@ export function createInspectStore(
   const cancel = opts?.cancel ?? clearTimeout;
 
   let state: InspectStoreState = {
+    inspectionMode: 'UIA_TREE',
+    fallbackState: undefined,
     windows: [],
     selectedWindowID: '',
     selectedNodeID: '',
@@ -314,7 +331,7 @@ export function createInspectStore(
 
       let inspectResp: { window?: InspectWindow; rootNodeID?: string };
       try {
-        inspectResp = await bindings.InspectWindow({ hwnd: windowID });
+        inspectResp = await bindings.InspectWindow({ hwnd: windowID, mode: state.inspectionMode });
         if (token !== windowSelectionToken) {
           return;
         }
@@ -322,9 +339,12 @@ export function createInspectStore(
         throw formatStageFailure('Failed InspectWindow', err);
       }
 
-      let rootResp: { root: InspectTreeNode };
+      let rootResp: {
+        root: InspectTreeNode;
+        state?: { activeMode?: 'UIA_TREE' | 'WINDOW_TREE'; fallbackUsed?: boolean; failureStage?: string; guidanceText?: string };
+      };
       try {
-        rootResp = await bindings.GetTreeRoot({ hwnd: windowID, refresh: true });
+        rootResp = await bindings.GetTreeRoot({ hwnd: windowID, refresh: true, mode: state.inspectionMode });
         if (token !== windowSelectionToken) {
           return;
         }
@@ -358,6 +378,8 @@ export function createInspectStore(
       }
 
       setState({
+        inspectionMode: rootResp.state?.activeMode ?? state.inspectionMode,
+        fallbackState: rootResp.state,
         selectedNodeID,
         loadingWindow: false,
         nodesByID: seededNodesByID,
@@ -387,6 +409,7 @@ export function createInspectStore(
         properties: [],
         patterns: [],
         selectorText: '',
+        fallbackState: undefined,
         nodeDetails: undefined,
         statusText: typeof err === 'object' && err !== null && 'statusText' in err ? String((err as { statusText: string }).statusText) : 'Failed to load window'
       });
@@ -657,6 +680,7 @@ export function createInspectStore(
     invokePatternAction,
     copyBestSelector,
     setFilterInput,
+    setInspectionMode: (value) => setState({ inspectionMode: value, fallbackState: undefined }),
     setFollowCursor,
     setVisibleOnly: (value) => setState({ visibleOnly: value }),
     setTitleOnly: (value) => setState({ titleOnly: value }),

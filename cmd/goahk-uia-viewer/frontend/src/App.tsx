@@ -70,6 +70,30 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <div className="inspect-toolbar">
+        <label>
+          Inspection mode:{' '}
+          <select
+            aria-label="Inspection mode"
+            value={snapshot.inspectionMode}
+            onChange={(event) => snapshot.inspectionMode !== event.target.value && store.setInspectionMode(event.target.value as 'UIA_TREE' | 'WINDOW_TREE')}
+          >
+            <option value="UIA_TREE">UIA Tree</option>
+            <option value="WINDOW_TREE">Window Tree</option>
+          </select>
+        </label>
+      </div>
+      {snapshot.fallbackState?.fallbackUsed ? (
+        <div className="inspect-fallback-banner" role="alert">
+          <span>
+            {snapshot.fallbackState.guidanceText || 'UIA inspection failed, switched to Window Tree mode.'}
+            {snapshot.fallbackState.failureStage ? ` (${snapshot.fallbackState.failureStage})` : ''}
+          </span>
+          <button type="button" onClick={() => store.setInspectionMode('WINDOW_TREE')}>
+            Switch to Window Tree
+          </button>
+        </div>
+      ) : null}
       <ThreeColumnLayout
         leftWidthPx={leftSplitter.sizePx}
         middleWidthPx={middleSplitter.sizePx}

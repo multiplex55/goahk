@@ -116,6 +116,41 @@ func TestWindowsProvider_UIAFailuresReturnStructuredErrors(t *testing.T) {
 	}
 }
 
+func TestWindowsProvider_GetTreeRoot_ModeRoutingAndFallbackState(t *testing.T) {
+	windowTree := &fakeAdapter{
+		root: &uiaElement{Ref: "root-window", RuntimeID: "101", HWND: "0x1", Name: "Window Root"},
+	}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(nil), newUIAAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
+
+	resp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+	if err != nil {
+		t.Fatalf("GetTreeRoot fallback failed: %v", err)
+	}
+	if resp.State.ActiveMode != InspectModeWindowTree || !resp.State.FallbackUsed {
+		t.Fatalf("expected fallback state with WINDOW_TREE active mode, got %+v", resp.State)
+	}
+	if resp.State.FailureStage == "" || resp.State.GuidanceText == "" {
+		t.Fatalf("expected explicit fallback metadata, got %+v", resp.State)
+	}
+}
+
+func TestWindowsProvider_GetTreeRoot_ManualWindowTreeMode(t *testing.T) {
+	uia := &fakeAdapter{root: &uiaElement{Ref: "root-uia", RuntimeID: "1", HWND: "0x1", Name: "UIA Root"}}
+	windowTree := &fakeAdapter{root: &uiaElement{Ref: "root-window", RuntimeID: "2", HWND: "0x1", Name: "Window Root"}}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
+
+	resp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeWindowTree})
+	if err != nil {
+		t.Fatalf("GetTreeRoot manual mode failed: %v", err)
+	}
+	if resp.State.ActiveMode != InspectModeWindowTree || resp.State.FallbackUsed {
+		t.Fatalf("expected WINDOW_TREE mode without fallback, got %+v", resp.State)
+	}
+	if windowTree.resolveRootCalls != 1 || uia.resolveRootCalls != 0 {
+		t.Fatalf("expected only window tree adapter call, uia=%d window=%d", uia.resolveRootCalls, windowTree.resolveRootCalls)
+	}
+}
+
 func TestWindowsProvider_WindowListingAndRefreshFilters(t *testing.T) {
 	visible := true
 	hidden := false
