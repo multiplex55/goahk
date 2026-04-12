@@ -1,5 +1,11 @@
 package inspect
 
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
+
 // API Model Compatibility Notes:
 //   - These structs are part of the inspect JSON contract consumed by the frontend.
 //   - Treat existing JSON field names and value semantics as stable API surface.
@@ -155,3 +161,66 @@ type (
 	NodeDetailsRequestDTO = GetNodeDetailsRequest
 	NodeDetailsDTO        = GetNodeDetailsResponse
 )
+
+type nodeRefProvider string
+
+const (
+	nodeRefProviderUIA nodeRefProvider = "uia"
+	nodeRefProviderWin nodeRefProvider = "win"
+	nodeRefProviderACC nodeRefProvider = "acc"
+)
+
+var ErrInvalidNodeRef = errors.New("inspect: invalid node ref")
+
+type NodeRefNotFoundError struct {
+	Provider nodeRefProvider
+	Ref      string
+}
+
+func (e *NodeRefNotFoundError) Error() string {
+	return fmt.Sprintf("inspect: %s node ref not found: %s", e.Provider, strings.TrimSpace(e.Ref))
+}
+
+type parsedNodeRef struct {
+	Provider nodeRefProvider
+	Session  string
+	ID       string
+}
+
+func makeWindowNodeRef(hwnd string) string {
+	return string(nodeRefProviderWin) + ":" + strings.TrimSpace(hwnd)
+}
+
+func makeUIANodeRef(sessionID, id string) string {
+	return fmt.Sprintf("%s:%s:%s", nodeRefProviderUIA, strings.TrimSpace(sessionID), strings.TrimSpace(id))
+}
+
+func makeACCNodeRef(sessionID, id string) string {
+	return fmt.Sprintf("%s:%s:%s", nodeRefProviderACC, strings.TrimSpace(sessionID), strings.TrimSpace(id))
+}
+
+func parseNodeRef(raw string) (parsedNodeRef, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return parsedNodeRef{}, ErrInvalidNodeRef
+	}
+	parts := strings.Split(trimmed, ":")
+	if len(parts) < 2 {
+		return parsedNodeRef{}, ErrInvalidNodeRef
+	}
+	provider := nodeRefProvider(parts[0])
+	switch provider {
+	case nodeRefProviderWin:
+		if len(parts) != 2 || strings.TrimSpace(parts[1]) == "" {
+			return parsedNodeRef{}, ErrInvalidNodeRef
+		}
+		return parsedNodeRef{Provider: provider, ID: strings.TrimSpace(parts[1])}, nil
+	case nodeRefProviderUIA, nodeRefProviderACC:
+		if len(parts) != 3 || strings.TrimSpace(parts[1]) == "" || strings.TrimSpace(parts[2]) == "" {
+			return parsedNodeRef{}, ErrInvalidNodeRef
+		}
+		return parsedNodeRef{Provider: provider, Session: strings.TrimSpace(parts[1]), ID: strings.TrimSpace(parts[2])}, nil
+	default:
+		return parsedNodeRef{}, ErrInvalidNodeRef
+	}
+}

@@ -6,6 +6,7 @@ package inspect
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"goahk/internal/window"
@@ -55,7 +56,7 @@ func (f *fakeNativeBridge) Collapse(h window.HWND) error                { return
 
 func TestNativeUIADeps_LookupAndActions(t *testing.T) {
 	mk := func(h window.HWND) *uiaElement {
-		return &uiaElement{Ref: makeElementRef(h), Name: h.String()}
+		return &uiaElement{HWND: h.String(), RuntimeID: h.String(), Name: h.String()}
 	}
 	deps := &nativeUIADeps{bridge: &fakeNativeBridge{
 		resolveRoot:   func(h window.HWND) (*uiaElement, error) { return mk(h), nil },
@@ -75,7 +76,7 @@ func TestNativeUIADeps_LookupAndActions(t *testing.T) {
 	}}
 
 	root, err := deps.ResolveWindowRoot(context.Background(), "0x1")
-	if err != nil || root.Ref != "hwnd:0x1" {
+	if err != nil || !strings.HasPrefix(root.Ref, "uia:") {
 		t.Fatalf("ResolveWindowRoot failed: %+v, %v", root, err)
 	}
 	focused, err := deps.GetFocusedElement(context.Background())
@@ -87,7 +88,7 @@ func TestNativeUIADeps_LookupAndActions(t *testing.T) {
 		t.Fatalf("GetCursorPosition failed: x=%d y=%d err=%v", x, y, err)
 	}
 	under, err := deps.ElementFromPoint(context.Background(), x, y)
-	if err != nil || under.Ref != "hwnd:0xa" {
+	if err != nil || !strings.HasPrefix(under.Ref, "uia:") {
 		t.Fatalf("ElementFromPoint failed: %+v err=%v", under, err)
 	}
 }
@@ -111,13 +112,13 @@ func TestNativeUIADeps_TreeMethodsAreGuarded(t *testing.T) {
 	}
 	deps := &nativeUIADeps{bridge: bridge}
 
-	if _, err := deps.GetParent(context.Background(), "hwnd:0x2"); !errors.Is(err, ErrProviderActionUnsupported) {
+	if _, err := deps.GetParent(context.Background(), "uia:sess:2"); !errors.Is(err, ErrProviderActionUnsupported) {
 		t.Fatalf("expected guarded parent lookup, got %v", err)
 	}
-	if _, err := deps.GetChildren(context.Background(), "hwnd:0x1"); !errors.Is(err, ErrProviderActionUnsupported) {
+	if _, err := deps.GetChildren(context.Background(), "uia:sess:1"); !errors.Is(err, ErrProviderActionUnsupported) {
 		t.Fatalf("expected guarded child traversal, got %v", err)
 	}
-	if _, _, err := deps.GetChildCount(context.Background(), "hwnd:0x1"); !errors.Is(err, ErrProviderActionUnsupported) {
+	if _, _, err := deps.GetChildCount(context.Background(), "uia:sess:1"); !errors.Is(err, ErrProviderActionUnsupported) {
 		t.Fatalf("expected guarded child count, got %v", err)
 	}
 	if bridge.parentCalls != 0 || bridge.childCalls != 0 {
@@ -144,7 +145,11 @@ func TestNativeUIADeps_ActionDispatchAndInvalidRefs(t *testing.T) {
 		collapse:      func(h window.HWND) error { called["collapse"] = h.String(); return nil },
 	}}
 
-	ref := "hwnd:0x2a"
+	resolved, err := deps.ResolveWindowRoot(context.Background(), "0x2a")
+	if err != nil {
+		t.Fatalf("ResolveWindowRoot failed: %v", err)
+	}
+	ref := resolved.Ref
 	_ = deps.Invoke(context.Background(), ref)
 	_ = deps.Select(context.Background(), ref)
 	_ = deps.SetValue(context.Background(), ref, "ok")
@@ -161,5 +166,58 @@ func TestNativeUIADeps_ActionDispatchAndInvalidRefs(t *testing.T) {
 	}
 	if _, err := deps.GetElementByRef(context.Background(), "bad"); !errors.Is(err, errUIANilElement) {
 		t.Fatalf("expected invalid ref -> nil element, got %v", err)
+	}
+}
+
+func TestNativeUIADeps_CacheLifecycle(t *testing.T) {
+	sameElement := &uiaElement{HWND: "0x44", RuntimeID: "runtime-44", Name: "save"}
+	deps := &nativeUIADeps{
+		bridge: &fakeNativeBridge{
+			resolveRoot:   func(window.HWND) (*uiaElement, error) { return cloneUIAElement(sameElement), nil },
+			elementByHWND: func(window.HWND) (*uiaElement, error) { return cloneUIAElement(sameElement), nil },
+			parentHWND:    func(window.HWND) (window.HWND, bool, error) { return 0, false, nil },
+			childHWNDs:    func(window.HWND) ([]window.HWND, error) { return nil, nil },
+			focusedHWND:   func() (window.HWND, error) { return 0, nil },
+			cursorPos:     func() (int, int, error) { return 0, 0, nil },
+			hwndFromPoint: func(int, int) (window.HWND, error) { return 0, nil },
+			invoke:        func(window.HWND) error { return nil },
+			selectFn:      func(window.HWND) error { return nil },
+			setValue:      func(window.HWND, string) error { return nil },
+			defaultAction: func(window.HWND) error { return nil },
+			toggle:        func(window.HWND) error { return nil },
+			expand:        func(window.HWND) error { return nil },
+			collapse:      func(window.HWND) error { return nil },
+		},
+		sessionID:     "sess-a",
+		refToElement:  map[string]*uiaElement{},
+		keyToRefCache: map[string]string{},
+	}
+	first, err := deps.ResolveWindowRoot(context.Background(), "0x44")
+	if err != nil {
+		t.Fatalf("ResolveWindowRoot: %v", err)
+	}
+	second, err := deps.GetElementByRef(context.Background(), first.Ref)
+	if err != nil {
+		t.Fatalf("GetElementByRef: %v", err)
+	}
+	if first.Ref != second.Ref {
+		t.Fatalf("expected stable opaque ref across session, got %q and %q", first.Ref, second.Ref)
+	}
+	_, err = deps.lookupByRef(makeUIANodeRef("sess-a", "missing"))
+	var notFound *NodeRefNotFoundError
+	if !errors.As(err, &notFound) {
+		t.Fatalf("expected typed not found error, got %v", err)
+	}
+}
+
+func TestNativeUIADeps_RejectsWindowRefs(t *testing.T) {
+	deps := &nativeUIADeps{
+		bridge:        &fakeNativeBridge{},
+		sessionID:     "sess-a",
+		refToElement:  map[string]*uiaElement{},
+		keyToRefCache: map[string]string{},
+	}
+	if _, err := deps.GetElementByRef(context.Background(), "win:0x2a"); !errors.Is(err, errUIANilElement) {
+		t.Fatalf("expected window ref rejection in UIA mode, got %v", err)
 	}
 }

@@ -40,26 +40,26 @@ func (f fakeWindowTreeBridge) ChildHWNDs(hwnd window.HWND) ([]window.HWND, error
 func TestNativeWindowTreeDeps_ParentAndChildrenTraversal(t *testing.T) {
 	deps := &nativeWindowTreeDeps{bridge: fakeWindowTreeBridge{
 		elements: map[window.HWND]*uiaElement{
-			0x1: {Ref: "hwnd:0x1", RuntimeID: "1", Name: "root"},
-			0x2: {Ref: "hwnd:0x2", RuntimeID: "2", Name: "left", ParentRef: "hwnd:0x1"},
-			0x3: {Ref: "hwnd:0x3", RuntimeID: "3", Name: "right", ParentRef: "hwnd:0x1"},
+			0x1: {Ref: "win:0x1", RuntimeID: "1", Name: "root"},
+			0x2: {Ref: "win:0x2", RuntimeID: "2", Name: "left", ParentRef: "win:0x1"},
+			0x3: {Ref: "win:0x3", RuntimeID: "3", Name: "right", ParentRef: "win:0x1"},
 		},
 		parents:  map[window.HWND]window.HWND{0x2: 0x1, 0x3: 0x1},
 		children: map[window.HWND][]window.HWND{0x1: {0x2, 0x3}},
 	}}
 
-	kids, err := deps.GetChildren(context.Background(), "hwnd:0x1")
+	kids, err := deps.GetChildren(context.Background(), "win:0x1")
 	if err != nil {
 		t.Fatalf("GetChildren failed: %v", err)
 	}
-	if len(kids) != 2 || kids[0].Ref != "hwnd:0x2" || kids[1].Ref != "hwnd:0x3" {
+	if len(kids) != 2 || kids[0].Ref != "win:0x2" || kids[1].Ref != "win:0x3" {
 		t.Fatalf("unexpected children: %+v", kids)
 	}
-	parent, err := deps.GetParent(context.Background(), "hwnd:0x2")
-	if err != nil || parent.Ref != "hwnd:0x1" {
+	parent, err := deps.GetParent(context.Background(), "win:0x2")
+	if err != nil || parent.Ref != "win:0x1" {
 		t.Fatalf("GetParent failed: %+v err=%v", parent, err)
 	}
-	count, ok, err := deps.GetChildCount(context.Background(), "hwnd:0x1")
+	count, ok, err := deps.GetChildCount(context.Background(), "win:0x1")
 	if err != nil || !ok || count != 2 {
 		t.Fatalf("GetChildCount failed: count=%d ok=%v err=%v", count, ok, err)
 	}
@@ -75,5 +75,8 @@ func TestNativeWindowTreeDeps_UIAOnlyMethodsGuarded(t *testing.T) {
 	}
 	if _, err := deps.ElementFromPoint(context.Background(), 1, 2); !errors.Is(err, ErrProviderActionUnsupported) {
 		t.Fatalf("expected element-from-point to be unsupported, got %v", err)
+	}
+	if _, err := deps.GetElementByRef(context.Background(), "uia:sess:1"); !errors.Is(err, errUIANilElement) {
+		t.Fatalf("expected UIA ref rejection in window tree mode, got %v", err)
 	}
 }

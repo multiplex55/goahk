@@ -41,7 +41,7 @@ func (d *nativeWindowTreeDeps) ResolveWindowRoot(_ context.Context, hwnd string)
 }
 
 func (d *nativeWindowTreeDeps) GetElementByRef(_ context.Context, ref string) (*uiaElement, error) {
-	hwnd, err := parseElementRef(ref)
+	hwnd, err := parseWindowTreeRef(ref)
 	if err != nil {
 		return nil, errUIANilElement
 	}
@@ -56,7 +56,7 @@ func (d *nativeWindowTreeDeps) GetElementByRef(_ context.Context, ref string) (*
 }
 
 func (d *nativeWindowTreeDeps) GetParent(_ context.Context, ref string) (*uiaElement, error) {
-	hwnd, err := parseElementRef(ref)
+	hwnd, err := parseWindowTreeRef(ref)
 	if err != nil {
 		return nil, errUIANilElement
 	}
@@ -71,7 +71,7 @@ func (d *nativeWindowTreeDeps) GetParent(_ context.Context, ref string) (*uiaEle
 }
 
 func (d *nativeWindowTreeDeps) GetChildren(_ context.Context, ref string) ([]*uiaElement, error) {
-	hwnd, err := parseElementRef(ref)
+	hwnd, err := parseWindowTreeRef(ref)
 	if err != nil {
 		return nil, errUIANilElement
 	}
@@ -190,10 +190,10 @@ func describeHWND(hwnd window.HWND) (*uiaElement, error) {
 	className, _ := getClassName(hwnd)
 	parent, _, _ := win32WindowTreeBridge{}.ParentHWND(hwnd)
 	return &uiaElement{
-		Ref:         makeElementRef(hwnd),
+		Ref:         makeWindowNodeRef(hwnd.String()),
 		RuntimeID:   strconv.FormatUint(uint64(hwnd), 10),
 		HWND:        hwnd.String(),
-		ParentRef:   makeElementRef(parent),
+		ParentRef:   makeWindowNodeRef(parent.String()),
 		Name:        title,
 		ControlType: "Window",
 		ClassName:   className,
@@ -219,6 +219,14 @@ func describeHWND(hwnd window.HWND) (*uiaElement, error) {
 		},
 		SupportedPatterns: []string{},
 	}, nil
+}
+
+func parseWindowTreeRef(ref string) (window.HWND, error) {
+	parsed, err := parseNodeRef(ref)
+	if err != nil || parsed.Provider != nodeRefProviderWin {
+		return 0, ErrInvalidNodeRef
+	}
+	return parseHWND(parsed.ID)
 }
 
 func getWindowText(hwnd window.HWND) (string, error) {
