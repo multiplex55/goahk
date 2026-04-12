@@ -414,6 +414,74 @@ func TestBuildPropertyList_IncludesDenseSetAndUnsupportedMarkers(t *testing.T) {
 	assertProperty("LabeledBy", "relation", "ok", "Submit label")
 }
 
+func TestBuildPropertyList_PreservesFalseAndSemanticAbsenceStates(t *testing.T) {
+	selected := InspectElement{
+		IsEnabled: false,
+		UnsupportedProps: map[string]bool{
+			"IsEnabled": false,
+		},
+		PropertyStates: map[string]string{
+			"HelpText": propertyStatusUnavailable,
+			"Value":    propertyStatusEmpty,
+		},
+	}
+	properties := buildPropertyList(selected)
+	byName := map[string]PropertyDTO{}
+	for _, property := range properties {
+		byName[property.Name] = property
+	}
+	isEnabled := byName["IsEnabled"]
+	if isEnabled.Status != propertyStatusOK || isEnabled.Value == nil || *isEnabled.Value != "false" {
+		t.Fatalf("explicit false should be rendered as ok=false, got %+v", isEnabled)
+	}
+	helpText := byName["HelpText"]
+	if helpText.Status != propertyStatusUnavailable || helpText.Value != nil {
+		t.Fatalf("expected unavailable help text to keep semantic status, got %+v", helpText)
+	}
+	value := byName["Value"]
+	if value.Status != propertyStatusEmpty || value.Value != nil {
+		t.Fatalf("expected empty value to keep semantic status, got %+v", value)
+	}
+}
+
+func TestBuildPropertyList_BoundingRectangleValidity(t *testing.T) {
+	cases := []struct {
+		name       string
+		rect       *Rect
+		wantStatus string
+		wantValue  string
+	}{
+		{name: "nil is empty", rect: nil, wantStatus: propertyStatusEmpty},
+		{name: "zero size is empty", rect: &Rect{Left: 1, Top: 2, Width: 0, Height: 3}, wantStatus: propertyStatusEmpty},
+		{name: "negative size is empty", rect: &Rect{Left: 1, Top: 2, Width: -10, Height: 3}, wantStatus: propertyStatusEmpty},
+		{name: "valid rect renders", rect: &Rect{Left: 1, Top: 2, Width: 3, Height: 4}, wantStatus: propertyStatusOK, wantValue: "1,2,3,4"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			properties := buildPropertyList(InspectElement{BoundingRect: tc.rect})
+			var got PropertyDTO
+			for _, property := range properties {
+				if property.Name == "BoundingRectangle" {
+					got = property
+					break
+				}
+			}
+			if got.Status != tc.wantStatus {
+				t.Fatalf("unexpected status got=%q want=%q", got.Status, tc.wantStatus)
+			}
+			if tc.wantValue == "" {
+				if got.Value != nil {
+					t.Fatalf("expected nil rect value, got %q", *got.Value)
+				}
+				return
+			}
+			if got.Value == nil || *got.Value != tc.wantValue {
+				t.Fatalf("unexpected rect value got=%v want=%q", got.Value, tc.wantValue)
+			}
+		})
+	}
+}
+
 func strPtr(v string) *string { return &v }
 
 func TestWindowsProvider_GetNodeDetailsStatusAndPathFallbacks(t *testing.T) {

@@ -126,6 +126,7 @@ type InspectElement struct {
 	IsControlElement     bool                `json:"isControlElement"`
 	IsPassword           bool                `json:"isPassword"`
 	UnsupportedProps     map[string]bool     `json:"unsupportedProps,omitempty"`
+	PropertyStates       map[string]string   `json:"propertyStates,omitempty"`
 	Patterns             []PatternAction     `json:"patterns,omitempty"`
 	BestSelector         *Selector           `json:"bestSelector,omitempty"`
 	SelectorSuggestions  []SelectorCandidate `json:"selectorSuggestions,omitempty"`

@@ -270,85 +270,72 @@ func accPathFromElement(selected InspectElement) string {
 }
 
 func buildPropertyList(selected InspectElement) []PropertyDTO {
+	status := func(name string) string { return normalizePropertyStatus(selected.PropertyStates[name]) }
 	return []PropertyDTO{
-		propertyString("RuntimeID", "identity", selected.RuntimeID, selected.UnsupportedProps["RuntimeID"]),
-		propertyString("AutomationId", "identity", selected.AutomationID, selected.UnsupportedProps["AutomationId"]),
-		propertyInt("ProcessId", "identity", selected.ProcessID, selected.UnsupportedProps["ProcessId"]),
-		propertyString("ClassName", "identity", selected.ClassName, selected.UnsupportedProps["ClassName"]),
-		propertyString("FrameworkId", "identity", selected.FrameworkID, selected.UnsupportedProps["FrameworkId"]),
-		propertyString("ControlType", "semantics", selected.ControlType, selected.UnsupportedProps["ControlType"]),
-		propertyString("LocalizedControlType", "semantics", selected.LocalizedControlType, selected.UnsupportedProps["LocalizedControlType"]),
-		propertyString("Name", "semantics", selected.Name, selected.UnsupportedProps["Name"]),
-		propertyOptional("Value", "semantics", selected.Value, selected.UnsupportedProps["Value"]),
-		propertyOptional("HelpText", "semantics", selected.HelpText, selected.UnsupportedProps["HelpText"]),
-		propertyOptional("ItemType", "semantics", selected.ItemType, selected.UnsupportedProps["ItemType"]),
-		propertyOptional("ItemStatus", "semantics", selected.ItemStatus, selected.UnsupportedProps["ItemStatus"]),
-		propertyOptional("AccessKey", "semantics", selected.AccessKey, selected.UnsupportedProps["AccessKey"]),
-		propertyOptional("AcceleratorKey", "semantics", selected.AcceleratorKey, selected.UnsupportedProps["AcceleratorKey"]),
-		propertyBool("IsEnabled", "state", selected.IsEnabled, selected.UnsupportedProps["IsEnabled"]),
-		propertyBool("IsPassword", "state", selected.IsPassword, selected.UnsupportedProps["IsPassword"]),
-		propertyBool("IsOffscreen", "state", selected.IsOffscreen, selected.UnsupportedProps["IsOffscreen"]),
-		propertyBool("HasKeyboardFocus", "state", selected.HasKeyboardFocus, selected.UnsupportedProps["HasKeyboardFocus"]),
-		propertyBool("IsKeyboardFocusable", "state", selected.IsKeyboardFocusable, selected.UnsupportedProps["IsKeyboardFocusable"]),
-		propertyBool("IsRequiredForForm", "state", selected.IsRequiredForForm, selected.UnsupportedProps["IsRequiredForForm"]),
-		propertyRect("BoundingRectangle", "geometry", selected.BoundingRect, selected.UnsupportedProps["BoundingRectangle"]),
-		propertyOptional("LabeledBy", "relation", selected.LabeledBy, selected.UnsupportedProps["LabeledBy"]),
+		propertyString("RuntimeID", "identity", selected.RuntimeID, selected.UnsupportedProps["RuntimeID"], status("RuntimeID")),
+		propertyString("AutomationId", "identity", selected.AutomationID, selected.UnsupportedProps["AutomationId"], status("AutomationId")),
+		propertyInt("ProcessId", "identity", selected.ProcessID, selected.UnsupportedProps["ProcessId"], status("ProcessId")),
+		propertyString("ClassName", "identity", selected.ClassName, selected.UnsupportedProps["ClassName"], status("ClassName")),
+		propertyString("FrameworkId", "identity", selected.FrameworkID, selected.UnsupportedProps["FrameworkId"], status("FrameworkId")),
+		propertyString("ControlType", "semantics", selected.ControlType, selected.UnsupportedProps["ControlType"], status("ControlType")),
+		propertyString("LocalizedControlType", "semantics", selected.LocalizedControlType, selected.UnsupportedProps["LocalizedControlType"], status("LocalizedControlType")),
+		propertyString("Name", "semantics", selected.Name, selected.UnsupportedProps["Name"], status("Name")),
+		propertyOptional("Value", "semantics", selected.Value, selected.UnsupportedProps["Value"], status("Value")),
+		propertyOptional("HelpText", "semantics", selected.HelpText, selected.UnsupportedProps["HelpText"], status("HelpText")),
+		propertyOptional("ItemType", "semantics", selected.ItemType, selected.UnsupportedProps["ItemType"], status("ItemType")),
+		propertyOptional("ItemStatus", "semantics", selected.ItemStatus, selected.UnsupportedProps["ItemStatus"], status("ItemStatus")),
+		propertyOptional("AccessKey", "semantics", selected.AccessKey, selected.UnsupportedProps["AccessKey"], status("AccessKey")),
+		propertyOptional("AcceleratorKey", "semantics", selected.AcceleratorKey, selected.UnsupportedProps["AcceleratorKey"], status("AcceleratorKey")),
+		propertyBool("IsEnabled", "state", selected.IsEnabled, selected.UnsupportedProps["IsEnabled"], status("IsEnabled")),
+		propertyBool("IsPassword", "state", selected.IsPassword, selected.UnsupportedProps["IsPassword"], status("IsPassword")),
+		propertyBool("IsOffscreen", "state", selected.IsOffscreen, selected.UnsupportedProps["IsOffscreen"], status("IsOffscreen")),
+		propertyBool("HasKeyboardFocus", "state", selected.HasKeyboardFocus, selected.UnsupportedProps["HasKeyboardFocus"], status("HasKeyboardFocus")),
+		propertyBool("IsKeyboardFocusable", "state", selected.IsKeyboardFocusable, selected.UnsupportedProps["IsKeyboardFocusable"], status("IsKeyboardFocusable")),
+		propertyBool("IsRequiredForForm", "state", selected.IsRequiredForForm, selected.UnsupportedProps["IsRequiredForForm"], status("IsRequiredForForm")),
+		propertyRect("BoundingRectangle", "geometry", selected.BoundingRect, selected.UnsupportedProps["BoundingRectangle"], status("BoundingRectangle")),
+		propertyOptional("LabeledBy", "relation", selected.LabeledBy, selected.UnsupportedProps["LabeledBy"], status("LabeledBy")),
 	}
 }
 
-func propertyString(name, group, raw string, unsupported bool) PropertyDTO {
-	if unsupported {
-		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "unsupported"}
+func propertyString(name, group, raw string, unsupported bool, state string) PropertyDTO {
+	value, status := normalizeStringField(raw, unsupported, state)
+	if value == "" {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: status}
 	}
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "ok"}
-	}
-	return PropertyDTO{Name: name, Group: group, Value: &trimmed, Status: "ok"}
+	return PropertyDTO{Name: name, Group: group, Value: &value, Status: status}
 }
 
-func propertyOptional(name, group string, raw *string, unsupported bool) PropertyDTO {
-	if unsupported {
-		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "unsupported"}
-	}
-	if raw == nil {
-		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "ok"}
-	}
-	trimmed := strings.TrimSpace(*raw)
-	if trimmed == "" {
-		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "ok"}
-	}
-	return PropertyDTO{Name: name, Group: group, Value: &trimmed, Status: "ok"}
+func propertyOptional(name, group string, raw *string, unsupported bool, state string) PropertyDTO {
+	value, status := normalizeOptionalStringField(raw, unsupported, state)
+	return PropertyDTO{Name: name, Group: group, Value: value, Status: status}
 }
 
-func propertyBool(name, group string, raw bool, unsupported bool) PropertyDTO {
-	if unsupported {
-		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "unsupported"}
+func propertyBool(name, group string, raw bool, unsupported bool, state string) PropertyDTO {
+	value, status := normalizeBoolField(raw, unsupported, state)
+	if status == propertyStatusUnsupported {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: status}
 	}
-	value := strconv.FormatBool(raw)
-	return PropertyDTO{Name: name, Group: group, Value: &value, Status: "ok"}
+	formatted := strconv.FormatBool(value)
+	return PropertyDTO{Name: name, Group: group, Value: &formatted, Status: status}
 }
 
-func propertyInt(name, group string, raw int, unsupported bool) PropertyDTO {
-	if unsupported {
-		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "unsupported"}
+func propertyInt(name, group string, raw int, unsupported bool, state string) PropertyDTO {
+	value, status := normalizeScalarField(raw, unsupported, state)
+	if value <= 0 {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: status}
 	}
-	if raw <= 0 {
-		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "ok"}
-	}
-	value := strconv.Itoa(raw)
-	return PropertyDTO{Name: name, Group: group, Value: &value, Status: "ok"}
+	formatted := strconv.Itoa(value)
+	return PropertyDTO{Name: name, Group: group, Value: &formatted, Status: status}
 }
 
-func propertyRect(name, group string, rect *Rect, unsupported bool) PropertyDTO {
-	if unsupported {
-		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "unsupported"}
+func propertyRect(name, group string, rect *Rect, unsupported bool, state string) PropertyDTO {
+	valueRect, status := normalizeRectField(rect, unsupported, state)
+	if valueRect == nil {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: status}
 	}
-	if rect == nil {
-		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "ok"}
-	}
+	rect = valueRect
 	value := strconv.Itoa(rect.Left) + "," + strconv.Itoa(rect.Top) + "," + strconv.Itoa(rect.Width) + "," + strconv.Itoa(rect.Height)
-	return PropertyDTO{Name: name, Group: group, Value: &value, Status: "ok"}
+	return PropertyDTO{Name: name, Group: group, Value: &value, Status: status}
 }
 
 func ptrString(v *string) string {

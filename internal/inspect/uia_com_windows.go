@@ -18,6 +18,7 @@ type uiaBridgeElement struct {
 	AllowHWNDFallback   bool
 	SupportedPatterns   []string
 	UnsupportedProperty map[string]bool
+	PropertyState       map[string]string
 }
 
 type nativeUIABridge interface {

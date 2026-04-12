@@ -193,3 +193,41 @@ func TestNativeUIADeps_BridgeMappingIncludesPatternsAndUnsupportedProps(t *testi
 		t.Fatalf("mapping mismatch element=%+v", got)
 	}
 }
+
+func TestNativeUIADeps_BridgePropertyAbsenceStateTranslation(t *testing.T) {
+	bridge := newBridgeFixture()
+	bridge.resolveRoot = func(h window.HWND) (*uiaBridgeElement, error) {
+		el := bridgeEl("rid:states", h.String(), "states")
+		el.UnsupportedProperty = map[string]bool{
+			"HelpText":  true,  // unsupported by provider
+			"ItemType":  false, // supported but empty
+			"IsEnabled": false, // explicit false must not become unsupported
+		}
+		el.PropertyState = map[string]string{
+			"Value": propertyStatusUnavailable,
+			"Name":  propertyStatusStale,
+		}
+		el.Element.IsEnabled = false
+		return el, nil
+	}
+	deps := &nativeUIADeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*cachedBridgeElement{}, keyToRef: map[string]string{}}
+	got, err := deps.ResolveWindowRoot(context.Background(), "0x44")
+	if err != nil {
+		t.Fatalf("ResolveWindowRoot: %v", err)
+	}
+	if got.PropertyStates["HelpText"] != propertyStatusUnsupported {
+		t.Fatalf("expected unsupported status for HelpText, got %q", got.PropertyStates["HelpText"])
+	}
+	if got.PropertyStates["ItemType"] != propertyStatusEmpty {
+		t.Fatalf("expected empty status for ItemType, got %q", got.PropertyStates["ItemType"])
+	}
+	if got.PropertyStates["Value"] != propertyStatusUnavailable {
+		t.Fatalf("expected unavailable status for Value, got %q", got.PropertyStates["Value"])
+	}
+	if got.PropertyStates["Name"] != propertyStatusStale {
+		t.Fatalf("expected stale status for Name, got %q", got.PropertyStates["Name"])
+	}
+	if got.UnsupportedProps["IsEnabled"] {
+		t.Fatalf("explicit false must not be marked unsupported")
+	}
+}
