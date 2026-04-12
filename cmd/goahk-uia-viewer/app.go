@@ -33,6 +33,8 @@ type ViewerApp struct {
 	followInterval time.Duration
 	followEventID  int64
 	lastNodeID     string
+	followPaused   bool
+	followLocked   bool
 
 	logDebugf func(ctx context.Context, format string, args ...any)
 	logErrorf func(ctx context.Context, format string, args ...any)
@@ -189,6 +191,8 @@ func (a *ViewerApp) ToggleFollowCursor(req inspect.ToggleFollowCursorRequest) (i
 	a.followCancel = nil
 	a.followDone = nil
 	a.followEnabled = false
+	a.followPaused = false
+	a.followLocked = false
 	a.followMu.Unlock()
 
 	if cancel != nil {
@@ -215,6 +219,12 @@ func (a *ViewerApp) runFollowCursorLoop(loopCtx context.Context, done chan struc
 		case <-loopCtx.Done():
 			return
 		case <-ticks:
+			a.followMu.Lock()
+			if a.followPaused || a.followLocked {
+				a.followMu.Unlock()
+				continue
+			}
+			a.followMu.Unlock()
 			resp, err := a.service.GetElementUnderCursor(loopCtx, inspect.GetElementUnderCursorRequest{})
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -249,6 +259,50 @@ func (a *ViewerApp) emit(name string, payload any) {
 
 func (a *ViewerApp) RefreshWindows(req inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
 	return a.service.RefreshWindows(a.runtimeContext(), req)
+}
+
+func (a *ViewerApp) PauseFollowCursor(req inspect.PauseFollowCursorRequest) (inspect.PauseFollowCursorResponse, error) {
+	a.followMu.Lock()
+	a.followPaused = true
+	a.followMu.Unlock()
+	return a.service.PauseFollowCursor(a.runtimeContext(), req)
+}
+
+func (a *ViewerApp) ResumeFollowCursor(req inspect.ResumeFollowCursorRequest) (inspect.ResumeFollowCursorResponse, error) {
+	a.followMu.Lock()
+	a.followPaused = false
+	a.followMu.Unlock()
+	return a.service.ResumeFollowCursor(a.runtimeContext(), req)
+}
+
+func (a *ViewerApp) LockFollowCursor(req inspect.LockFollowCursorRequest) (inspect.LockFollowCursorResponse, error) {
+	a.followMu.Lock()
+	a.followLocked = true
+	a.followMu.Unlock()
+	return a.service.LockFollowCursor(a.runtimeContext(), req)
+}
+
+func (a *ViewerApp) UnlockFollowCursor(req inspect.UnlockFollowCursorRequest) (inspect.UnlockFollowCursorResponse, error) {
+	a.followMu.Lock()
+	a.followLocked = false
+	a.followMu.Unlock()
+	return a.service.UnlockFollowCursor(a.runtimeContext(), req)
+}
+
+func (a *ViewerApp) RefreshTreeRoot(req inspect.RefreshTreeRootRequest) (inspect.RefreshTreeRootResponse, error) {
+	return a.service.RefreshTreeRoot(a.runtimeContext(), req)
+}
+
+func (a *ViewerApp) RefreshNodeChildren(req inspect.RefreshNodeChildrenRequest) (inspect.RefreshNodeChildrenResponse, error) {
+	return a.service.RefreshNodeChildren(a.runtimeContext(), req)
+}
+
+func (a *ViewerApp) RefreshNodeDetails(req inspect.RefreshNodeDetailsRequest) (inspect.RefreshNodeDetailsResponse, error) {
+	return a.service.RefreshNodeDetails(a.runtimeContext(), req)
+}
+
+func (a *ViewerApp) GetDiagnostics(req inspect.GetDiagnosticsRequest) (inspect.GetDiagnosticsResponse, error) {
+	return a.service.GetDiagnostics(a.runtimeContext(), req)
 }
 
 func (a *ViewerApp) runtimeContext() context.Context {

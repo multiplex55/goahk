@@ -3,11 +3,19 @@ import {
   ActivateWindow,
   ClearHighlight,
   CopyBestSelector,
+  GetDiagnostics,
   GetNodeChildren,
   GetNodeDetails,
   GetTreeRoot,
   HighlightNode,
   InspectWindow,
+  LockFollowCursor,
+  PauseFollowCursor,
+  RefreshNodeChildren,
+  RefreshNodeDetails,
+  RefreshTreeRoot,
+  ResumeFollowCursor,
+  UnlockFollowCursor,
   InvokePattern,
   RefreshWindows,
   SelectNode,
@@ -57,7 +65,7 @@ export function createInspectBindings(): InspectBindings {
       if (!response?.root) {
         throw new Error('Tree root response was empty');
       }
-      return { root: normalizeNode(response.root), state: response?.state };
+      return { root: normalizeNode(response.root), state: response?.state, diagnostics: response?.diagnostics };
     },
     GetNodeChildren: async (req: inspect.GetNodeChildrenRequest) => {
       const response = await call(() => GetNodeChildren(req), 'Failed to load node children');
@@ -95,6 +103,7 @@ export function createInspectBindings(): InspectBindings {
           selectorSuggestions?: SelectorCandidate[];
         };
         selectorOptions?: SelectorResolution;
+        accPath?: string;
       };
       return {
         windowInfo: dto.windowInfo,
@@ -112,7 +121,8 @@ export function createInspectBindings(): InspectBindings {
         bestSelector: dto.bestSelector,
         path: Array.isArray(dto.path) ? dto.path : [],
         selectorPath: dto.selectorPath,
-        selectorOptions: dto.selectorOptions
+        selectorOptions: dto.selectorOptions,
+        accPath: dto.accPath
       };
     },
     HighlightNode: async (req: inspect.HighlightNodeRequest) => {
@@ -137,9 +147,45 @@ export function createInspectBindings(): InspectBindings {
       const response = await call(() => ToggleFollowCursor(req), 'Failed to toggle follow cursor');
       return { enabled: !!response?.enabled };
     },
+    PauseFollowCursor: async () => {
+      const response = await call(() => PauseFollowCursor({}), 'Failed to pause follow cursor');
+      return { paused: !!response?.paused };
+    },
+    ResumeFollowCursor: async () => {
+      const response = await call(() => ResumeFollowCursor({}), 'Failed to resume follow cursor');
+      return { paused: !!response?.paused };
+    },
+    LockFollowCursor: async (req: { nodeID?: string }) => {
+      const response = await call(() => LockFollowCursor(req), 'Failed to lock follow cursor');
+      return { locked: !!response?.locked, nodeID: response?.nodeID };
+    },
+    UnlockFollowCursor: async () => {
+      const response = await call(() => UnlockFollowCursor({}), 'Failed to unlock follow cursor');
+      return { locked: !!response?.locked };
+    },
     ActivateWindow: async (req: inspect.ActivateWindowRequest) => {
       const response = await call(() => ActivateWindow(req), 'Failed to activate window');
       return { activated: !!response?.activated };
+    },
+    RefreshTreeRoot: async (req: inspect.RefreshTreeRootRequest) => {
+      const response = await call(() => RefreshTreeRoot(req), 'Failed to refresh root');
+      if (!response?.root) throw new Error('Tree root response was empty');
+      return { root: normalizeNode(response.root), state: response?.state, diagnostics: response?.diagnostics };
+    },
+    RefreshNodeChildren: async (req: inspect.RefreshNodeChildrenRequest) => {
+      const response = await call(() => RefreshNodeChildren(req), 'Failed to refresh children');
+      return {
+        parentNodeID: response?.parentNodeID ?? req.nodeID,
+        children: Array.isArray(response?.children) ? response.children.map((child) => normalizeNode(child)) : []
+      };
+    },
+    RefreshNodeDetails: async (req: inspect.RefreshNodeDetailsRequest) => {
+      const response = await call(() => RefreshNodeDetails(req), 'Failed to refresh details');
+      return { details: (response?.details ?? {}) as any };
+    },
+    GetDiagnostics: async () => {
+      const response = await call(() => GetDiagnostics({}), 'Failed to read diagnostics');
+      return { diagnostics: response?.diagnostics };
     },
     CopyBestSelector: async (req: inspect.CopyBestSelectorRequest) => {
       const response = await call(() => CopyBestSelector(req), 'Failed to copy selector');

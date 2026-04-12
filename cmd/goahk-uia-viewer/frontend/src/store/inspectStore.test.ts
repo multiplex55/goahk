@@ -59,6 +59,54 @@ describe('inspectStore', () => {
     expect(store.getState().statusText).toContain('Loaded');
   });
 
+  it('supports follow cursor pause/resume and lock/unlock commands', async () => {
+    const bindings = makeBindings({
+      PauseFollowCursor: vi.fn().mockResolvedValue({ paused: true }),
+      ResumeFollowCursor: vi.fn().mockResolvedValue({ paused: false }),
+      LockFollowCursor: vi.fn().mockResolvedValue({ locked: true, nodeID: 'root-1' }),
+      UnlockFollowCursor: vi.fn().mockResolvedValue({ locked: false })
+    });
+    const store = createInspectStore(bindings);
+    await store.selectNode('root-1');
+
+    await store.pauseFollowCursor();
+    await store.lockFollowCursor();
+    expect(store.getState().followCursorPaused).toBe(true);
+    expect(store.getState().followCursorLocked).toBe(true);
+
+    await store.resumeFollowCursor();
+    await store.unlockFollowCursor();
+    expect(store.getState().followCursorPaused).toBe(false);
+    expect(store.getState().followCursorLocked).toBe(false);
+  });
+
+  it('supports scoped refresh commands and diagnostics hydration', async () => {
+    const bindings = makeBindings({
+      RefreshTreeRoot: vi.fn().mockResolvedValue({
+        root: { nodeID: 'root-r', hasChildren: true },
+        diagnostics: { stage: 'ResolveWindowRoot', hresult: '0x80070005' }
+      }),
+      RefreshNodeChildren: vi.fn().mockResolvedValue({
+        parentNodeID: 'root-r',
+        children: [{ nodeID: 'child-r', hasChildren: false }]
+      }),
+      RefreshNodeDetails: vi.fn().mockResolvedValue({
+        details: { properties: [{ name: 'AutomationId', value: 'child-r', group: 'identity', status: 'ok' }], patterns: [], bestSelector: '#child-r', accPath: 'hwnd=0x1' }
+      })
+    });
+    const store = createInspectStore(bindings);
+    await store.selectWindow('w1');
+
+    await store.refreshSelectedRoot();
+    expect(store.getState().diagnostics?.hresult).toBe('0x80070005');
+    await store.refreshSelectedNodeChildren();
+    expect(store.getState().childrenByParentID[store.getState().selectedNodeID]).toEqual(['child-r']);
+    await store.selectNode('child-r');
+    await store.refreshSelectedNodeDetails();
+    expect(store.getState().selectorText).toBe('#child-r');
+    expect(store.getState().nodeDetails?.accPath).toBe('hwnd=0x1');
+  });
+
 
 
   it('startup refresh path succeeds with one-arg RefreshWindows contract', async () => {

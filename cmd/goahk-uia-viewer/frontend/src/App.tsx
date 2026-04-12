@@ -63,7 +63,10 @@ export default function App() {
     visibleOnly: snapshot.visibleOnly,
     titleOnly: snapshot.titleOnly,
     activateWindow: snapshot.activateOnSelect,
-    filter: snapshot.filter
+    filter: snapshot.filter,
+    followCursor: snapshot.followCursor,
+    followCursorPaused: snapshot.followCursorPaused,
+    followCursorLocked: snapshot.followCursorLocked
   };
 
   const backendPath = snapshot.nodeDetails?.path?.length ? pathToText(snapshot.nodeDetails.path) : '';
@@ -127,7 +130,8 @@ export default function App() {
               windowInfo: snapshot.nodeDetails?.windowInfo,
               element: snapshot.nodeDetails?.element,
               selectorPath: snapshot.nodeDetails?.selectorPath,
-              selectorOptions: snapshot.nodeDetails?.selectorOptions
+              selectorOptions: snapshot.nodeDetails?.selectorOptions,
+              accPath: snapshot.nodeDetails?.accPath
             }}
             patternActions={snapshot.patterns.map((pattern) => ({
               id: pattern.name,
@@ -160,6 +164,12 @@ export default function App() {
       />
 
       <footer className="footer-controls">
+        {snapshot.diagnostics ? (
+          <div className="inspect-diagnostics" role="status">
+            Diagnostics: {snapshot.diagnostics.stage || 'unknown'} {snapshot.diagnostics.hresult ? `(${snapshot.diagnostics.hresult})` : ''}{' '}
+            {snapshot.diagnostics.privilegeHint || snapshot.diagnostics.message || ''}
+          </div>
+        ) : null}
         <FooterControls
           state={footerState}
           onRefresh={() => {
@@ -169,6 +179,30 @@ export default function App() {
           onToggleTitle={(value) => store.setTitleOnly(value)}
           onToggleActivate={(value) => store.setActivateOnSelect(value)}
           onChangeFilter={(value) => store.setFilterInput(value)}
+          onToggleFollowCursor={(value) => {
+            void store.setFollowCursor(value);
+          }}
+          onPauseFollowCursor={() => {
+            void store.pauseFollowCursor();
+          }}
+          onResumeFollowCursor={() => {
+            void store.resumeFollowCursor();
+          }}
+          onLockFollowCursor={() => {
+            void store.lockFollowCursor();
+          }}
+          onUnlockFollowCursor={() => {
+            void store.unlockFollowCursor();
+          }}
+          onRefreshRoot={() => {
+            void store.refreshSelectedRoot();
+          }}
+          onRefreshChildren={() => {
+            void store.refreshSelectedNodeChildren();
+          }}
+          onRefreshDetails={() => {
+            void store.refreshSelectedNodeDetails();
+          }}
         />
         <StatusBar
           statusText={footerStatusText}

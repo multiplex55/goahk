@@ -70,7 +70,31 @@ func (unsupportedProvider) ActivateWindow(context.Context, ActivateWindowRequest
 func (unsupportedProvider) ToggleFollowCursor(context.Context, ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error) {
 	return ToggleFollowCursorResponse{}, ErrProviderActionUnsupported
 }
+func (unsupportedProvider) PauseFollowCursor(context.Context, PauseFollowCursorRequest) (PauseFollowCursorResponse, error) {
+	return PauseFollowCursorResponse{}, ErrProviderActionUnsupported
+}
+func (unsupportedProvider) ResumeFollowCursor(context.Context, ResumeFollowCursorRequest) (ResumeFollowCursorResponse, error) {
+	return ResumeFollowCursorResponse{}, ErrProviderActionUnsupported
+}
+func (unsupportedProvider) LockFollowCursor(context.Context, LockFollowCursorRequest) (LockFollowCursorResponse, error) {
+	return LockFollowCursorResponse{}, ErrProviderActionUnsupported
+}
+func (unsupportedProvider) UnlockFollowCursor(context.Context, UnlockFollowCursorRequest) (UnlockFollowCursorResponse, error) {
+	return UnlockFollowCursorResponse{}, ErrProviderActionUnsupported
+}
 
 func (unsupportedProvider) RefreshWindows(context.Context, RefreshWindowsRequest) (RefreshWindowsResponse, error) {
 	return RefreshWindowsResponse{}, ErrProviderActionUnsupported
+}
+func (unsupportedProvider) RefreshTreeRoot(context.Context, RefreshTreeRootRequest) (RefreshTreeRootResponse, error) {
+	return RefreshTreeRootResponse{}, ErrProviderActionUnsupported
+}
+func (unsupportedProvider) RefreshNodeChildren(context.Context, RefreshNodeChildrenRequest) (RefreshNodeChildrenResponse, error) {
+	return RefreshNodeChildrenResponse{}, ErrProviderActionUnsupported
+}
+func (unsupportedProvider) RefreshNodeDetails(context.Context, RefreshNodeDetailsRequest) (RefreshNodeDetailsResponse, error) {
+	return RefreshNodeDetailsResponse{}, ErrProviderActionUnsupported
+}
+func (unsupportedProvider) GetDiagnostics(context.Context, GetDiagnosticsRequest) (GetDiagnosticsResponse, error) {
+	return GetDiagnosticsResponse{}, ErrProviderActionUnsupported
 }

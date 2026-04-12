@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"goahk/internal/window"
 )
@@ -29,7 +30,13 @@ type windowsProvider struct {
 
 	followMu            sync.RWMutex
 	followCursorEnabled bool
+	followCursorPaused  bool
+	followCursorLocked  bool
+	lockedNodeID        string
 	focusedUnderCursor  TreeNodeDTO
+
+	diagMu          sync.RWMutex
+	lastDiagnostics *InspectDiagnostics
 }
 
 func newWindowsProvider() WindowsProvider {
@@ -95,8 +102,10 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 	mode := normalizeInspectMode(req.Mode)
 	root, resolvedMode, err := p.resolveTreeRoot(ctx, req.HWND, mode, req.Refresh)
 	if err != nil {
+		p.setDiagnostics(diagnosticsFromError("ResolveWindowRoot", err, ""))
 		return GetTreeRootResponse{}, err
 	}
+	p.clearDiagnostics()
 	p.setActiveMode(resolvedMode)
 	_ = p.highlights.ClearOnWindowSwitch(ctx, req.HWND)
 	state := InspectModeState{
@@ -107,7 +116,16 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 		state.FailureStage = "ResolveWindowRoot"
 		state.GuidanceText = "UIA tree is unavailable. Switch to Window Tree mode to continue inspecting this window."
 	}
-	return GetTreeRootResponse{Root: root, State: state}, nil
+	var diagnostics *InspectDiagnostics
+	if state.FallbackUsed {
+		diagnostics = &InspectDiagnostics{
+			Stage:        state.FailureStage,
+			Message:      state.GuidanceText,
+			FallbackMode: resolvedMode,
+		}
+		p.setDiagnostics(diagnostics)
+	}
+	return GetTreeRootResponse{Root: root, State: state, Diagnostics: diagnostics}, nil
 }
 
 func (p *windowsProvider) GetNodeChildren(ctx context.Context, req GetNodeChildrenRequest) (GetNodeChildrenResponse, error) {
@@ -219,7 +237,22 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 			SelectorSuggestions: selected.SelectorSuggestions,
 		},
 		SelectorOptions: selectorResolution(selected.SelectorSuggestions),
+		ACCPath:         accPathFromElement(selected),
 	}, nil
+}
+
+func accPathFromElement(selected InspectElement) string {
+	parts := make([]string, 0, 3)
+	if strings.TrimSpace(selected.HWND) != "" {
+		parts = append(parts, "hwnd="+strings.TrimSpace(selected.HWND))
+	}
+	if strings.TrimSpace(selected.ClassName) != "" {
+		parts = append(parts, "class="+strings.TrimSpace(selected.ClassName))
+	}
+	if strings.TrimSpace(selected.Name) != "" {
+		parts = append(parts, "name="+strings.TrimSpace(selected.Name))
+	}
+	return strings.Join(parts, ";")
 }
 
 func buildPropertyList(selected InspectElement) []PropertyDTO {
@@ -415,10 +448,24 @@ func (p *windowsProvider) GetFocusedElement(ctx context.Context, req GetFocusedE
 }
 
 func (p *windowsProvider) GetElementUnderCursor(ctx context.Context, req GetElementUnderCursorRequest) (GetElementUnderCursorResponse, error) {
+	p.followMu.RLock()
+	paused := p.followCursorPaused
+	locked := p.followCursorLocked
+	lockedNodeID := p.lockedNodeID
+	lockedElement := p.focusedUnderCursor
+	p.followMu.RUnlock()
+	if paused {
+		return GetElementUnderCursorResponse{Element: TreeNodeDTO{}}, nil
+	}
+	if locked && strings.TrimSpace(lockedNodeID) != "" {
+		return GetElementUnderCursorResponse{Element: lockedElement}, nil
+	}
 	el, err := p.activeCore().underCursor(ctx)
 	if err != nil {
+		p.setDiagnostics(diagnosticsFromError("ElementFromPoint", err, ""))
 		return GetElementUnderCursorResponse{}, err
 	}
+	p.clearDiagnostics()
 	p.followMu.Lock()
 	if p.followCursorEnabled {
 		p.focusedUnderCursor = el
@@ -480,9 +527,52 @@ func (p *windowsProvider) ToggleFollowCursor(_ context.Context, req ToggleFollow
 	p.followCursorEnabled = req.Enabled
 	if !req.Enabled {
 		p.focusedUnderCursor = TreeNodeDTO{}
+		p.followCursorPaused = false
+		p.followCursorLocked = false
+		p.lockedNodeID = ""
 	}
 	p.followMu.Unlock()
 	return ToggleFollowCursorResponse{Enabled: req.Enabled}, nil
+}
+
+func (p *windowsProvider) PauseFollowCursor(_ context.Context, _ PauseFollowCursorRequest) (PauseFollowCursorResponse, error) {
+	p.followMu.Lock()
+	p.followCursorPaused = true
+	p.followMu.Unlock()
+	return PauseFollowCursorResponse{Paused: true}, nil
+}
+
+func (p *windowsProvider) ResumeFollowCursor(_ context.Context, _ ResumeFollowCursorRequest) (ResumeFollowCursorResponse, error) {
+	p.followMu.Lock()
+	p.followCursorPaused = false
+	p.followMu.Unlock()
+	return ResumeFollowCursorResponse{Paused: false}, nil
+}
+
+func (p *windowsProvider) LockFollowCursor(ctx context.Context, req LockFollowCursorRequest) (LockFollowCursorResponse, error) {
+	p.followMu.Lock()
+	defer p.followMu.Unlock()
+	p.followCursorLocked = true
+	if strings.TrimSpace(req.NodeID) != "" {
+		p.lockedNodeID = req.NodeID
+		return LockFollowCursorResponse{Locked: true, NodeID: req.NodeID}, nil
+	}
+	el, err := p.activeCore().underCursor(ctx)
+	if err != nil {
+		p.followCursorLocked = false
+		return LockFollowCursorResponse{}, err
+	}
+	p.focusedUnderCursor = el
+	p.lockedNodeID = el.NodeID
+	return LockFollowCursorResponse{Locked: true, NodeID: el.NodeID}, nil
+}
+
+func (p *windowsProvider) UnlockFollowCursor(_ context.Context, _ UnlockFollowCursorRequest) (UnlockFollowCursorResponse, error) {
+	p.followMu.Lock()
+	p.followCursorLocked = false
+	p.lockedNodeID = ""
+	p.followMu.Unlock()
+	return UnlockFollowCursorResponse{Locked: false}, nil
 }
 
 func (p *windowsProvider) ActivateWindow(ctx context.Context, req ActivateWindowRequest) (ActivateWindowResponse, error) {
@@ -522,6 +612,46 @@ func (p *windowsProvider) RefreshWindows(ctx context.Context, req RefreshWindows
 		return false
 	})
 	return RefreshWindowsResponse{Windows: windows}, nil
+}
+
+func (p *windowsProvider) RefreshTreeRoot(ctx context.Context, req RefreshTreeRootRequest) (RefreshTreeRootResponse, error) {
+	resp, err := p.GetTreeRoot(ctx, GetTreeRootRequest{HWND: req.HWND, Mode: req.Mode, Refresh: true})
+	if err != nil {
+		return RefreshTreeRootResponse{}, err
+	}
+	return RefreshTreeRootResponse{Root: resp.Root, State: resp.State, Diagnostics: resp.Diagnostics}, nil
+}
+
+func (p *windowsProvider) RefreshNodeChildren(ctx context.Context, req RefreshNodeChildrenRequest) (RefreshNodeChildrenResponse, error) {
+	core := p.activeCore()
+	core.childrenCache.invalidateNode(core.childrenCache.window(), req.NodeID)
+	children, err := core.nodeChildren(ctx, req.NodeID)
+	if err != nil {
+		p.setDiagnostics(diagnosticsFromError("GetChildren", err, ""))
+		return RefreshNodeChildrenResponse{}, err
+	}
+	p.clearDiagnostics()
+	return RefreshNodeChildrenResponse{ParentNodeID: req.NodeID, Children: children}, nil
+}
+
+func (p *windowsProvider) RefreshNodeDetails(ctx context.Context, req RefreshNodeDetailsRequest) (RefreshNodeDetailsResponse, error) {
+	details, err := p.GetNodeDetails(ctx, GetNodeDetailsRequest{NodeID: req.NodeID})
+	if err != nil {
+		p.setDiagnostics(diagnosticsFromError("GetElementByRef", err, ""))
+		return RefreshNodeDetailsResponse{}, err
+	}
+	p.clearDiagnostics()
+	return RefreshNodeDetailsResponse{Details: details}, nil
+}
+
+func (p *windowsProvider) GetDiagnostics(_ context.Context, _ GetDiagnosticsRequest) (GetDiagnosticsResponse, error) {
+	p.diagMu.RLock()
+	defer p.diagMu.RUnlock()
+	if p.lastDiagnostics == nil {
+		return GetDiagnosticsResponse{}, nil
+	}
+	copy := *p.lastDiagnostics
+	return GetDiagnosticsResponse{Diagnostics: &copy}, nil
 }
 
 func summarizeAndFilterWindows(infos []window.Info, keep func(window.Info) bool) []WindowSummary {
@@ -616,6 +746,44 @@ func parseHWND(raw string) (window.HWND, error) {
 		return 0, errors.Join(ErrInvalidNodeID, err)
 	}
 	return window.HWND(v), nil
+}
+
+func (p *windowsProvider) setDiagnostics(diag *InspectDiagnostics) {
+	p.diagMu.Lock()
+	p.lastDiagnostics = diag
+	p.diagMu.Unlock()
+}
+
+func (p *windowsProvider) clearDiagnostics() {
+	p.diagMu.Lock()
+	p.lastDiagnostics = nil
+	p.diagMu.Unlock()
+}
+
+func diagnosticsFromError(stage string, err error, fallbackHint string) *InspectDiagnostics {
+	if err == nil {
+		return nil
+	}
+	diag := &InspectDiagnostics{
+		Stage:   stage,
+		Message: err.Error(),
+	}
+	if fallbackHint != "" {
+		diag.FallbackMode = InspectMode(fallbackHint)
+	}
+	if errors.Is(err, syscall.EACCES) || strings.Contains(strings.ToLower(err.Error()), "access denied") || strings.Contains(strings.ToLower(err.Error()), "e_accessdenied") {
+		diag.ErrorCode = "access_denied"
+		diag.HResult = "0x80070005"
+		diag.PrivilegeHint = "Try running the viewer with the same or higher integrity level as the target application."
+	}
+	var pErr *ProviderCallError
+	if errors.As(err, &pErr) {
+		diag.Stage = pErr.Op
+		if diag.Message == "" {
+			diag.Message = pErr.Err.Error()
+		}
+	}
+	return diag
 }
 
 type unsupportedUIAAdapter struct{}

@@ -82,11 +82,35 @@ func (f *fakeInspectService) ActivateWindow(context.Context, inspect.ActivateWin
 func (f *fakeInspectService) ToggleFollowCursor(context.Context, inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
 	return inspect.ToggleFollowCursorResponse{}, nil
 }
+func (f *fakeInspectService) PauseFollowCursor(context.Context, inspect.PauseFollowCursorRequest) (inspect.PauseFollowCursorResponse, error) {
+	return inspect.PauseFollowCursorResponse{Paused: true}, nil
+}
+func (f *fakeInspectService) ResumeFollowCursor(context.Context, inspect.ResumeFollowCursorRequest) (inspect.ResumeFollowCursorResponse, error) {
+	return inspect.ResumeFollowCursorResponse{Paused: false}, nil
+}
+func (f *fakeInspectService) LockFollowCursor(_ context.Context, req inspect.LockFollowCursorRequest) (inspect.LockFollowCursorResponse, error) {
+	return inspect.LockFollowCursorResponse{Locked: true, NodeID: req.NodeID}, nil
+}
+func (f *fakeInspectService) UnlockFollowCursor(context.Context, inspect.UnlockFollowCursorRequest) (inspect.UnlockFollowCursorResponse, error) {
+	return inspect.UnlockFollowCursorResponse{Locked: false}, nil
+}
 func (f *fakeInspectService) RefreshWindows(_ context.Context, req inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
 	f.mu.Lock()
 	f.refreshReqs = append(f.refreshReqs, req)
 	f.mu.Unlock()
 	return inspect.RefreshWindowsResponse{}, nil
+}
+func (f *fakeInspectService) RefreshTreeRoot(context.Context, inspect.RefreshTreeRootRequest) (inspect.RefreshTreeRootResponse, error) {
+	return inspect.RefreshTreeRootResponse{}, nil
+}
+func (f *fakeInspectService) RefreshNodeChildren(context.Context, inspect.RefreshNodeChildrenRequest) (inspect.RefreshNodeChildrenResponse, error) {
+	return inspect.RefreshNodeChildrenResponse{}, nil
+}
+func (f *fakeInspectService) RefreshNodeDetails(context.Context, inspect.RefreshNodeDetailsRequest) (inspect.RefreshNodeDetailsResponse, error) {
+	return inspect.RefreshNodeDetailsResponse{}, nil
+}
+func (f *fakeInspectService) GetDiagnostics(context.Context, inspect.GetDiagnosticsRequest) (inspect.GetDiagnosticsResponse, error) {
+	return inspect.GetDiagnosticsResponse{}, nil
 }
 
 func TestNewViewerApp_InitializesDependencies(t *testing.T) {

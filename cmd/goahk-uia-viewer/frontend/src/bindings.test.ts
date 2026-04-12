@@ -11,7 +11,15 @@ const viewerAppFns = vi.hoisted(() => ({
   HighlightNode: vi.fn(),
   ClearHighlight: vi.fn(),
   ToggleFollowCursor: vi.fn(),
-  ActivateWindow: vi.fn()
+  PauseFollowCursor: vi.fn(),
+  ResumeFollowCursor: vi.fn(),
+  LockFollowCursor: vi.fn(),
+  UnlockFollowCursor: vi.fn(),
+  ActivateWindow: vi.fn(),
+  RefreshTreeRoot: vi.fn(),
+  RefreshNodeChildren: vi.fn(),
+  RefreshNodeDetails: vi.fn(),
+  GetDiagnostics: vi.fn()
 }));
 
 vi.mock('./wailsjs/wailsjs/go/main/ViewerApp', () => viewerAppFns);

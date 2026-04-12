@@ -95,4 +95,5 @@ export type NodeDetailsView = {
     selectorSuggestions?: SelectorCandidate[];
   };
   selectorOptions?: SelectorResolution;
+  accPath?: string;
 };
