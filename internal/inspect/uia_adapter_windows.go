@@ -6,6 +6,7 @@ package inspect
 import (
 	"context"
 	"errors"
+	"strings"
 )
 
 var errUIAElementNotAvailable = errors.New("inspect: uia element not available")
@@ -46,7 +47,7 @@ func (a *windowsUIAAdapter) ResolveWindowRoot(ctx context.Context, hwnd string) 
 	if el == nil {
 		return nil, errNilElementReference
 	}
-	return el, nil
+	return a.normalizeElement(el), nil
 }
 
 func (a *windowsUIAAdapter) GetFocusedElement(ctx context.Context) (*uiaElement, error) {
@@ -57,7 +58,7 @@ func (a *windowsUIAAdapter) GetFocusedElement(ctx context.Context) (*uiaElement,
 	if el == nil {
 		return nil, errNilElementReference
 	}
-	return el, nil
+	return a.normalizeElement(el), nil
 }
 
 func (a *windowsUIAAdapter) GetCursorPosition(ctx context.Context) (int, int, error) {
@@ -76,7 +77,7 @@ func (a *windowsUIAAdapter) ElementFromPoint(ctx context.Context, x, y int) (*ui
 	if el == nil {
 		return nil, errNilElementReference
 	}
-	return el, nil
+	return a.normalizeElement(el), nil
 }
 
 func (a *windowsUIAAdapter) GetElementByRef(ctx context.Context, ref string) (*uiaElement, error) {
@@ -87,7 +88,7 @@ func (a *windowsUIAAdapter) GetElementByRef(ctx context.Context, ref string) (*u
 	if el == nil {
 		return nil, errNilElementReference
 	}
-	return el, nil
+	return a.normalizeElement(el), nil
 }
 
 func (a *windowsUIAAdapter) GetParent(ctx context.Context, ref string) (*uiaElement, error) {
@@ -98,7 +99,7 @@ func (a *windowsUIAAdapter) GetParent(ctx context.Context, ref string) (*uiaElem
 	if el == nil {
 		return nil, errNilElementReference
 	}
-	return el, nil
+	return a.normalizeElement(el), nil
 }
 
 func (a *windowsUIAAdapter) GetChildren(ctx context.Context, ref string) ([]*uiaElement, error) {
@@ -137,6 +138,24 @@ func (a *windowsUIAAdapter) Expand(ctx context.Context, ref string) error {
 }
 func (a *windowsUIAAdapter) Collapse(ctx context.Context, ref string) error {
 	return mapUIAError(a.deps.Collapse(ctx, ref))
+}
+
+func (a *windowsUIAAdapter) normalizeElement(el *uiaElement) *uiaElement {
+	if el == nil {
+		return nil
+	}
+	if el.UnsupportedProps == nil {
+		el.UnsupportedProps = map[string]bool{}
+	}
+	el.RuntimeID = strings.TrimSpace(el.RuntimeID)
+	el.Name = strings.TrimSpace(el.Name)
+	el.LocalizedControlType = strings.TrimSpace(el.LocalizedControlType)
+	el.ControlType = strings.TrimSpace(el.ControlType)
+	el.AutomationID = strings.TrimSpace(el.AutomationID)
+	el.ClassName = strings.TrimSpace(el.ClassName)
+	el.FrameworkID = strings.TrimSpace(el.FrameworkID)
+	el.HWND = strings.TrimSpace(el.HWND)
+	return el
 }
 
 func mapUIAError(err error) error {

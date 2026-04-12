@@ -64,6 +64,7 @@ type uiaElement struct {
 	IsContentElement     bool
 	IsControlElement     bool
 	IsPassword           bool
+	UnsupportedProps     map[string]bool
 	SupportedPatterns    []string
 }
 
@@ -494,8 +495,20 @@ func toInspectElement(nodeID, parentNodeID string, el *uiaElement) InspectElemen
 		ItemType: el.ItemType, ItemStatus: el.ItemStatus, IsRequiredForForm: el.IsRequiredForForm, LabeledBy: el.LabeledBy,
 		BoundingRect: toRect(el.BoundingRect), IsEnabled: el.IsEnabled, IsKeyboardFocusable: el.IsKeyboardFocusable, HasKeyboardFocus: el.HasKeyboardFocus,
 		IsOffscreen: el.IsOffscreen, IsContentElement: el.IsContentElement, IsControlElement: el.IsControlElement, IsPassword: el.IsPassword,
-		Patterns: patternActionsFromSupported(el.SupportedPatterns), BestSelector: best, SelectorSuggestions: alts,
+		UnsupportedProps: cloneUnsupportedProps(el.UnsupportedProps),
+		Patterns:         patternActionsFromSupported(el.SupportedPatterns), BestSelector: best, SelectorSuggestions: alts,
 	}
+}
+
+func cloneUnsupportedProps(src map[string]bool) map[string]bool {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]bool, len(src))
+	for key, unsupported := range src {
+		dst[key] = unsupported
+	}
+	return dst
 }
 
 func toRect(r *uiaRect) *Rect {

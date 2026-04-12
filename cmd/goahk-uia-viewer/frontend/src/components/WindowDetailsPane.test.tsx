@@ -9,7 +9,7 @@ describe('WindowDetailsPane', () => {
     render(
       <WindowDetailsPane
         windowTitle="Settings"
-        properties={[{ name: 'Name', value: 'Settings' }]}
+        properties={[{ name: 'Name', value: 'Settings', group: 'semantics', status: 'ok' }]}
         patternActions={[{ id: 'invoke', label: 'Invoke', supported: true }]}
         onInvokePattern={onInvokePattern}
       />

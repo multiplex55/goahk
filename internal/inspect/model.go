@@ -110,6 +110,7 @@ type InspectElement struct {
 	IsContentElement     bool                `json:"isContentElement"`
 	IsControlElement     bool                `json:"isControlElement"`
 	IsPassword           bool                `json:"isPassword"`
+	UnsupportedProps     map[string]bool     `json:"unsupportedProps,omitempty"`
 	Patterns             []PatternAction     `json:"patterns,omitempty"`
 	BestSelector         *Selector           `json:"bestSelector,omitempty"`
 	SelectorSuggestions  []SelectorCandidate `json:"selectorSuggestions,omitempty"`

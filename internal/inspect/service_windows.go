@@ -206,23 +206,85 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 }
 
 func buildPropertyList(selected InspectElement) []PropertyDTO {
-	properties := []PropertyDTO{
-		{Name: "name", Value: selected.Name},
-		{Name: "controlType", Value: selected.ControlType},
-		{Name: "localizedControlType", Value: selected.LocalizedControlType},
-		{Name: "automationId", Value: selected.AutomationID},
-		{Name: "className", Value: selected.ClassName},
-		{Name: "frameworkId", Value: selected.FrameworkID},
-		{Name: "value", Value: ptrString(selected.Value)},
-		{Name: "helpText", Value: ptrString(selected.HelpText)},
-		{Name: "accessKey", Value: ptrString(selected.AccessKey)},
-		{Name: "acceleratorKey", Value: ptrString(selected.AcceleratorKey)},
-		{Name: "status", Value: ptrString(selected.Status)},
-		{Name: "itemType", Value: ptrString(selected.ItemType)},
-		{Name: "itemStatus", Value: ptrString(selected.ItemStatus)},
-		{Name: "isRequiredForForm", Value: strconv.FormatBool(selected.IsRequiredForForm)},
+	return []PropertyDTO{
+		propertyString("RuntimeID", "identity", selected.RuntimeID, selected.UnsupportedProps["RuntimeID"]),
+		propertyString("AutomationId", "identity", selected.AutomationID, selected.UnsupportedProps["AutomationId"]),
+		propertyInt("ProcessId", "identity", selected.ProcessID, selected.UnsupportedProps["ProcessId"]),
+		propertyString("ClassName", "identity", selected.ClassName, selected.UnsupportedProps["ClassName"]),
+		propertyString("FrameworkId", "identity", selected.FrameworkID, selected.UnsupportedProps["FrameworkId"]),
+		propertyString("ControlType", "semantics", selected.ControlType, selected.UnsupportedProps["ControlType"]),
+		propertyString("LocalizedControlType", "semantics", selected.LocalizedControlType, selected.UnsupportedProps["LocalizedControlType"]),
+		propertyString("Name", "semantics", selected.Name, selected.UnsupportedProps["Name"]),
+		propertyOptional("Value", "semantics", selected.Value, selected.UnsupportedProps["Value"]),
+		propertyOptional("HelpText", "semantics", selected.HelpText, selected.UnsupportedProps["HelpText"]),
+		propertyOptional("ItemType", "semantics", selected.ItemType, selected.UnsupportedProps["ItemType"]),
+		propertyOptional("ItemStatus", "semantics", selected.ItemStatus, selected.UnsupportedProps["ItemStatus"]),
+		propertyOptional("AccessKey", "semantics", selected.AccessKey, selected.UnsupportedProps["AccessKey"]),
+		propertyOptional("AcceleratorKey", "semantics", selected.AcceleratorKey, selected.UnsupportedProps["AcceleratorKey"]),
+		propertyBool("IsEnabled", "state", selected.IsEnabled, selected.UnsupportedProps["IsEnabled"]),
+		propertyBool("IsPassword", "state", selected.IsPassword, selected.UnsupportedProps["IsPassword"]),
+		propertyBool("IsOffscreen", "state", selected.IsOffscreen, selected.UnsupportedProps["IsOffscreen"]),
+		propertyBool("HasKeyboardFocus", "state", selected.HasKeyboardFocus, selected.UnsupportedProps["HasKeyboardFocus"]),
+		propertyBool("IsKeyboardFocusable", "state", selected.IsKeyboardFocusable, selected.UnsupportedProps["IsKeyboardFocusable"]),
+		propertyBool("IsRequiredForForm", "state", selected.IsRequiredForForm, selected.UnsupportedProps["IsRequiredForForm"]),
+		propertyRect("BoundingRectangle", "geometry", selected.BoundingRect, selected.UnsupportedProps["BoundingRectangle"]),
+		propertyOptional("LabeledBy", "relation", selected.LabeledBy, selected.UnsupportedProps["LabeledBy"]),
 	}
-	return properties
+}
+
+func propertyString(name, group, raw string, unsupported bool) PropertyDTO {
+	if unsupported {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "unsupported"}
+	}
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "ok"}
+	}
+	return PropertyDTO{Name: name, Group: group, Value: &trimmed, Status: "ok"}
+}
+
+func propertyOptional(name, group string, raw *string, unsupported bool) PropertyDTO {
+	if unsupported {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "unsupported"}
+	}
+	if raw == nil {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "ok"}
+	}
+	trimmed := strings.TrimSpace(*raw)
+	if trimmed == "" {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "ok"}
+	}
+	return PropertyDTO{Name: name, Group: group, Value: &trimmed, Status: "ok"}
+}
+
+func propertyBool(name, group string, raw bool, unsupported bool) PropertyDTO {
+	if unsupported {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "unsupported"}
+	}
+	value := strconv.FormatBool(raw)
+	return PropertyDTO{Name: name, Group: group, Value: &value, Status: "ok"}
+}
+
+func propertyInt(name, group string, raw int, unsupported bool) PropertyDTO {
+	if unsupported {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "unsupported"}
+	}
+	if raw <= 0 {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "ok"}
+	}
+	value := strconv.Itoa(raw)
+	return PropertyDTO{Name: name, Group: group, Value: &value, Status: "ok"}
+}
+
+func propertyRect(name, group string, rect *Rect, unsupported bool) PropertyDTO {
+	if unsupported {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "unsupported"}
+	}
+	if rect == nil {
+		return PropertyDTO{Name: name, Group: group, Value: nil, Status: "ok"}
+	}
+	value := strconv.Itoa(rect.Left) + "," + strconv.Itoa(rect.Top) + "," + strconv.Itoa(rect.Width) + "," + strconv.Itoa(rect.Height)
+	return PropertyDTO{Name: name, Group: group, Value: &value, Status: "ok"}
 }
 
 func ptrString(v *string) string {

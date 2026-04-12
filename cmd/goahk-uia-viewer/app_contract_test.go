@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -327,6 +328,43 @@ func TestViewerApp_WindowSelectionLoggingAndErrorPassthrough(t *testing.T) {
 				assertContainsLog(t, errorLogs, tc.wantErrorLog)
 			}
 		})
+	}
+}
+
+func TestViewerApp_NodeDetailsPropertyContract_JSONShape(t *testing.T) {
+	t.Parallel()
+
+	value := "button"
+	resp := inspect.GetNodeDetailsResponse{
+		Properties: []inspect.PropertyDTO{
+			{Name: "ControlType", Group: "semantics", Value: &value, Status: "ok"},
+			{Name: "HelpText", Group: "semantics", Value: nil, Status: "unsupported"},
+		},
+	}
+
+	raw, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	properties, ok := decoded["properties"].([]any)
+	if !ok || len(properties) != 2 {
+		t.Fatalf("properties payload malformed: %s", string(raw))
+	}
+	first := properties[0].(map[string]any)
+	if _, ok := first["value"]; !ok {
+		t.Fatalf("missing explicit value key in first property: %s", string(raw))
+	}
+	second := properties[1].(map[string]any)
+	if second["value"] != nil {
+		t.Fatalf("expected explicit null for unsupported property value: %s", string(raw))
+	}
+	if second["status"] != "unsupported" {
+		t.Fatalf("expected unsupported marker, got %v", second["status"])
 	}
 }
 

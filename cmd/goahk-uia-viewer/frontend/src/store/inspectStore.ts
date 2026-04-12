@@ -1,4 +1,9 @@
-export type InspectProperty = { name: string; value: string };
+export type InspectProperty = {
+  name: string;
+  value: string | null;
+  status: 'ok' | 'unsupported';
+  group: 'identity' | 'semantics' | 'state' | 'geometry' | 'relation';
+};
 
 export type InspectPattern = { name: string; payloadSchema?: string; supported?: boolean };
 

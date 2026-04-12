@@ -15,7 +15,7 @@ function makeBindings(overrides?: Partial<InspectBindings>): InspectBindings {
     })),
     GetNodeDetails: vi.fn().mockImplementation(async ({ nodeID }) => ({
       windowInfo: { hwnd: 'w1', title: 'Notepad' },
-      properties: [{ name: 'AutomationId', value: nodeID }],
+      properties: [{ name: 'AutomationId', value: nodeID, group: 'identity', status: 'ok' }],
       patterns: [{ name: 'Invoke' }],
       statusText: `Details ${nodeID}`,
       bestSelector: `#${nodeID}`,
@@ -167,7 +167,7 @@ describe('inspectStore', () => {
     expect(bindings.SelectNode).toHaveBeenCalledWith({ nodeID: 'node-22' });
     expect(bindings.HighlightNode).toHaveBeenCalledWith({ nodeID: 'node-22' });
     expect(store.getState().selectedNodeID).toBe('node-22');
-    expect(store.getState().properties).toEqual([{ name: 'AutomationId', value: 'node-22' }]);
+    expect(store.getState().properties).toEqual([{ name: 'AutomationId', value: 'node-22', group: 'identity', status: 'ok' }]);
     expect(store.getState().statusText).toBe('Details node-22');
     expect(store.getState().selectorText).toBe('#node-22');
   });
@@ -272,7 +272,7 @@ describe('inspectStore', () => {
   });
 
   it('ignores stale window selection response when rapid selection changes occur', async () => {
-    let resolveSlow: ((value: { properties: { name: string; value: string }[]; patterns: { name: string }[]; statusText: string }) => void) | undefined;
+    let resolveSlow: ((value: { properties: { name: string; value: string; group: 'identity'; status: 'ok' }[]; patterns: { name: string }[]; statusText: string }) => void) | undefined;
     const bindings = makeBindings({
       GetNodeDetails: vi.fn().mockImplementation(async ({ nodeID }) => {
         if (nodeID === 'root-1') {
@@ -280,7 +280,12 @@ describe('inspectStore', () => {
             resolveSlow = resolve as typeof resolveSlow;
           });
         }
-        return { properties: [{ name: 'AutomationId', value: 'root-2' }], patterns: [{ name: 'Focus' }], statusText: 'Details root-2', path: [{ nodeID: 'root-2', hasChildren: true }] };
+        return {
+          properties: [{ name: 'AutomationId', value: 'root-2', group: 'identity', status: 'ok' }],
+          patterns: [{ name: 'Focus' }],
+          statusText: 'Details root-2',
+          path: [{ nodeID: 'root-2', hasChildren: true }]
+        };
       }),
       InspectWindow: vi
         .fn()
@@ -297,7 +302,7 @@ describe('inspectStore', () => {
     const second = store.selectWindow('w2');
 
     await second;
-    resolveSlow?.({ properties: [{ name: 'AutomationId', value: 'root-1' }], patterns: [{ name: 'Invoke' }], statusText: 'Details root-1' });
+    resolveSlow?.({ properties: [{ name: 'AutomationId', value: 'root-1', group: 'identity', status: 'ok' }], patterns: [{ name: 'Invoke' }], statusText: 'Details root-1' });
     await first;
 
     expect(store.getState().selectedWindowID).toBe('w2');
@@ -315,7 +320,7 @@ describe('inspectStore', () => {
           });
         }
         return {
-          properties: [{ name: 'AutomationId', value: 'root-2' }],
+          properties: [{ name: 'AutomationId', value: 'root-2', group: 'identity', status: 'ok' }],
           patterns: [{ name: 'Value' }],
           statusText: 'Details root-2',
           bestSelector: '#root-2',
@@ -342,7 +347,7 @@ describe('inspectStore', () => {
 
     expect(store.getState().selectedWindowID).toBe('w2');
     expect(store.getState().selectedNodeID).toBe('root-2');
-    expect(store.getState().properties).toEqual([{ name: 'AutomationId', value: 'root-2' }]);
+    expect(store.getState().properties).toEqual([{ name: 'AutomationId', value: 'root-2', group: 'identity', status: 'ok' }]);
     expect(store.getState().patterns).toEqual([{ name: 'Value' }]);
     expect(store.getState().selectorText).toBe('#root-2');
     expect(store.getState().errorText).toBe('');
