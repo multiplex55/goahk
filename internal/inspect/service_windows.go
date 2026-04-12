@@ -58,7 +58,7 @@ func newWindowsProviderWithModeAdapters(uiaAdapter uiaAdapter, windowTreeAdapter
 		windows = window.NewOSProvider()
 	}
 	return &windowsProvider{
-		uiaCore:    newProviderCore(uiaAdapter),
+		uiaCore:    newProviderCoreWithChildCountProbe(uiaAdapter, false),
 		windowCore: newProviderCore(windowTreeAdapter),
 		highlights: newHighlightController(newNativeHighlightOverlay()),
 		windows:    windows,
@@ -208,38 +208,16 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 			ParentNodeID: selected.ParentNodeID,
 		}}
 	}
-	windowInfo := p.windowInfoForSelection(ctx, selected.ProcessID)
+	windowInfo := p.windowInfoForActiveWindow(ctx)
+	element := elementPropertiesFromSelection(selected)
 	bestSelector := selectorToCanonicalString(selected.BestSelector)
 	statusText := "Loaded node details"
 	if strings.TrimSpace(selected.Name) != "" {
 		statusText = "Loaded node details: " + selected.Name
 	}
 	return GetNodeDetailsResponse{
-		WindowInfo: windowInfo,
-		Element: ElementPropertiesDTO{
-			NodeID:               selected.NodeID,
-			NodeId:               selected.NodeID,
-			HWND:                 selected.HWND,
-			ControlType:          selected.ControlType,
-			LocalizedControlType: selected.LocalizedControlType,
-			Name:                 selected.Name,
-			Value:                ptrString(selected.Value),
-			AutomationID:         selected.AutomationID,
-			Bounds:               selected.BoundingRect,
-			HelpText:             ptrString(selected.HelpText),
-			AccessKey:            ptrString(selected.AccessKey),
-			AcceleratorKey:       ptrString(selected.AcceleratorKey),
-			IsKeyboardFocusable:  selected.IsKeyboardFocusable,
-			HasKeyboardFocus:     selected.HasKeyboardFocus,
-			ItemType:             ptrString(selected.ItemType),
-			ItemStatus:           ptrString(selected.ItemStatus),
-			IsEnabled:            selected.IsEnabled,
-			IsPassword:           selected.IsPassword,
-			IsOffscreen:          selected.IsOffscreen,
-			FrameworkID:          selected.FrameworkID,
-			IsRequiredForForm:    selected.IsRequiredForForm,
-			Status:               ptrString(selected.Status),
-		},
+		WindowInfo:   windowInfo,
+		Element:      element,
 		Properties:   properties,
 		Patterns:     patterns,
 		StatusText:   statusText,
@@ -402,7 +380,34 @@ func (p *windowsProvider) nodePath(ctx context.Context, nodeID string) []TreeNod
 	return reversed
 }
 
-func (p *windowsProvider) windowInfoForSelection(ctx context.Context, processID int) WindowInfoDTO {
+func elementPropertiesFromSelection(selected InspectElement) ElementPropertiesDTO {
+	return ElementPropertiesDTO{
+		NodeID:               selected.NodeID,
+		NodeId:               selected.NodeID,
+		HWND:                 selected.HWND,
+		ControlType:          selected.ControlType,
+		LocalizedControlType: selected.LocalizedControlType,
+		Name:                 selected.Name,
+		Value:                ptrString(selected.Value),
+		AutomationID:         selected.AutomationID,
+		Bounds:               selected.BoundingRect,
+		HelpText:             ptrString(selected.HelpText),
+		AccessKey:            ptrString(selected.AccessKey),
+		AcceleratorKey:       ptrString(selected.AcceleratorKey),
+		IsKeyboardFocusable:  selected.IsKeyboardFocusable,
+		HasKeyboardFocus:     selected.HasKeyboardFocus,
+		ItemType:             ptrString(selected.ItemType),
+		ItemStatus:           ptrString(selected.ItemStatus),
+		IsEnabled:            selected.IsEnabled,
+		IsPassword:           selected.IsPassword,
+		IsOffscreen:          selected.IsOffscreen,
+		FrameworkID:          selected.FrameworkID,
+		IsRequiredForForm:    selected.IsRequiredForForm,
+		Status:               ptrString(selected.Status),
+	}
+}
+
+func (p *windowsProvider) windowInfoForActiveWindow(ctx context.Context) WindowInfoDTO {
 	hwnd := p.activeCore().childrenCache.window()
 	info := WindowInfoDTO{HWND: hwnd}
 	if hwnd == "" {
@@ -421,9 +426,6 @@ func (p *windowsProvider) windowInfoForSelection(ctx context.Context, processID 
 		info.Class = candidate.Class
 		info.Process = candidate.Exe
 		info.PID = int(candidate.PID)
-		if processID > 0 {
-			info.PID = processID
-		}
 		if candidate.Rect != nil {
 			info.Rect = &Rect{
 				Left:   candidate.Rect.Left,
@@ -433,9 +435,6 @@ func (p *windowsProvider) windowInfoForSelection(ctx context.Context, processID 
 			}
 		}
 		return info
-	}
-	if processID > 0 {
-		info.PID = processID
 	}
 	return info
 }

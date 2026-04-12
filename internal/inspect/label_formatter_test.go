@@ -11,8 +11,9 @@ func TestFormatDisplayLabel(t *testing.T) {
 		wantLabel   string
 	}{
 		{name: "empty name", localized: "edit", controlType: "Edit", wantLabel: `edit ""`},
-		{name: "localized fallback", elementName: "Search", localized: "document", controlType: "Pane", wantLabel: `document "Search"`},
-		{name: "special chars escaped", elementName: `A "quoted" value`, controlType: "Edit", wantLabel: `Edit "A \"quoted\" value"`},
+		{name: "localized control type primary", elementName: "Search", localized: "document", controlType: "Pane", wantLabel: `document "Search"`},
+		{name: "special chars escaped", elementName: `A "quoted" value`, localized: "edit", controlType: "Edit", wantLabel: `edit "A \"quoted\" value"`},
+		{name: "missing localized control type", elementName: "Search", controlType: "Pane", wantLabel: `element "Search"`},
 	}
 
 	for _, tc := range tests {
