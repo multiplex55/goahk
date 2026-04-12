@@ -142,8 +142,8 @@ func TestProviderAdapter_PropertyMappingAndNormalization(t *testing.T) {
 	if mapped.BoundingRect == nil || mapped.BoundingRect.Width != 3 {
 		t.Fatalf("bounding rect mapping failed: %#v", mapped.BoundingRect)
 	}
-	if mapped.HelpText == nil || *mapped.HelpText != "h" {
-		t.Fatalf("helpText not mapped")
+	if mapped.HelpText != nil {
+		t.Fatalf("helpText should be cleared when property is unsupported")
 	}
 	if len(mapped.Patterns) != 2 {
 		t.Fatalf("pattern extraction failed: %+v", mapped.Patterns)
@@ -151,6 +151,58 @@ func TestProviderAdapter_PropertyMappingAndNormalization(t *testing.T) {
 	if !mapped.UnsupportedProps["HelpText"] {
 		t.Fatalf("unsupported property metadata not mapped")
 	}
+}
+
+func TestProviderAdapter_NormalizationSemanticStates(t *testing.T) {
+	t.Run("string normalization states", func(t *testing.T) {
+		cases := []struct {
+			name        string
+			raw         string
+			unsupported bool
+			state       string
+			wantValue   string
+			wantStatus  string
+		}{
+			{name: "unsupported overrides", raw: "value", unsupported: true, state: propertyStatusOK, wantStatus: propertyStatusUnsupported, wantValue: "value"},
+			{name: "empty inferred from blank", raw: "   ", wantStatus: propertyStatusEmpty},
+			{name: "explicit unavailable retained", raw: "", state: propertyStatusUnavailable, wantStatus: propertyStatusUnavailable},
+			{name: "stale retained", raw: "", state: propertyStatusStale, wantStatus: propertyStatusStale},
+			{name: "ok with value", raw: " value ", wantStatus: propertyStatusOK, wantValue: "value"},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				gotValue, gotStatus := normalizeStringField(tc.raw, tc.unsupported, tc.state)
+				if gotValue != tc.wantValue || gotStatus != tc.wantStatus {
+					t.Fatalf("normalizeStringField(%q)=(%q,%q) want (%q,%q)", tc.raw, gotValue, gotStatus, tc.wantValue, tc.wantStatus)
+				}
+			})
+		}
+	})
+
+	t.Run("bool normalization keeps explicit false", func(t *testing.T) {
+		gotValue, gotStatus := normalizeBoolField(false, false, propertyStatusOK)
+		if gotStatus != propertyStatusOK || gotValue {
+			t.Fatalf("normalizeBoolField false should remain explicit false, got (%v,%q)", gotValue, gotStatus)
+		}
+	})
+
+	t.Run("scalar normalization", func(t *testing.T) {
+		_, gotEmpty := normalizeScalarField(0, false, propertyStatusOK)
+		if gotEmpty != propertyStatusEmpty {
+			t.Fatalf("expected empty scalar status for zero, got %q", gotEmpty)
+		}
+		gotValue, gotOK := normalizeScalarField(42, false, propertyStatusOK)
+		if gotValue != 42 || gotOK != propertyStatusOK {
+			t.Fatalf("expected scalar value to survive normalization, got (%d,%q)", gotValue, gotOK)
+		}
+	})
+
+	t.Run("rect normalization", func(t *testing.T) {
+		rect, status := normalizeRectField(&Rect{Left: 0, Top: 0, Width: 0, Height: 10}, false, propertyStatusOK)
+		if rect != nil || status != propertyStatusEmpty {
+			t.Fatalf("expected invalid rect to normalize as empty, got rect=%+v status=%q", rect, status)
+		}
+	})
 }
 
 func TestProviderAdapter_CacheBehavior(t *testing.T) {

@@ -66,8 +66,17 @@ type uiaElement struct {
 	IsControlElement     bool
 	IsPassword           bool
 	UnsupportedProps     map[string]bool
+	PropertyStates       map[string]string
 	SupportedPatterns    []string
 }
+
+const (
+	propertyStatusOK          = "ok"
+	propertyStatusUnsupported = "unsupported"
+	propertyStatusEmpty       = "empty"
+	propertyStatusUnavailable = "unavailable"
+	propertyStatusStale       = "stale"
+)
 
 type uiaAdapter interface {
 	ResolveWindowRoot(context.Context, string) (*uiaElement, error)
@@ -511,17 +520,74 @@ func toInspectElement(nodeID, parentNodeID string, el *uiaElement) InspectElemen
 	if el == nil {
 		return InspectElement{NodeID: nodeID, ParentNodeID: parentNodeID}
 	}
+	runtimeID, runtimeState := normalizeRuntimeIDField(el.RuntimeID, el.UnsupportedProps["RuntimeID"], el.PropertyStates["RuntimeID"])
+	name, nameState := normalizeStringField(el.Name, el.UnsupportedProps["Name"], el.PropertyStates["Name"])
+	localizedType, localizedTypeState := normalizeStringField(normalizeLocalizedControlType(el.LocalizedControlType, el.ControlType), el.UnsupportedProps["LocalizedControlType"], el.PropertyStates["LocalizedControlType"])
+	controlType, controlTypeState := normalizeStringField(normalizeControlType(el.ControlType, el.LocalizedControlType), el.UnsupportedProps["ControlType"], el.PropertyStates["ControlType"])
+	automationID, automationIDState := normalizeStringField(el.AutomationID, el.UnsupportedProps["AutomationId"], el.PropertyStates["AutomationId"])
+	className, classNameState := normalizeStringField(el.ClassName, el.UnsupportedProps["ClassName"], el.PropertyStates["ClassName"])
+	frameworkID, frameworkIDState := normalizeStringField(el.FrameworkID, el.UnsupportedProps["FrameworkId"], el.PropertyStates["FrameworkId"])
+	processID, processIDState := normalizeScalarField(el.ProcessID, el.UnsupportedProps["ProcessId"], el.PropertyStates["ProcessId"])
+	helpText, helpTextState := normalizeOptionalStringField(el.HelpText, el.UnsupportedProps["HelpText"], el.PropertyStates["HelpText"])
+	accessKey, accessKeyState := normalizeOptionalStringField(el.AccessKey, el.UnsupportedProps["AccessKey"], el.PropertyStates["AccessKey"])
+	accelKey, accelKeyState := normalizeOptionalStringField(el.AcceleratorKey, el.UnsupportedProps["AcceleratorKey"], el.PropertyStates["AcceleratorKey"])
+	status, statusState := normalizeOptionalStringField(el.Status, el.UnsupportedProps["Status"], el.PropertyStates["Status"])
+	value, valueState := normalizeOptionalStringField(el.Value, el.UnsupportedProps["Value"], el.PropertyStates["Value"])
+	itemType, itemTypeState := normalizeOptionalStringField(el.ItemType, el.UnsupportedProps["ItemType"], el.PropertyStates["ItemType"])
+	itemStatus, itemStatusState := normalizeOptionalStringField(el.ItemStatus, el.UnsupportedProps["ItemStatus"], el.PropertyStates["ItemStatus"])
+	labeledBy, labeledByState := normalizeOptionalStringField(el.LabeledBy, el.UnsupportedProps["LabeledBy"], el.PropertyStates["LabeledBy"])
+	rect, rectState := normalizeRectField(toRect(el.BoundingRect), el.UnsupportedProps["BoundingRectangle"], el.PropertyStates["BoundingRectangle"])
+	isEnabled, isEnabledState := normalizeBoolField(el.IsEnabled, el.UnsupportedProps["IsEnabled"], el.PropertyStates["IsEnabled"])
+	isKeyboardFocusable, focusableState := normalizeBoolField(el.IsKeyboardFocusable, el.UnsupportedProps["IsKeyboardFocusable"], el.PropertyStates["IsKeyboardFocusable"])
+	hasKeyboardFocus, hasFocusState := normalizeBoolField(el.HasKeyboardFocus, el.UnsupportedProps["HasKeyboardFocus"], el.PropertyStates["HasKeyboardFocus"])
+	isOffscreen, offscreenState := normalizeBoolField(el.IsOffscreen, el.UnsupportedProps["IsOffscreen"], el.PropertyStates["IsOffscreen"])
+	isContentElement, contentState := normalizeBoolField(el.IsContentElement, el.UnsupportedProps["IsContentElement"], el.PropertyStates["IsContentElement"])
+	isControlElement, controlElementState := normalizeBoolField(el.IsControlElement, el.UnsupportedProps["IsControlElement"], el.PropertyStates["IsControlElement"])
+	isPassword, passwordState := normalizeBoolField(el.IsPassword, el.UnsupportedProps["IsPassword"], el.PropertyStates["IsPassword"])
+	isRequiredForForm, requiredState := normalizeBoolField(el.IsRequiredForForm, el.UnsupportedProps["IsRequiredForForm"], el.PropertyStates["IsRequiredForForm"])
+
+	propertyStates := clonePropertyStates(el.PropertyStates)
+	if propertyStates == nil {
+		propertyStates = map[string]string{}
+	}
+	mergeNormalizedPropertyState(propertyStates, "RuntimeID", runtimeState)
+	mergeNormalizedPropertyState(propertyStates, "Name", nameState)
+	mergeNormalizedPropertyState(propertyStates, "LocalizedControlType", localizedTypeState)
+	mergeNormalizedPropertyState(propertyStates, "ControlType", controlTypeState)
+	mergeNormalizedPropertyState(propertyStates, "AutomationId", automationIDState)
+	mergeNormalizedPropertyState(propertyStates, "ClassName", classNameState)
+	mergeNormalizedPropertyState(propertyStates, "FrameworkId", frameworkIDState)
+	mergeNormalizedPropertyState(propertyStates, "ProcessId", processIDState)
+	mergeNormalizedPropertyState(propertyStates, "HelpText", helpTextState)
+	mergeNormalizedPropertyState(propertyStates, "AccessKey", accessKeyState)
+	mergeNormalizedPropertyState(propertyStates, "AcceleratorKey", accelKeyState)
+	mergeNormalizedPropertyState(propertyStates, "Status", statusState)
+	mergeNormalizedPropertyState(propertyStates, "Value", valueState)
+	mergeNormalizedPropertyState(propertyStates, "ItemType", itemTypeState)
+	mergeNormalizedPropertyState(propertyStates, "ItemStatus", itemStatusState)
+	mergeNormalizedPropertyState(propertyStates, "LabeledBy", labeledByState)
+	mergeNormalizedPropertyState(propertyStates, "BoundingRectangle", rectState)
+	mergeNormalizedPropertyState(propertyStates, "IsEnabled", isEnabledState)
+	mergeNormalizedPropertyState(propertyStates, "IsKeyboardFocusable", focusableState)
+	mergeNormalizedPropertyState(propertyStates, "HasKeyboardFocus", hasFocusState)
+	mergeNormalizedPropertyState(propertyStates, "IsOffscreen", offscreenState)
+	mergeNormalizedPropertyState(propertyStates, "IsContentElement", contentState)
+	mergeNormalizedPropertyState(propertyStates, "IsControlElement", controlElementState)
+	mergeNormalizedPropertyState(propertyStates, "IsPassword", passwordState)
+	mergeNormalizedPropertyState(propertyStates, "IsRequiredForForm", requiredState)
+
 	best, alts := selectorCandidatesForElement(el)
 	return InspectElement{
-		NodeID: nodeID, RuntimeID: strings.TrimSpace(el.RuntimeID), ParentNodeID: parentNodeID,
+		NodeID: nodeID, RuntimeID: runtimeID, ParentNodeID: parentNodeID,
 		HWND: strings.TrimSpace(el.HWND),
-		Name: el.Name, LocalizedControlType: normalizeLocalizedControlType(el.LocalizedControlType, el.ControlType), ControlType: normalizeControlType(el.ControlType, el.LocalizedControlType),
-		AutomationID: el.AutomationID, ClassName: el.ClassName, FrameworkID: el.FrameworkID, ProcessID: el.ProcessID,
-		HelpText: el.HelpText, AccessKey: el.AccessKey, AcceleratorKey: el.AcceleratorKey, Status: el.Status, Value: el.Value,
-		ItemType: el.ItemType, ItemStatus: el.ItemStatus, IsRequiredForForm: el.IsRequiredForForm, LabeledBy: el.LabeledBy,
-		BoundingRect: toRect(el.BoundingRect), IsEnabled: el.IsEnabled, IsKeyboardFocusable: el.IsKeyboardFocusable, HasKeyboardFocus: el.HasKeyboardFocus,
-		IsOffscreen: el.IsOffscreen, IsContentElement: el.IsContentElement, IsControlElement: el.IsControlElement, IsPassword: el.IsPassword,
+		Name: name, LocalizedControlType: localizedType, ControlType: controlType,
+		AutomationID: automationID, ClassName: className, FrameworkID: frameworkID, ProcessID: processID,
+		HelpText: helpText, AccessKey: accessKey, AcceleratorKey: accelKey, Status: status, Value: value,
+		ItemType: itemType, ItemStatus: itemStatus, IsRequiredForForm: isRequiredForForm, LabeledBy: labeledBy,
+		BoundingRect: rect, IsEnabled: isEnabled, IsKeyboardFocusable: isKeyboardFocusable, HasKeyboardFocus: hasKeyboardFocus,
+		IsOffscreen: isOffscreen, IsContentElement: isContentElement, IsControlElement: isControlElement, IsPassword: isPassword,
 		UnsupportedProps: cloneUnsupportedProps(el.UnsupportedProps),
+		PropertyStates:   propertyStates,
 		Patterns:         patternActionsFromSupported(el.SupportedPatterns), BestSelector: best, SelectorSuggestions: alts,
 	}
 }
@@ -535,6 +601,110 @@ func cloneUnsupportedProps(src map[string]bool) map[string]bool {
 		dst[key] = unsupported
 	}
 	return dst
+}
+
+func clonePropertyStates(src map[string]string) map[string]string {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]string, len(src))
+	for key, status := range src {
+		dst[key] = normalizePropertyStatus(status)
+	}
+	return dst
+}
+
+func mergeNormalizedPropertyState(states map[string]string, property, status string) {
+	normalized := normalizePropertyStatus(status)
+	if normalized == propertyStatusOK {
+		return
+	}
+	states[property] = normalized
+}
+
+func normalizeRuntimeIDField(raw string, unsupported bool, status string) (string, string) {
+	return normalizeStringField(raw, unsupported, status)
+}
+
+func normalizeStringField(raw string, unsupported bool, status string) (string, string) {
+	normalized := normalizePropertyStatus(status)
+	if unsupported {
+		normalized = propertyStatusUnsupported
+	}
+	trimmed := strings.TrimSpace(raw)
+	if normalized == propertyStatusOK && trimmed == "" {
+		normalized = propertyStatusEmpty
+	}
+	return trimmed, normalized
+}
+
+func normalizeOptionalStringField(raw *string, unsupported bool, status string) (*string, string) {
+	normalized := normalizePropertyStatus(status)
+	if unsupported {
+		return nil, propertyStatusUnsupported
+	}
+	if raw == nil {
+		if normalized == propertyStatusOK {
+			normalized = propertyStatusEmpty
+		}
+		return nil, normalized
+	}
+	trimmed := strings.TrimSpace(*raw)
+	if trimmed == "" {
+		if normalized == propertyStatusOK {
+			normalized = propertyStatusEmpty
+		}
+		return nil, normalized
+	}
+	return &trimmed, normalized
+}
+
+func normalizeScalarField(raw int, unsupported bool, status string) (int, string) {
+	normalized := normalizePropertyStatus(status)
+	if unsupported {
+		return 0, propertyStatusUnsupported
+	}
+	if raw <= 0 && normalized == propertyStatusOK {
+		normalized = propertyStatusEmpty
+	}
+	return raw, normalized
+}
+
+func normalizeBoolField(raw bool, unsupported bool, status string) (bool, string) {
+	normalized := normalizePropertyStatus(status)
+	if unsupported {
+		return false, propertyStatusUnsupported
+	}
+	return raw, normalized
+}
+
+func normalizeRectField(raw *Rect, unsupported bool, status string) (*Rect, string) {
+	normalized := normalizePropertyStatus(status)
+	if unsupported {
+		return nil, propertyStatusUnsupported
+	}
+	if raw == nil || raw.Width <= 0 || raw.Height <= 0 {
+		if normalized == propertyStatusOK {
+			normalized = propertyStatusEmpty
+		}
+		return nil, normalized
+	}
+	return raw, normalized
+}
+
+func normalizePropertyStatus(status string) string {
+	switch strings.TrimSpace(strings.ToLower(status)) {
+	case propertyStatusUnsupported:
+		return propertyStatusUnsupported
+	case propertyStatusEmpty:
+		return propertyStatusEmpty
+	case propertyStatusUnavailable:
+		return propertyStatusUnavailable
+	case propertyStatusStale:
+		return propertyStatusStale
+	default:
+		return propertyStatusOK
+	}
 }
 
 func toRect(r *uiaRect) *Rect {

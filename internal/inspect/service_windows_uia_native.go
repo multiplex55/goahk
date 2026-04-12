@@ -190,6 +190,21 @@ func (d *nativeUIADeps) registerBridgeElement(be *uiaBridgeElement) *uiaElement 
 	for k, v := range be.UnsupportedProperty {
 		el.UnsupportedProps[k] = v
 	}
+	if el.PropertyStates == nil {
+		el.PropertyStates = map[string]string{}
+	}
+	for k, status := range be.PropertyState {
+		el.PropertyStates[k] = normalizePropertyStatus(status)
+	}
+	for k, unsupported := range be.UnsupportedProperty {
+		if unsupported {
+			el.PropertyStates[k] = propertyStatusUnsupported
+			continue
+		}
+		if _, hasStatus := el.PropertyStates[k]; !hasStatus {
+			el.PropertyStates[k] = propertyStatusEmpty
+		}
+	}
 	if len(be.SupportedPatterns) > 0 {
 		el.SupportedPatterns = append([]string(nil), be.SupportedPatterns...)
 	}
@@ -202,13 +217,13 @@ func (d *nativeUIADeps) registerBridgeElement(be *uiaBridgeElement) *uiaElement 
 	defer d.mu.Unlock()
 	if existingRef, ok := d.keyToRef[key]; ok {
 		el.Ref = existingRef
-		d.refToElement[existingRef] = &cachedBridgeElement{bridge: cloneBridgeElement(&uiaBridgeElement{Element: el, Key: key, AllowHWNDFallback: be.AllowHWNDFallback, SupportedPatterns: el.SupportedPatterns, UnsupportedProperty: el.UnsupportedProps}), elem: cloneUIAElement(el)}
+		d.refToElement[existingRef] = &cachedBridgeElement{bridge: cloneBridgeElement(&uiaBridgeElement{Element: el, Key: key, AllowHWNDFallback: be.AllowHWNDFallback, SupportedPatterns: el.SupportedPatterns, UnsupportedProperty: el.UnsupportedProps, PropertyState: el.PropertyStates}), elem: cloneUIAElement(el)}
 		return el
 	}
 	d.nextID++
 	ref := makeUIANodeRef(d.sessionID, strconv.FormatUint(d.nextID, 36))
 	el.Ref = ref
-	storedBridge := cloneBridgeElement(&uiaBridgeElement{Element: cloneUIAElement(el), Key: key, AllowHWNDFallback: be.AllowHWNDFallback, SupportedPatterns: el.SupportedPatterns, UnsupportedProperty: el.UnsupportedProps})
+	storedBridge := cloneBridgeElement(&uiaBridgeElement{Element: cloneUIAElement(el), Key: key, AllowHWNDFallback: be.AllowHWNDFallback, SupportedPatterns: el.SupportedPatterns, UnsupportedProperty: el.UnsupportedProps, PropertyState: el.PropertyStates})
 	d.keyToRef[key] = ref
 	d.refToElement[ref] = &cachedBridgeElement{bridge: storedBridge, elem: cloneUIAElement(el)}
 	return el
@@ -258,6 +273,12 @@ func cloneUIAElement(el *uiaElement) *uiaElement {
 			cloned.UnsupportedProps[k] = v
 		}
 	}
+	if el.PropertyStates != nil {
+		cloned.PropertyStates = map[string]string{}
+		for k, v := range el.PropertyStates {
+			cloned.PropertyStates[k] = v
+		}
+	}
 	return &cloned
 }
 
@@ -274,6 +295,12 @@ func cloneBridgeElement(el *uiaBridgeElement) *uiaBridgeElement {
 		out.UnsupportedProperty = map[string]bool{}
 		for k, v := range el.UnsupportedProperty {
 			out.UnsupportedProperty[k] = v
+		}
+	}
+	if el.PropertyState != nil {
+		out.PropertyState = map[string]string{}
+		for k, v := range el.PropertyState {
+			out.PropertyState[k] = v
 		}
 	}
 	return &out
