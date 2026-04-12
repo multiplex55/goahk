@@ -5,7 +5,13 @@ export type InspectProperty = {
   group: 'identity' | 'semantics' | 'state' | 'geometry' | 'relation';
 };
 
-export type InspectPattern = { name: string; payloadSchema?: string; supported?: boolean };
+export type InspectPattern = {
+  name: string;
+  displayName?: string;
+  payloadSchema?: string;
+  supported?: boolean;
+  preconditions?: { name: string; satisfied: boolean; reason?: string }[];
+};
 
 export type InspectTreeNode = {
   nodeID: string;
@@ -119,7 +125,17 @@ export type InspectBindings = {
   SelectNode(req: { nodeID: string }): Promise<{ selected: InspectTreeNode }>;
   GetNodeDetails(req: { nodeID: string }): Promise<NodeDetailsResponse>;
   CopyBestSelector(req: { nodeID: string }): Promise<{ selector: string; clipboardUpdated: boolean }>;
-  InvokePattern(req: { nodeID: string; action: string; payload?: Record<string, unknown> }): Promise<{ invoked: boolean; action: string; nodeID: string; result?: string }>;
+  InvokePattern(req: {
+    nodeID: string;
+    action: string;
+    payload?: Record<string, unknown>;
+  }): Promise<{
+    invoked: boolean;
+    action: string;
+    nodeID: string;
+    result?: string;
+    error?: { class: 'not_supported' | 'invalid_input' | 'transient_state' | 'access_denied'; code: string; message: string; retryable: boolean };
+  }>;
   HighlightNode(req: { nodeID: string }): Promise<{ highlighted: boolean }>;
   ClearHighlight?(req?: Record<string, never>): Promise<{ cleared: boolean }>;
   ToggleFollowCursor?(req: { enabled: boolean }): Promise<{ enabled: boolean }>;
@@ -548,11 +564,14 @@ export function createInspectStore(
 
     setState({ errorText: '' });
     try {
-      await bindings.InvokePattern({
+      const invokeResp = await bindings.InvokePattern({
         nodeID,
         action: normalizedAction,
         payload: payload ? { value: payload } : undefined
       });
+      if (invokeResp.error) {
+        throw new Error(`[${invokeResp.error.class}] ${invokeResp.error.message}`);
+      }
 
       const isMutatingAction = ['toggle', 'expand', 'collapse', 'set-value', 'setValue'].includes(action);
       if (isMutatingAction) {

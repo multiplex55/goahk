@@ -79,7 +79,13 @@ export function createInspectBindings(): InspectBindings {
         windowInfo?: WindowInfoDetails;
         element?: ElementDetails;
         properties?: { name: string; value: string | null; status?: 'ok' | 'unsupported'; group?: 'identity' | 'semantics' | 'state' | 'geometry' | 'relation' }[];
-        patterns?: { name: string; payloadSchema?: string }[];
+        patterns?: {
+          name: string;
+          displayName?: string;
+          payloadSchema?: string;
+          supported?: boolean;
+          preconditions?: { name: string; satisfied: boolean; reason?: string }[];
+        }[];
         statusText?: string;
         bestSelector?: string;
         path?: { nodeID: string; hasChildren: boolean; name?: string; parentNodeID?: string }[];
@@ -117,7 +123,8 @@ export function createInspectBindings(): InspectBindings {
         invoked: !!response?.invoked,
         action: response?.action ?? req.action,
         nodeID: response?.nodeID ?? req.nodeID,
-        result: response?.result
+        result: response?.result,
+        error: response?.error
       };
     },
     ClearHighlight: async (req: inspect.ClearHighlightRequest = {}) => {

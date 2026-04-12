@@ -126,9 +126,9 @@ export default function App() {
             }}
             patternActions={snapshot.patterns.map((pattern) => ({
               id: pattern.name,
-              label: pattern.name,
+              label: pattern.displayName || pattern.name,
               requiresInput: !!pattern.payloadSchema,
-              supported: pattern.supported !== false
+              supported: pattern.supported !== false && !(pattern.preconditions ?? []).some((condition) => !condition.satisfied)
             }))}
             onInvokePattern={async (id, payload) => {
               await store.invokePatternAction(id, payload);

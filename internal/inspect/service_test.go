@@ -319,3 +319,21 @@ func TestService_MethodContracts(t *testing.T) {
 		})
 	}
 }
+
+func TestService_InvokePatternReturnsStructuredActionErrors(t *testing.T) {
+	t.Parallel()
+	svc := newServiceWithProvider(&contractProvider{
+		err: newPatternActionError(patternErrorClassInvalidInput, "missing_input", "missing value", "setValue", "n1", ErrMissingPatternInput),
+	})
+
+	resp, err := svc.InvokePattern(context.Background(), InvokePatternRequest{NodeID: "n1", Action: "setValue"})
+	if err != nil {
+		t.Fatalf("expected structured response instead of error, got %v", err)
+	}
+	if resp.Error == nil {
+		t.Fatalf("expected error payload")
+	}
+	if resp.Error.Class != patternErrorClassInvalidInput || resp.Error.Code != "missing_input" {
+		t.Fatalf("unexpected error payload: %+v", resp.Error)
+	}
+}

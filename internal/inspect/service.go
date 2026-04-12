@@ -251,10 +251,12 @@ type GetPatternActionsRequest struct {
 	NodeID string `json:"nodeID"`
 }
 type PatternActionDTO struct {
-	Name          string `json:"name"`
-	Pattern       string `json:"pattern,omitempty"`
-	DisplayName   string `json:"displayName,omitempty"`
-	PayloadSchema string `json:"payloadSchema,omitempty"`
+	Name          string               `json:"name"`
+	Pattern       string               `json:"pattern,omitempty"`
+	DisplayName   string               `json:"displayName,omitempty"`
+	PayloadSchema string               `json:"payloadSchema,omitempty"`
+	Supported     bool                 `json:"supported"`
+	Preconditions []PreconditionStatus `json:"preconditions,omitempty"`
 }
 type GetPatternActionsResponse struct {
 	NodeID  string             `json:"nodeID"`
@@ -268,10 +270,57 @@ type InvokePatternRequest struct {
 }
 
 type InvokePatternResponse struct {
-	NodeID  string `json:"nodeID"`
-	Action  string `json:"action"`
-	Invoked bool   `json:"invoked"`
-	Result  string `json:"result,omitempty"`
+	NodeID  string                 `json:"nodeID"`
+	Action  string                 `json:"action"`
+	Invoked bool                   `json:"invoked"`
+	Result  string                 `json:"result,omitempty"`
+	Error   *PatternActionErrorDTO `json:"error,omitempty"`
+}
+
+type PatternActionErrorClass string
+
+const (
+	patternErrorClassNotSupported   PatternActionErrorClass = "not_supported"
+	patternErrorClassInvalidInput   PatternActionErrorClass = "invalid_input"
+	patternErrorClassTransientState PatternActionErrorClass = "transient_state"
+	patternErrorClassAccessDenied   PatternActionErrorClass = "access_denied"
+)
+
+type PatternActionErrorDTO struct {
+	Class     PatternActionErrorClass `json:"class"`
+	Code      string                  `json:"code"`
+	Message   string                  `json:"message"`
+	Retryable bool                    `json:"retryable"`
+}
+
+type patternActionError struct {
+	Class  PatternActionErrorClass
+	Code   string
+	Msg    string
+	Action string
+	NodeID string
+	Err    error
+}
+
+func (e *patternActionError) Error() string {
+	return fmt.Sprintf("inspect pattern action error: class=%s code=%s action=%s node=%s: %s", e.Class, e.Code, e.Action, e.NodeID, e.Msg)
+}
+
+func (e *patternActionError) Unwrap() error { return e.Err }
+
+func newPatternActionError(class PatternActionErrorClass, code, msg, action, nodeID string, err error) error {
+	return &patternActionError{Class: class, Code: code, Msg: msg, Action: action, NodeID: nodeID, Err: err}
+}
+
+func asPatternActionError(err error) (*patternActionError, bool) {
+	if err == nil {
+		return nil, false
+	}
+	var target *patternActionError
+	if errors.As(err, &target) {
+		return target, true
+	}
+	return nil, false
 }
 
 type ActivateWindowRequest struct {
@@ -387,7 +436,24 @@ func (s service) InvokePattern(ctx context.Context, req InvokePatternRequest) (I
 		return InvokePatternResponse{}, ErrInvalidNodeID
 	}
 	resp, err := s.provider.InvokePattern(ctx, req)
-	return resp, mapProviderError(err)
+	if err == nil {
+		return resp, nil
+	}
+	mapped := mapProviderError(err)
+	if actionErr, ok := asPatternActionError(mapped); ok {
+		return InvokePatternResponse{
+			NodeID:  req.NodeID,
+			Action:  req.Action,
+			Invoked: false,
+			Error: &PatternActionErrorDTO{
+				Class:     actionErr.Class,
+				Code:      actionErr.Code,
+				Message:   actionErr.Msg,
+				Retryable: actionErr.Class == patternErrorClassTransientState,
+			},
+		}, nil
+	}
+	return InvokePatternResponse{}, mapped
 }
 
 func (s service) ActivateWindow(ctx context.Context, req ActivateWindowRequest) (ActivateWindowResponse, error) {

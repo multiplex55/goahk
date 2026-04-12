@@ -515,11 +515,27 @@ describe('inspectStore', () => {
 
     expect(bindings.GetNodeDetails).toHaveBeenCalledWith({ nodeID: 'node-22' });
     expect(bindings.GetNodeChildren).toHaveBeenLastCalledWith({ nodeID: 'node-22' });
+    expect((bindings.InvokePattern as any).mock.invocationCallOrder[0]).toBeLessThan((bindings.GetNodeDetails as any).mock.invocationCallOrder.at(-1));
+    expect((bindings.GetNodeDetails as any).mock.invocationCallOrder.at(-1)).toBeLessThan((bindings.GetNodeChildren as any).mock.invocationCallOrder.at(-1));
     expect(store.getState().childrenByParentID['node-22']).toEqual(['mutated-child']);
 
     (bindings.InvokePattern as any).mockRejectedValueOnce(new Error('backend explode'));
     await expect(store.invokePatternAction('toggle')).rejects.toThrow('backend explode');
     expect(store.getState().statusText).toBe('backend explode');
     expect(store.getState().errorText).toBe('backend explode');
+  });
+
+  it('surfaces backend action error class payloads from invoke endpoint', async () => {
+    const bindings = makeBindings({
+      InvokePattern: vi.fn().mockResolvedValue({
+        invoked: false,
+        action: 'setValue',
+        nodeID: 'node-22',
+        error: { class: 'invalid_input', code: 'missing_input', message: 'setValue requires input', retryable: false }
+      })
+    });
+    const store = createInspectStore(bindings);
+    await store.selectNode('node-22');
+    await expect(store.invokePatternAction('set-value')).rejects.toThrow('[invalid_input] setValue requires input');
   });
 });

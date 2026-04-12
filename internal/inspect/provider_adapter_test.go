@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -24,12 +25,14 @@ type fakeAdapter struct {
 	invokeErr         error
 	selectErr         error
 	setValueErr       error
+	doDefaultErr      error
 	toggleErr         error
 	expandErr         error
 	collapseErr       error
 	invokeCount       int
 	selectCount       int
 	setValueCount     int
+	doDefaultCount    int
 	toggleCount       int
 	expandCount       int
 	collapseCount     int
@@ -97,7 +100,11 @@ func (f *fakeAdapter) SetValue(_ context.Context, _ string, value string) error 
 	return f.setValueErr
 }
 func (f *fakeAdapter) DoDefaultAction(context.Context, string) error {
-	return ErrProviderActionUnsupported
+	f.doDefaultCount++
+	if f.doDefaultErr != nil {
+		return f.doDefaultErr
+	}
+	return nil
 }
 func (f *fakeAdapter) Toggle(context.Context, string) error {
 	f.toggleCount++
@@ -401,7 +408,7 @@ func TestProviderAdapter_InvokePatternDispatcher(t *testing.T) {
 	}
 
 	t.Run("valid routing per action", func(t *testing.T) {
-		core, adapter, nodeID := setup([]string{"Invoke", "SelectionItem", "Value"})
+		core, adapter, nodeID := setup([]string{"Invoke", "SelectionItem", "Value", "ExpandCollapse"})
 		_, err := core.invokePattern(context.Background(), InvokePatternRequest{NodeID: nodeID, Action: "invoke"})
 		if err != nil {
 			t.Fatalf("invoke route failed: %v", err)
@@ -423,6 +430,17 @@ func TestProviderAdapter_InvokePatternDispatcher(t *testing.T) {
 		}
 		if adapter.lastSetValue != "hello" {
 			t.Fatalf("expected propagated value, got %q", adapter.lastSetValue)
+		}
+		_, err = core.invokePattern(context.Background(), InvokePatternRequest{NodeID: nodeID, Action: "expand"})
+		if err != nil {
+			t.Fatalf("expand route failed: %v", err)
+		}
+		_, err = core.invokePattern(context.Background(), InvokePatternRequest{NodeID: nodeID, Action: "collapse"})
+		if err != nil {
+			t.Fatalf("collapse route failed: %v", err)
+		}
+		if adapter.expandCount != 1 || adapter.collapseCount != 1 {
+			t.Fatalf("unexpected expand/collapse calls expand=%d collapse=%d", adapter.expandCount, adapter.collapseCount)
 		}
 	})
 
@@ -493,5 +511,40 @@ func TestProviderAdapter_InvokePatternFailureModes(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), "action=invoke") {
 		t.Fatalf("expected action context in error, got %v", err)
+	}
+}
+
+func TestProviderAdapter_InvokePatternErrorClasses(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		invokeErr error
+		class     PatternActionErrorClass
+	}{
+		{name: "unsupported", invokeErr: ErrProviderActionUnsupported, class: patternErrorClassNotSupported},
+		{name: "transient", invokeErr: ErrStaleCache, class: patternErrorClassTransientState},
+		{name: "access denied", invokeErr: syscall.EACCES, class: patternErrorClassAccessDenied},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			adapter := &fakeAdapter{
+				root:      &uiaElement{Ref: "root", Name: "Root"},
+				byRef:     map[string]*uiaElement{"root": {Ref: "root", SupportedPatterns: []string{"Invoke"}}},
+				invokeErr: tc.invokeErr,
+			}
+			core := newProviderCore(adapter)
+			root, _ := core.treeRoot(context.Background(), "0x1", false)
+			_, err := core.invokePattern(context.Background(), InvokePatternRequest{NodeID: root.NodeID, Action: "invoke"})
+			var actionErr *patternActionError
+			if !errors.As(err, &actionErr) {
+				t.Fatalf("expected patternActionError, got %v", err)
+			}
+			if actionErr.Class != tc.class {
+				t.Fatalf("expected class %s, got %s", tc.class, actionErr.Class)
+			}
+		})
 	}
 }
