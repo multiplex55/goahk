@@ -6,11 +6,75 @@ package inspect
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 )
 
 var errUIAElementNotAvailable = errors.New("inspect: uia element not available")
 var errUIANilElement = errors.New("inspect: uia nil element")
+
+type UIAComUnavailableError struct {
+	Op  string
+	Err error
+}
+
+func (e *UIAComUnavailableError) Error() string {
+	if e == nil {
+		return "inspect: uia com unavailable"
+	}
+	if e.Op == "" {
+		return fmt.Sprintf("inspect: uia com unavailable: %v", e.Err)
+	}
+	return fmt.Sprintf("inspect: uia com unavailable during %s: %v", e.Op, e.Err)
+}
+func (e *UIAComUnavailableError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+type UIAElementStaleError struct {
+	Op  string
+	Err error
+}
+
+func (e *UIAElementStaleError) Error() string {
+	if e == nil {
+		return "inspect: stale uia element"
+	}
+	if e.Op == "" {
+		return fmt.Sprintf("inspect: stale uia element: %v", e.Err)
+	}
+	return fmt.Sprintf("inspect: stale uia element during %s: %v", e.Op, e.Err)
+}
+func (e *UIAElementStaleError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+type UIAUnsupportedPropertyError struct {
+	Property string
+	Err      error
+}
+
+func (e *UIAUnsupportedPropertyError) Error() string {
+	if e == nil {
+		return "inspect: unsupported uia property"
+	}
+	if e.Property == "" {
+		return fmt.Sprintf("inspect: unsupported uia property: %v", e.Err)
+	}
+	return fmt.Sprintf("inspect: unsupported uia property %q: %v", e.Property, e.Err)
+}
+func (e *UIAUnsupportedPropertyError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
 
 type windowsUIADeps interface {
 	ResolveWindowRoot(context.Context, string) (*uiaElement, error)
@@ -162,11 +226,15 @@ func mapUIAError(err error) error {
 	if err == nil {
 		return nil
 	}
+	var comUnavailable *UIAComUnavailableError
+	var stale *UIAElementStaleError
 	switch {
 	case errors.Is(err, errUIANilElement):
 		return errNilElementReference
-	case errors.Is(err, errUIAElementNotAvailable):
+	case errors.Is(err, errUIAElementNotAvailable), errors.As(err, &stale):
 		return errStaleElementReference
+	case errors.As(err, &comUnavailable):
+		return ErrProviderTransientFailure
 	default:
 		return err
 	}
