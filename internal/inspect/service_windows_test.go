@@ -164,7 +164,7 @@ func TestWindowsProvider_UIAModeTreeExpansionUsesUIAChildrenOnly(t *testing.T) {
 			"window-root": {{Ref: "window-child", RuntimeID: "200", ParentRef: "window-root", Name: "Window Child"}},
 		},
 	}
-	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newWindowTreeAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
 
 	rootResp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
 	if err != nil {
@@ -191,15 +191,15 @@ func TestWindowsProvider_UIAModeTreeExpansionUsesUIAChildrenOnly(t *testing.T) {
 func TestWindowsProvider_ModeAdaptersAreDistinct(t *testing.T) {
 	uia := &fakeAdapter{root: &uiaElement{Ref: "root-uia", RuntimeID: "1", HWND: "0x1", Name: "UIA Root"}}
 	windowTree := &fakeAdapter{root: &uiaElement{Ref: "root-window", RuntimeID: "2", HWND: "0x1", Name: "Window Root"}}
-	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newWindowTreeAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
 
-	if provider.uiaCore == nil || provider.windowCore == nil {
+	if provider.uiaCore == nil || provider.accCore == nil {
 		t.Fatalf("expected both cores to be initialized")
 	}
-	if provider.uiaCore == provider.windowCore {
+	if provider.uiaCore == provider.accCore {
 		t.Fatalf("expected distinct mode cores")
 	}
-	if provider.uiaCore.adapter == provider.windowCore.adapter {
+	if provider.uiaCore.adapter == provider.accCore.adapter {
 		t.Fatalf("expected distinct adapters for UIA and Window Tree modes")
 	}
 }
@@ -219,7 +219,7 @@ func TestWindowsProvider_WindowModeParentChildRegression(t *testing.T) {
 			"c2":          {Ref: "c2", RuntimeID: "3", ParentRef: "root-window", HWND: "0x3", Name: "Child Two"},
 		},
 	}
-	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(nil), newWindowTreeAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(nil), newUIAAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
 	rootResp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeWindowTree})
 	if err != nil {
 		t.Fatalf("GetTreeRoot failed: %v", err)
@@ -575,7 +575,7 @@ func TestWindowsProvider_GetNodeDetails_WindowInfoAndElementRemainIndependentlyS
 			{HWND: window.HWND(0x1), Title: "Selected Window", Class: "RootClass", Exe: "root.exe", PID: 100},
 		},
 	}
-	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newWindowTreeAdapter(&fakeAdapter{}), windows).(*windowsProvider)
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(&fakeAdapter{}), windows).(*windowsProvider)
 
 	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
 	if err != nil {

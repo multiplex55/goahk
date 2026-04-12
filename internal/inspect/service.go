@@ -89,6 +89,12 @@ type InspectModeState struct {
 	GuidanceText string      `json:"guidanceText,omitempty"`
 }
 
+type ProviderSourceDTO struct {
+	Provider string      `json:"provider,omitempty"`
+	Source   string      `json:"source,omitempty"`
+	Mode     InspectMode `json:"mode,omitempty"`
+}
+
 type InspectDiagnostics struct {
 	Stage         string      `json:"stage,omitempty"`
 	ErrorCode     string      `json:"errorCode,omitempty"`
@@ -173,6 +179,7 @@ type GetTreeRootResponse struct {
 	Root        TreeNodeDTO         `json:"root"`
 	State       InspectModeState    `json:"state"`
 	Diagnostics *InspectDiagnostics `json:"diagnostics,omitempty"`
+	Source      ProviderSourceDTO   `json:"source,omitempty"`
 }
 
 type GetNodeChildrenRequest struct {
@@ -259,6 +266,7 @@ type GetNodeDetailsResponse struct {
 	SelectorPath    SelectorPathDTO       `json:"selectorPath"`
 	SelectorOptions SelectorResolutionDTO `json:"selectorOptions,omitempty"`
 	ACCPath         string                `json:"accPath,omitempty"`
+	Source          ProviderSourceDTO     `json:"source,omitempty"`
 }
 
 type GetFocusedElementRequest struct{}
