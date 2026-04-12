@@ -206,7 +206,7 @@ func (d *nativeUIADeps) registerBridgeElement(be *uiaBridgeElement) *uiaElement 
 		}
 	}
 	if len(be.SupportedPatterns) > 0 {
-		el.SupportedPatterns = append([]string(nil), be.SupportedPatterns...)
+		el.SupportedPatterns = normalizeSupportedPatterns(be.SupportedPatterns)
 	}
 	key := strings.TrimSpace(be.Key)
 	if key == "" {
@@ -280,6 +280,38 @@ func cloneUIAElement(el *uiaElement) *uiaElement {
 		}
 	}
 	return &cloned
+}
+
+func normalizeSupportedPatterns(patterns []string) []string {
+	if len(patterns) == 0 {
+		return nil
+	}
+	aliases := map[string]string{
+		"legacyiaccessible": "LegacyIAccessible",
+		"legacy":            "LegacyIAccessible",
+		"invoke":            "Invoke",
+		"selectionitem":     "SelectionItem",
+		"value":             "Value",
+		"toggle":            "Toggle",
+		"expandcollapse":    "ExpandCollapse",
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(patterns))
+	for _, raw := range patterns {
+		key := strings.ToLower(strings.TrimSpace(raw))
+		if key == "" {
+			continue
+		}
+		name, ok := aliases[key]
+		if !ok {
+			name = strings.TrimSpace(raw)
+		}
+		if !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 func cloneBridgeElement(el *uiaBridgeElement) *uiaBridgeElement {

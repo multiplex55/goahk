@@ -18,6 +18,7 @@ type fakeAdapter struct {
 	childCount        map[string]int
 	childCountCalls   map[string]int
 	childrenCallCount map[string]int
+	getByRefCount     map[string]int
 	cursorX           int
 	cursorY           int
 	focusErr          error
@@ -55,6 +56,10 @@ func (f *fakeAdapter) ElementFromPoint(context.Context, int, int) (*uiaElement, 
 	return f.under, f.pointErr
 }
 func (f *fakeAdapter) GetElementByRef(_ context.Context, ref string) (*uiaElement, error) {
+	if f.getByRefCount == nil {
+		f.getByRefCount = map[string]int{}
+	}
+	f.getByRefCount[ref]++
 	if f.byRef != nil {
 		if el, ok := f.byRef[ref]; ok {
 			return el, nil
@@ -379,6 +384,37 @@ func TestProviderAdapter_PatternMappingAndSelectorFallbacks(t *testing.T) {
 	}
 }
 
+func TestProviderAdapter_PatternActionMatrixByPatternSupport(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		patterns []string
+		actions  []string
+	}{
+		{name: "invoke", patterns: []string{"Invoke"}, actions: []string{"invoke"}},
+		{name: "selection", patterns: []string{"SelectionItem"}, actions: []string{"select"}},
+		{name: "value", patterns: []string{"Value"}, actions: []string{"setValue"}},
+		{name: "legacy", patterns: []string{"LegacyIAccessible"}, actions: []string{"doDefaultAction"}},
+		{name: "toggle", patterns: []string{"Toggle"}, actions: []string{"toggle"}},
+		{name: "expand collapse", patterns: []string{"ExpandCollapse"}, actions: []string{"collapse", "expand"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := patternActionsFromSupported(tc.patterns)
+			if len(got) != len(tc.actions) {
+				t.Fatalf("actions=%d want=%d (%+v)", len(got), len(tc.actions), got)
+			}
+			for i, want := range tc.actions {
+				if got[i].Action != want {
+					t.Fatalf("action[%d]=%q want %q", i, got[i].Action, want)
+				}
+			}
+		})
+	}
+}
+
 func TestSelectorCandidatesForElement_DeterministicScoring(t *testing.T) {
 	fixtures := []struct {
 		name       string
@@ -651,5 +687,33 @@ func TestProviderAdapter_InvokePatternErrorClasses(t *testing.T) {
 				t.Fatalf("expected class %s, got %s", tc.class, actionErr.Class)
 			}
 		})
+	}
+}
+
+func TestProviderAdapter_GetPatternActions_ExposesEnabledAndRequiredArgs(t *testing.T) {
+	adapter := &fakeAdapter{
+		root: &uiaElement{Ref: "root", Name: "Root"},
+		byRef: map[string]*uiaElement{
+			"root": {
+				Ref:               "root",
+				SupportedPatterns: []string{"Value"},
+				IsEnabled:         false,
+			},
+		},
+	}
+	core := newProviderCore(adapter)
+	root, _ := core.treeRoot(context.Background(), "0x1", false)
+	actions, err := core.getPatternActions(context.Background(), root.NodeID)
+	if err != nil {
+		t.Fatalf("getPatternActions: %v", err)
+	}
+	if len(actions) != 1 {
+		t.Fatalf("expected one action, got %d", len(actions))
+	}
+	if actions[0].Name != "setValue" || actions[0].Enabled {
+		t.Fatalf("expected disabled setValue action, got %+v", actions[0])
+	}
+	if len(actions[0].RequiredArgs) != 1 || actions[0].RequiredArgs[0] != "value" {
+		t.Fatalf("expected required value argument, got %+v", actions[0].RequiredArgs)
 	}
 }

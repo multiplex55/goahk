@@ -194,6 +194,24 @@ func TestNativeUIADeps_BridgeMappingIncludesPatternsAndUnsupportedProps(t *testi
 	}
 }
 
+func TestNativeUIADeps_BridgeMappingNormalizesPatternAliases(t *testing.T) {
+	bridge := newBridgeFixture()
+	bridge.resolveRoot = func(h window.HWND) (*uiaBridgeElement, error) {
+		return bridgeEl("rid:alias", h.String(), "alias", "invoke", "Legacy", "ExpandCollapse", "legacyiaccessible"), nil
+	}
+	deps := &nativeUIADeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*cachedBridgeElement{}, keyToRef: map[string]string{}}
+	got, err := deps.ResolveWindowRoot(context.Background(), "0x41")
+	if err != nil {
+		t.Fatalf("ResolveWindowRoot: %v", err)
+	}
+	if len(got.SupportedPatterns) != 3 {
+		t.Fatalf("expected deduplicated normalized patterns, got %+v", got.SupportedPatterns)
+	}
+	if got.SupportedPatterns[0] != "Invoke" || got.SupportedPatterns[1] != "LegacyIAccessible" || got.SupportedPatterns[2] != "ExpandCollapse" {
+		t.Fatalf("unexpected normalized patterns: %+v", got.SupportedPatterns)
+	}
+}
+
 func TestNativeUIADeps_BridgePropertyAbsenceStateTranslation(t *testing.T) {
 	bridge := newBridgeFixture()
 	bridge.resolveRoot = func(h window.HWND) (*uiaBridgeElement, error) {
