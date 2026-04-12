@@ -22,7 +22,7 @@ type windowAdapter interface {
 
 type windowsProvider struct {
 	uiaCore    *providerCore
-	windowCore *providerCore
+	accCore    *providerCore
 	highlights *highlightController
 	windows    windowAdapter
 	modeMu     sync.RWMutex
@@ -40,26 +40,26 @@ type windowsProvider struct {
 }
 
 func newWindowsProvider() WindowsProvider {
-	return newWindowsProviderWithModeAdapters(newUIAAdapter(newNativeUIADeps()), newWindowTreeAdapter(newNativeWindowTreeDeps()), window.NewOSProvider())
+	return newWindowsProviderWithModeAdapters(newUIAAdapter(newNativeUIADeps()), newUIAAdapter(newNativeACCDeps()), window.NewOSProvider())
 }
 
 func newWindowsProviderWithDeps(adapter uiaAdapter, windows windowAdapter) WindowsProvider {
 	return newWindowsProviderWithModeAdapters(adapter, adapter, windows)
 }
 
-func newWindowsProviderWithModeAdapters(uiaAdapter uiaAdapter, windowTreeAdapter uiaAdapter, windows windowAdapter) WindowsProvider {
+func newWindowsProviderWithModeAdapters(uiaAdapter uiaAdapter, accAdapter uiaAdapter, windows windowAdapter) WindowsProvider {
 	if uiaAdapter == nil {
 		uiaAdapter = newUIAAdapter(nil)
 	}
-	if windowTreeAdapter == nil {
-		windowTreeAdapter = newUIAAdapter(newNativeUIADeps())
+	if accAdapter == nil {
+		accAdapter = newUIAAdapter(newNativeACCDeps())
 	}
 	if windows == nil {
 		windows = window.NewOSProvider()
 	}
 	return &windowsProvider{
-		uiaCore:    newProviderCoreWithChildCountProbe(uiaAdapter, false),
-		windowCore: newProviderCore(windowTreeAdapter),
+		uiaCore:    newProviderCoreWithNamespace(uiaAdapter, false, "uia"),
+		accCore:    newProviderCoreWithNamespace(accAdapter, false, "acc"),
 		highlights: newHighlightController(newNativeHighlightOverlay()),
 		windows:    windows,
 		activeMode: InspectModeUIATree,
@@ -99,7 +99,7 @@ func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRe
 	var diagnostics *InspectDiagnostics
 	if state.FallbackUsed {
 		state.FailureStage = "ResolveWindowRoot"
-		state.GuidanceText = "UIA tree is unavailable. Switch to Window Tree mode to continue inspecting this window."
+		state.GuidanceText = "UIA tree is unavailable. Switch to ACC/MSAA mode to continue inspecting this window."
 		diagnostics = &InspectDiagnostics{
 			Stage:        state.FailureStage,
 			Message:      state.GuidanceText,
@@ -128,7 +128,7 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 	}
 	if state.FallbackUsed {
 		state.FailureStage = "ResolveWindowRoot"
-		state.GuidanceText = "UIA tree is unavailable. Switch to Window Tree mode to continue inspecting this window."
+		state.GuidanceText = "UIA tree is unavailable. Switch to ACC/MSAA mode to continue inspecting this window."
 	}
 	var diagnostics *InspectDiagnostics
 	if state.FallbackUsed {
@@ -139,7 +139,7 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 		}
 		p.setDiagnostics(diagnostics)
 	}
-	return GetTreeRootResponse{Root: root, State: state, Diagnostics: diagnostics}, nil
+	return GetTreeRootResponse{Root: root, State: state, Diagnostics: diagnostics, Source: sourceMetadataForMode(resolvedMode)}, nil
 }
 
 func (p *windowsProvider) GetNodeChildren(ctx context.Context, req GetNodeChildrenRequest) (GetNodeChildrenResponse, error) {
@@ -230,6 +230,7 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 		},
 		SelectorOptions: selectorResolution(selected.SelectorSuggestions),
 		ACCPath:         accPathFromElement(selected),
+		Source:          sourceMetadataForMode(p.activeModeForRead()),
 	}, nil
 }
 
@@ -611,7 +612,7 @@ func (p *windowsProvider) ActivateWindow(ctx context.Context, req ActivateWindow
 func (p *windowsProvider) RefreshWindows(ctx context.Context, req RefreshWindowsRequest) (RefreshWindowsResponse, error) {
 	_ = p.highlights.Clear(ctx)
 	p.uiaCore.invalidateWindowCache("")
-	p.windowCore.invalidateWindowCache("")
+	p.accCore.invalidateWindowCache("")
 
 	infos, err := p.windows.EnumerateWindows(ctx)
 	if err != nil {
@@ -712,17 +713,17 @@ func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode
 	if err == nil {
 		return root, mode, nil
 	}
-	if mode != InspectModeUIATree || !shouldFallbackToWindowTree(err) {
+	if mode != InspectModeUIATree || !shouldFallbackToACC(err) {
 		return TreeNodeDTO{}, mode, err
 	}
-	root, fallbackErr := p.windowCore.treeRoot(ctx, hwnd, refresh)
+	root, fallbackErr := p.accCore.treeRoot(ctx, hwnd, refresh)
 	if fallbackErr != nil {
 		return TreeNodeDTO{}, mode, err
 	}
 	return root, InspectModeWindowTree, nil
 }
 
-func shouldFallbackToWindowTree(err error) bool {
+func shouldFallbackToACC(err error) bool {
 	if errors.Is(err, ErrProviderActionUnsupported) {
 		return true
 	}
@@ -743,7 +744,7 @@ func normalizeInspectMode(mode InspectMode) InspectMode {
 
 func (p *windowsProvider) coreForMode(mode InspectMode) *providerCore {
 	if mode == InspectModeWindowTree {
-		return p.windowCore
+		return p.accCore
 	}
 	return p.uiaCore
 }
@@ -759,6 +760,21 @@ func (p *windowsProvider) setActiveMode(mode InspectMode) {
 	p.modeMu.Lock()
 	p.activeMode = normalizeInspectMode(mode)
 	p.modeMu.Unlock()
+}
+
+func (p *windowsProvider) activeModeForRead() InspectMode {
+	p.modeMu.RLock()
+	defer p.modeMu.RUnlock()
+	return normalizeInspectMode(p.activeMode)
+}
+
+func sourceMetadataForMode(mode InspectMode) ProviderSourceDTO {
+	switch normalizeInspectMode(mode) {
+	case InspectModeWindowTree:
+		return ProviderSourceDTO{Provider: "acc", Source: "msaa", Mode: InspectModeWindowTree}
+	default:
+		return ProviderSourceDTO{Provider: "uia", Source: "uia", Mode: InspectModeUIATree}
+	}
 }
 
 func parseHWND(raw string) (window.HWND, error) {

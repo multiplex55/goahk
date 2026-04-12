@@ -99,6 +99,7 @@ type uiaAdapter interface {
 type providerCore struct {
 	adapter         uiaAdapter
 	probeChildCount bool
+	nodeNamespace   string
 	mu              sync.RWMutex
 	nodeToRef       map[string]string
 	parentByID      map[string]string
@@ -110,9 +111,14 @@ func newProviderCore(adapter uiaAdapter) *providerCore {
 }
 
 func newProviderCoreWithChildCountProbe(adapter uiaAdapter, probeChildCount bool) *providerCore {
+	return newProviderCoreWithNamespace(adapter, probeChildCount, "")
+}
+
+func newProviderCoreWithNamespace(adapter uiaAdapter, probeChildCount bool, nodeNamespace string) *providerCore {
 	return &providerCore{
 		adapter:         adapter,
 		probeChildCount: probeChildCount,
+		nodeNamespace:   strings.TrimSpace(nodeNamespace),
 		nodeToRef:       map[string]string{},
 		parentByID:      map[string]string{},
 		childrenCache:   newNodeChildrenCache(),
@@ -456,14 +462,25 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 }
 
 func runtimeNodeID(runtimeID, ref string) string {
+	return runtimeNodeIDWithNamespace("", runtimeID, ref)
+}
+
+func runtimeNodeIDWithNamespace(namespace, runtimeID, ref string) string {
+	ns := strings.TrimSpace(namespace)
 	if rid := strings.TrimSpace(runtimeID); rid != "" {
+		if ns != "" {
+			return "node:" + ns + ":rid:" + rid
+		}
 		return "node:rid:" + rid
+	}
+	if ns != "" {
+		return "node:" + ns + ":ref:" + strings.TrimSpace(ref)
 	}
 	return "node:ref:" + strings.TrimSpace(ref)
 }
 
 func (p *providerCore) cacheNodeRef(el *uiaElement) string {
-	nodeID := runtimeNodeID(el.RuntimeID, el.Ref)
+	nodeID := runtimeNodeIDWithNamespace(p.nodeNamespace, el.RuntimeID, el.Ref)
 	p.mu.Lock()
 	p.nodeToRef[nodeID] = el.Ref
 	if el.ParentRef != "" {
