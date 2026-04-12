@@ -117,19 +117,29 @@ type GetTreeRootRequest struct {
 }
 
 type TreeNodeDTO struct {
-	NodeID               string   `json:"nodeID"`
-	NodeId               string   `json:"nodeId,omitempty"`
-	HWND                 string   `json:"hwnd,omitempty"`
-	Name                 string   `json:"name,omitempty"`
-	ControlType          string   `json:"controlType,omitempty"`
-	LocalizedControlType string   `json:"localizedControlType,omitempty"`
-	ClassName            string   `json:"className,omitempty"`
-	HasChildren          bool     `json:"hasChildren"`
-	ParentNodeID         string   `json:"parentNodeID,omitempty"`
-	Patterns             []string `json:"patterns,omitempty"`
-	ChildCount           *int     `json:"childCount,omitempty"`
-	Expanded             bool     `json:"expanded,omitempty"`
-	Cycle                bool     `json:"cycle,omitempty"`
+	NodeID               string       `json:"nodeID"`
+	NodeId               string       `json:"nodeId,omitempty"`
+	RuntimeID            string       `json:"runtimeId,omitempty"`
+	HWND                 string       `json:"hwnd,omitempty"`
+	Name                 string       `json:"name,omitempty"`
+	ControlType          string       `json:"controlType,omitempty"`
+	LocalizedControlType string       `json:"localizedControlType,omitempty"`
+	DisplayLabel         string       `json:"displayLabel,omitempty"`
+	DebugMeta            DebugMetaDTO `json:"debugMeta,omitempty"`
+	ClassName            string       `json:"className,omitempty"`
+	HasChildren          bool         `json:"hasChildren"`
+	ParentNodeID         string       `json:"parentNodeID,omitempty"`
+	Patterns             []string     `json:"patterns,omitempty"`
+	ChildCount           *int         `json:"childCount,omitempty"`
+	Expanded             bool         `json:"expanded,omitempty"`
+	Cycle                bool         `json:"cycle,omitempty"`
+}
+
+type DebugMetaDTO struct {
+	ClassName    string `json:"className,omitempty"`
+	HWND         string `json:"hwnd,omitempty"`
+	AutomationID string `json:"automationId,omitempty"`
+	RuntimeID    string `json:"runtimeId,omitempty"`
 }
 
 type GetTreeRootResponse struct {
@@ -205,15 +215,21 @@ type SelectorPathDTO struct {
 	SelectorSuggestions []SelectorCandidate `json:"selectorSuggestions,omitempty"`
 }
 
+type SelectorResolutionDTO struct {
+	Best       *SelectorCandidate  `json:"best,omitempty"`
+	Alternates []SelectorCandidate `json:"alternates,omitempty"`
+}
+
 type GetNodeDetailsResponse struct {
-	WindowInfo   WindowInfoDTO        `json:"windowInfo"`
-	Element      ElementPropertiesDTO `json:"element"`
-	Properties   []PropertyDTO        `json:"properties"`
-	Patterns     []PatternActionDTO   `json:"patterns"`
-	StatusText   string               `json:"statusText,omitempty"`
-	BestSelector string               `json:"bestSelector,omitempty"`
-	Path         []TreeNodeDTO        `json:"path,omitempty"`
-	SelectorPath SelectorPathDTO      `json:"selectorPath"`
+	WindowInfo      WindowInfoDTO         `json:"windowInfo"`
+	Element         ElementPropertiesDTO  `json:"element"`
+	Properties      []PropertyDTO         `json:"properties"`
+	Patterns        []PatternActionDTO    `json:"patterns"`
+	StatusText      string                `json:"statusText,omitempty"`
+	BestSelector    string                `json:"bestSelector,omitempty"`
+	Path            []TreeNodeDTO         `json:"path,omitempty"`
+	SelectorPath    SelectorPathDTO       `json:"selectorPath"`
+	SelectorOptions SelectorResolutionDTO `json:"selectorOptions,omitempty"`
 }
 
 type GetFocusedElementRequest struct{}

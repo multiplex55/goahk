@@ -9,8 +9,12 @@ import ThreeColumnLayout from './layout/ThreeColumnLayout';
 import { createInspectBindings } from './bindings';
 import { createInspectStore, InspectBridgeEvent, InspectStore } from './store/inspectStore';
 
-function pathToText(path: { name?: string; nodeID: string }[]): string {
-  return path.map((item) => item.name || item.nodeID).join(' > ');
+function semanticLabel(item: { nodeID: string; displayLabel?: string; localizedControlType?: string; controlType?: string; name?: string }): string {
+  return item.localizedControlType || item.controlType || item.displayLabel || item.name || item.nodeID;
+}
+
+function pathToText(path: { name?: string; nodeID: string; displayLabel?: string; localizedControlType?: string; controlType?: string }[]): string {
+  return path.map((item) => semanticLabel(item)).join(' > ');
 }
 
 function isStageSpecificFailure(text: string): boolean {
@@ -122,7 +126,8 @@ export default function App() {
               bestSelector: snapshot.selectorText,
               windowInfo: snapshot.nodeDetails?.windowInfo,
               element: snapshot.nodeDetails?.element,
-              selectorPath: snapshot.nodeDetails?.selectorPath
+              selectorPath: snapshot.nodeDetails?.selectorPath,
+              selectorOptions: snapshot.nodeDetails?.selectorOptions
             }}
             patternActions={snapshot.patterns.map((pattern) => ({
               id: pattern.name,
@@ -139,7 +144,7 @@ export default function App() {
         right={
           <TreePane
             nodesByID={Object.fromEntries(
-              Object.entries(snapshot.nodesByID).map(([id, node]) => [id, { id, name: node.name ?? node.nodeID, hasChildren: node.hasChildren }])
+              Object.entries(snapshot.nodesByID).map(([id, node]) => [id, { id, name: node.displayLabel ?? node.name ?? node.nodeID, hasChildren: node.hasChildren }])
             )}
             childrenByParentID={snapshot.childrenByParentID}
             expandedByID={snapshot.expandedByID}

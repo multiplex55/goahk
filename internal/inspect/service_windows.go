@@ -128,11 +128,19 @@ func (p *windowsProvider) SelectNode(ctx context.Context, req SelectNodeRequest)
 	return SelectNodeResponse{Selected: TreeNodeDTO{
 		NodeID:               selected.NodeID,
 		NodeId:               selected.NodeID,
+		RuntimeID:            selected.RuntimeID,
 		HWND:                 selected.HWND,
 		Name:                 selected.Name,
 		ControlType:          selected.ControlType,
 		LocalizedControlType: selected.LocalizedControlType,
-		ClassName:            selected.ClassName,
+		DisplayLabel:         formatDisplayLabel(selected.Name, selected.LocalizedControlType, selected.ControlType),
+		DebugMeta: DebugMetaDTO{
+			ClassName:    selected.ClassName,
+			HWND:         selected.HWND,
+			AutomationID: selected.AutomationID,
+			RuntimeID:    selected.RuntimeID,
+		},
+		ClassName: selected.ClassName,
 	}}, nil
 }
 
@@ -152,12 +160,20 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 		path = []TreeNodeDTO{{
 			NodeID:               selected.NodeID,
 			NodeId:               selected.NodeID,
+			RuntimeID:            selected.RuntimeID,
 			HWND:                 selected.HWND,
 			Name:                 selected.Name,
 			ControlType:          selected.ControlType,
 			LocalizedControlType: selected.LocalizedControlType,
-			ClassName:            selected.ClassName,
-			ParentNodeID:         selected.ParentNodeID,
+			DisplayLabel:         formatDisplayLabel(selected.Name, selected.LocalizedControlType, selected.ControlType),
+			DebugMeta: DebugMetaDTO{
+				ClassName:    selected.ClassName,
+				HWND:         selected.HWND,
+				AutomationID: selected.AutomationID,
+				RuntimeID:    selected.RuntimeID,
+			},
+			ClassName:    selected.ClassName,
+			ParentNodeID: selected.ParentNodeID,
 		}}
 	}
 	windowInfo := p.windowInfoForSelection(ctx, selected.ProcessID)
@@ -202,6 +218,7 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 			FullPath:            path,
 			SelectorSuggestions: selected.SelectorSuggestions,
 		},
+		SelectorOptions: selectorResolution(selected.SelectorSuggestions),
 	}, nil
 }
 
@@ -328,12 +345,20 @@ func (p *windowsProvider) nodePath(ctx context.Context, nodeID string) []TreeNod
 		reversed = append(reversed, TreeNodeDTO{
 			NodeID:               details.NodeID,
 			NodeId:               details.NodeID,
+			RuntimeID:            details.RuntimeID,
 			HWND:                 details.HWND,
 			Name:                 details.Name,
 			ControlType:          details.ControlType,
 			LocalizedControlType: details.LocalizedControlType,
-			ClassName:            details.ClassName,
-			ParentNodeID:         details.ParentNodeID,
+			DisplayLabel:         formatDisplayLabel(details.Name, details.LocalizedControlType, details.ControlType),
+			DebugMeta: DebugMetaDTO{
+				ClassName:    details.ClassName,
+				HWND:         details.HWND,
+				AutomationID: details.AutomationID,
+				RuntimeID:    details.RuntimeID,
+			},
+			ClassName:    details.ClassName,
+			ParentNodeID: details.ParentNodeID,
 		})
 		current = details.ParentNodeID
 	}

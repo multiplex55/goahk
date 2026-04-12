@@ -322,6 +322,54 @@ func TestProviderAdapter_PatternMappingAndSelectorFallbacks(t *testing.T) {
 	}
 }
 
+func TestSelectorCandidatesForElement_DeterministicScoring(t *testing.T) {
+	fixtures := []struct {
+		name       string
+		element    *uiaElement
+		wantSource []string
+		wantScores []int
+	}{
+		{
+			name: "automation id dominates",
+			element: &uiaElement{
+				Name:         "Search",
+				ControlType:  "Edit",
+				AutomationID: "SearchBox",
+				ClassName:    "Edit",
+				FrameworkID:  "Win32",
+			},
+			wantSource: []string{"automationId", "automationId+controlType", "name+controlType", "name", "class+framework"},
+			wantScores: []int{100, 95, 70, 40, 35},
+		},
+		{
+			name: "name fallback only",
+			element: &uiaElement{
+				Name:        "Untitled - Notepad",
+				ControlType: "Window",
+			},
+			wantSource: []string{"name+controlType", "name"},
+			wantScores: []int{70, 40},
+		},
+	}
+
+	for _, tc := range fixtures {
+		t.Run(tc.name, func(t *testing.T) {
+			_, got := selectorCandidatesForElement(tc.element)
+			if len(got) != len(tc.wantSource) {
+				t.Fatalf("selector count=%d want=%d (%+v)", len(got), len(tc.wantSource), got)
+			}
+			for i := range got {
+				if got[i].Source != tc.wantSource[i] {
+					t.Fatalf("source[%d]=%q want %q", i, got[i].Source, tc.wantSource[i])
+				}
+				if got[i].Score != tc.wantScores[i] {
+					t.Fatalf("score[%d]=%d want %d", i, got[i].Score, tc.wantScores[i])
+				}
+			}
+		})
+	}
+}
+
 func TestProviderAdapter_EdgeCases(t *testing.T) {
 	if got := toInspectElement("node:nil", "", nil); got.NodeID != "node:nil" {
 		t.Fatalf("nil element should still map node metadata")

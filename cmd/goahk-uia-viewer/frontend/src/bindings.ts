@@ -14,7 +14,7 @@ import {
   ToggleFollowCursor
 } from './wailsjs/wailsjs/go/main/ViewerApp';
 import { InspectBindings } from './store/inspectStore';
-import { ElementDetails, Selector, SelectorCandidate, WindowInfoDetails } from './types';
+import { ElementDetails, Selector, SelectorCandidate, SelectorResolution, WindowInfoDetails } from './types';
 
 const toError = (err: unknown, fallback: string): Error => {
   if (err instanceof Error && err.message) {
@@ -88,12 +88,13 @@ export function createInspectBindings(): InspectBindings {
         }[];
         statusText?: string;
         bestSelector?: string;
-        path?: { nodeID: string; hasChildren: boolean; name?: string; parentNodeID?: string }[];
+        path?: { nodeID: string; hasChildren: boolean; name?: string; parentNodeID?: string; controlType?: string; localizedControlType?: string; displayLabel?: string }[];
         selectorPath?: {
           bestSelector?: Selector;
-          fullPath?: { nodeID: string; hasChildren: boolean; name?: string; parentNodeID?: string }[];
+          fullPath?: { nodeID: string; hasChildren: boolean; name?: string; parentNodeID?: string; controlType?: string; localizedControlType?: string; displayLabel?: string }[];
           selectorSuggestions?: SelectorCandidate[];
         };
+        selectorOptions?: SelectorResolution;
       };
       return {
         windowInfo: dto.windowInfo,
@@ -110,7 +111,8 @@ export function createInspectBindings(): InspectBindings {
         statusText: dto.statusText,
         bestSelector: dto.bestSelector,
         path: Array.isArray(dto.path) ? dto.path : [],
-        selectorPath: dto.selectorPath
+        selectorPath: dto.selectorPath,
+        selectorOptions: dto.selectorOptions
       };
     },
     HighlightNode: async (req: inspect.HighlightNodeRequest) => {

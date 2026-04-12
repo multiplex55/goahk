@@ -34,6 +34,11 @@ export type SelectorCandidate = {
   source?: string;
 };
 
+export type SelectorResolution = {
+  best?: SelectorCandidate;
+  alternates?: SelectorCandidate[];
+};
+
 export type WindowInfoDetails = {
   title?: string;
   hwnd?: string;
@@ -76,6 +81,7 @@ export type PatternAction = {
 export type TreeNode = {
   id: string;
   name: string;
+  displayLabel?: string;
   hasChildren: boolean;
 };
 
@@ -85,7 +91,8 @@ export type NodeDetailsView = {
   bestSelector?: string;
   selectorPath?: {
     bestSelector?: Selector;
-    fullPath?: { nodeID: string; name?: string }[];
+    fullPath?: { nodeID: string; name?: string; controlType?: string; localizedControlType?: string; displayLabel?: string }[];
     selectorSuggestions?: SelectorCandidate[];
   };
+  selectorOptions?: SelectorResolution;
 };
