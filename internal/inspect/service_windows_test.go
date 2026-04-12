@@ -819,8 +819,8 @@ func TestWindowsProvider_FollowCursorPauseAndLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("under cursor when paused: %v", err)
 	}
-	if pausedResp.Element.NodeID != "" {
-		t.Fatalf("expected empty element while paused, got %+v", pausedResp.Element)
+	if pausedResp.Element.NodeID == "" {
+		t.Fatalf("expected paused response to preserve selected node identity, got %+v", pausedResp.Element)
 	}
 	if _, err := provider.ResumeFollowCursor(context.Background(), ResumeFollowCursorRequest{}); err != nil {
 		t.Fatalf("resume follow: %v", err)
@@ -839,6 +839,50 @@ func TestWindowsProvider_FollowCursorPauseAndLock(t *testing.T) {
 	}
 	if _, err := provider.UnlockFollowCursor(context.Background(), UnlockFollowCursorRequest{}); err != nil {
 		t.Fatalf("unlock follow: %v", err)
+	}
+}
+
+func TestWindowsProvider_FollowCursor_UpdatesOnlyOnElementChange(t *testing.T) {
+	deps := &fakeAdapter{
+		root:    &uiaElement{Ref: "root", RuntimeID: "1", Name: "Root"},
+		under:   &uiaElement{Ref: "cursorA", RuntimeID: "2", Name: "Cursor A", BoundingRect: &uiaRect{Left: 1, Top: 1, Width: 10, Height: 10}},
+		byRef:   map[string]*uiaElement{"cursorA": {Ref: "cursorA", RuntimeID: "2", Name: "Cursor A", BoundingRect: &uiaRect{Left: 1, Top: 1, Width: 10, Height: 10}}},
+		cursorX: 10,
+		cursorY: 20,
+	}
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	if _, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree}); err != nil {
+		t.Fatalf("setup root: %v", err)
+	}
+	if _, err := provider.ToggleFollowCursor(context.Background(), ToggleFollowCursorRequest{Enabled: true}); err != nil {
+		t.Fatalf("enable follow: %v", err)
+	}
+	first, err := provider.GetElementUnderCursor(context.Background(), GetElementUnderCursorRequest{})
+	if err != nil {
+		t.Fatalf("first under cursor: %v", err)
+	}
+	second, err := provider.GetElementUnderCursor(context.Background(), GetElementUnderCursorRequest{})
+	if err != nil {
+		t.Fatalf("second under cursor: %v", err)
+	}
+	if first.Element.NodeID == "" || first.Element.NodeID != second.Element.NodeID {
+		t.Fatalf("expected stable node id while cursor remains on same element")
+	}
+	provider.followMu.RLock()
+	selectedID := provider.selectedNodeID
+	provider.followMu.RUnlock()
+	if selectedID != first.Element.NodeID {
+		t.Fatalf("expected selected node id to update once, got %q want %q", selectedID, first.Element.NodeID)
+	}
+
+	deps.under = &uiaElement{Ref: "cursorB", RuntimeID: "3", Name: "Cursor B", BoundingRect: &uiaRect{Left: 4, Top: 4, Width: 12, Height: 12}}
+	deps.byRef["cursorB"] = deps.under
+	third, err := provider.GetElementUnderCursor(context.Background(), GetElementUnderCursorRequest{})
+	if err != nil {
+		t.Fatalf("third under cursor: %v", err)
+	}
+	if third.Element.NodeID == first.Element.NodeID {
+		t.Fatalf("expected node change after cursor target changed")
 	}
 }
 
