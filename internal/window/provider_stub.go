@@ -5,12 +5,9 @@ package window
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime"
 )
-
-var ErrUnsupportedPlatform = errors.New("window provider is only supported on Windows")
 
 type OSProvider struct{}
 
