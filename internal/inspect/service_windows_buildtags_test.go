@@ -10,7 +10,10 @@ func TestBuildTags_WindowsProviderSelected(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected windowsProvider implementation")
 	}
-	if _, ok := p.core.adapter.(*windowsUIAAdapter); !ok {
-		t.Fatalf("expected concrete windows UIA adapter, got %T", p.core.adapter)
+	if _, ok := p.uiaCore.adapter.(*windowsUIAAdapter); !ok {
+		t.Fatalf("expected concrete windows UIA adapter, got %T", p.uiaCore.adapter)
+	}
+	if _, ok := p.windowCore.adapter.(*windowsUIAAdapter); !ok {
+		t.Fatalf("expected concrete window-tree adapter, got %T", p.windowCore.adapter)
 	}
 }

@@ -131,8 +131,10 @@ type InspectWindowRequest struct {
 }
 
 type InspectWindowResponse struct {
-	Window     WindowSummary `json:"window"`
-	RootNodeID string        `json:"rootNodeID,omitempty"`
+	Window      WindowSummary       `json:"window"`
+	RootNodeID  string              `json:"rootNodeID,omitempty"`
+	State       InspectModeState    `json:"state"`
+	Diagnostics *InspectDiagnostics `json:"diagnostics,omitempty"`
 }
 
 type GetTreeRootRequest struct {
