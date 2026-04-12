@@ -300,7 +300,9 @@ type PatternActionDTO struct {
 	Pattern       string               `json:"pattern,omitempty"`
 	DisplayName   string               `json:"displayName,omitempty"`
 	PayloadSchema string               `json:"payloadSchema,omitempty"`
+	RequiredArgs  []string             `json:"requiredArgs,omitempty"`
 	Supported     bool                 `json:"supported"`
+	Enabled       bool                 `json:"enabled"`
 	Preconditions []PreconditionStatus `json:"preconditions,omitempty"`
 }
 type GetPatternActionsResponse struct {

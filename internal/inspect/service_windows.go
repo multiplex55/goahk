@@ -519,7 +519,29 @@ func (p *windowsProvider) GetPatternActions(ctx context.Context, req GetPatternA
 }
 
 func (p *windowsProvider) InvokePattern(ctx context.Context, req InvokePatternRequest) (InvokePatternResponse, error) {
-	return p.activeCore().invokePattern(ctx, req)
+	resp, err := p.activeCore().invokePattern(ctx, req)
+	if err != nil {
+		return InvokePatternResponse{}, err
+	}
+	p.postInvokePatternRefresh(ctx, req)
+	return resp, nil
+}
+
+func (p *windowsProvider) postInvokePatternRefresh(ctx context.Context, req InvokePatternRequest) {
+	_, _ = p.RefreshNodeDetails(ctx, RefreshNodeDetailsRequest{NodeID: req.NodeID})
+	if !actionMutatesSubtree(req.Action) {
+		return
+	}
+	_, _ = p.RefreshNodeChildren(ctx, RefreshNodeChildrenRequest{NodeID: req.NodeID})
+}
+
+func actionMutatesSubtree(action string) bool {
+	switch strings.TrimSpace(action) {
+	case "toggle", "expand", "collapse", "select", "doDefaultAction":
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *windowsProvider) ToggleFollowCursor(_ context.Context, req ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error) {

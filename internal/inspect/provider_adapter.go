@@ -293,7 +293,9 @@ func (p *providerCore) getPatternActions(ctx context.Context, nodeID string) ([]
 			Pattern:       a.Pattern,
 			DisplayName:   a.DisplayName,
 			PayloadSchema: a.PayloadSchema,
+			RequiredArgs:  append([]string(nil), a.RequiredArgs...),
 			Supported:     a.Supported,
+			Enabled:       a.Enabled,
 			Preconditions: a.Preconditions,
 		})
 	}
@@ -431,7 +433,7 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 		p.parentByID[nodeID] = parentID
 		p.mu.Unlock()
 	}
-	patterns := patternActionsFromSupported(el.SupportedPatterns)
+	patterns := patternActionsForElement(el)
 	names := make([]string, 0, len(patterns))
 	for _, p := range patterns {
 		names = append(names, p.Action)
@@ -596,7 +598,7 @@ func toInspectElement(nodeID, parentNodeID string, el *uiaElement) InspectElemen
 		IsOffscreen: isOffscreen, IsContentElement: isContentElement, IsControlElement: isControlElement, IsPassword: isPassword,
 		UnsupportedProps: cloneUnsupportedProps(el.UnsupportedProps),
 		PropertyStates:   propertyStates,
-		Patterns:         patternActionsFromSupported(el.SupportedPatterns), BestSelector: best, SelectorSuggestions: alts,
+		Patterns:         patternActionsForElement(el), BestSelector: best, SelectorSuggestions: alts,
 	}
 }
 
@@ -747,12 +749,48 @@ func normalizeLocalizedControlType(localized, controlType string) string {
 }
 
 func patternActionsFromSupported(patterns []string) []PatternAction {
+	return patternActionsForElement(&uiaElement{SupportedPatterns: patterns, IsEnabled: true})
+}
+
+func patternActionsForElement(el *uiaElement) []PatternAction {
+	if el == nil {
+		return nil
+	}
+	patterns := el.SupportedPatterns
+	enabled := el.IsEnabled
+	toggleState := firstNonEmpty(el.PropertyStates["ToggleState"], el.PropertyStates["Toggle.ToggleState"])
+	expandCollapseState := firstNonEmpty(el.PropertyStates["ExpandCollapseState"], el.PropertyStates["ExpandCollapse.ExpandCollapseState"])
+	valueState := firstNonEmpty(el.PropertyStates["Value"], el.PropertyStates["Value.Value"], el.PropertyStates["Value.IsReadOnly"])
+	selectionHint := firstNonEmpty(el.PropertyStates["SelectionItem.IsSelected"], el.PropertyStates["Selection.IsSelectionRequired"], el.PropertyStates["Selection.CanSelectMultiple"])
+
+	stateReason := func(prefix, value string) string {
+		if strings.TrimSpace(value) == "" {
+			return ""
+		}
+		return prefix + ":" + strings.TrimSpace(value)
+	}
+
+	base := []PreconditionStatus{{Name: "enabled", Satisfied: enabled}}
 	m := map[string][]PatternAction{
-		"Invoke":         {{Pattern: "Invoke", Action: "invoke", DisplayName: "Invoke", Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}}}},
-		"ExpandCollapse": {{Pattern: "ExpandCollapse", Action: "expand", DisplayName: "Expand", Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}}}, {Pattern: "ExpandCollapse", Action: "collapse", DisplayName: "Collapse", Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}}}},
-		"SelectionItem":  {{Pattern: "SelectionItem", Action: "select", DisplayName: "Select", Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}}}},
-		"Value":          {{Pattern: "Value", Action: "setValue", DisplayName: "Set Value", PayloadSchema: `{"type":"object","required":["value"]}`, Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}, {Name: "input:value", Satisfied: true, Reason: "requires payload.value"}}}},
-		"Toggle":         {{Pattern: "Toggle", Action: "toggle", DisplayName: "Toggle", Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}}}},
+		"Invoke": {
+			{Pattern: "Invoke", Action: "invoke", DisplayName: "Invoke", Supported: true, Enabled: enabled, Preconditions: append([]PreconditionStatus(nil), base...)},
+		},
+		"LegacyIAccessible": {
+			{Pattern: "LegacyIAccessible", Action: "doDefaultAction", DisplayName: "Default Action", Supported: true, Enabled: enabled, Preconditions: append([]PreconditionStatus(nil), base...)},
+		},
+		"ExpandCollapse": {
+			{Pattern: "ExpandCollapse", Action: "expand", DisplayName: "Expand", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "expandCollapseState", Satisfied: true, Reason: stateReason("state", expandCollapseState)})},
+			{Pattern: "ExpandCollapse", Action: "collapse", DisplayName: "Collapse", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "expandCollapseState", Satisfied: true, Reason: stateReason("state", expandCollapseState)})},
+		},
+		"SelectionItem": {
+			{Pattern: "SelectionItem", Action: "select", DisplayName: "Select", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "selectionHint", Satisfied: true, Reason: stateReason("selection", selectionHint)})},
+		},
+		"Value": {
+			{Pattern: "Value", Action: "setValue", DisplayName: "Set Value", PayloadSchema: `{"type":"object","required":["value"]}`, RequiredArgs: []string{"value"}, Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "valueState", Satisfied: true, Reason: stateReason("value", valueState)}, PreconditionStatus{Name: "input:value", Satisfied: true, Reason: "requires payload.value"})},
+		},
+		"Toggle": {
+			{Pattern: "Toggle", Action: "toggle", DisplayName: "Toggle", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "toggleState", Satisfied: true, Reason: stateReason("state", toggleState)})},
+		},
 	}
 	seen := map[string]bool{}
 	var out []PatternAction
@@ -772,6 +810,15 @@ func patternActionsFromSupported(patterns []string) []PatternAction {
 		return out[i].Pattern < out[j].Pattern
 	})
 	return out
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func selectorCandidatesForElement(el *uiaElement) (*Selector, []SelectorCandidate) {

@@ -731,6 +731,75 @@ func TestWindowsProvider_InvokePatternDispatchesToAdapterActions(t *testing.T) {
 	}
 }
 
+func TestWindowsProvider_InvokePattern_RefreshesDetailsAndSubtreeHooks(t *testing.T) {
+	deps := &fakeAdapter{
+		root: &uiaElement{
+			Ref:               "root",
+			Name:              "Root",
+			SupportedPatterns: []string{"Invoke", "ExpandCollapse"},
+			IsEnabled:         true,
+		},
+		byRef: map[string]*uiaElement{
+			"root": {Ref: "root", Name: "Root", SupportedPatterns: []string{"Invoke", "ExpandCollapse"}, IsEnabled: true},
+		},
+		kids: map[string][]*uiaElement{
+			"root": {{Ref: "child", ParentRef: "root", Name: "Child"}},
+		},
+	}
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"})
+	if err != nil {
+		t.Fatalf("GetTreeRoot: %v", err)
+	}
+	if _, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: root.Root.NodeID}); err != nil {
+		t.Fatalf("GetNodeChildren warmup: %v", err)
+	}
+	if _, err := provider.InvokePattern(context.Background(), InvokePatternRequest{NodeID: root.Root.NodeID, Action: "expand"}); err != nil {
+		t.Fatalf("InvokePattern: %v", err)
+	}
+	if deps.getByRefCount["root"] < 2 {
+		t.Fatalf("expected node details refresh through GetElementByRef, calls=%d", deps.getByRefCount["root"])
+	}
+	if deps.childrenCallCount["root"] < 2 {
+		t.Fatalf("expected subtree refresh through GetChildren, calls=%d", deps.childrenCallCount["root"])
+	}
+}
+
+func TestWindowsProvider_InvokePattern_RefreshesDetailsOnlyForNonStructuralActions(t *testing.T) {
+	deps := &fakeAdapter{
+		root: &uiaElement{
+			Ref:               "root",
+			Name:              "Root",
+			SupportedPatterns: []string{"Invoke"},
+			IsEnabled:         true,
+		},
+		byRef: map[string]*uiaElement{
+			"root": {Ref: "root", Name: "Root", SupportedPatterns: []string{"Invoke"}, IsEnabled: true},
+		},
+		kids: map[string][]*uiaElement{
+			"root": {{Ref: "child", ParentRef: "root", Name: "Child"}},
+		},
+	}
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1"})
+	if err != nil {
+		t.Fatalf("GetTreeRoot: %v", err)
+	}
+	if _, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: root.Root.NodeID}); err != nil {
+		t.Fatalf("GetNodeChildren warmup: %v", err)
+	}
+	childrenCallsBefore := deps.childrenCallCount["root"]
+	if _, err := provider.InvokePattern(context.Background(), InvokePatternRequest{NodeID: root.Root.NodeID, Action: "invoke"}); err != nil {
+		t.Fatalf("InvokePattern: %v", err)
+	}
+	if deps.getByRefCount["root"] < 2 {
+		t.Fatalf("expected node details refresh through GetElementByRef, calls=%d", deps.getByRefCount["root"])
+	}
+	if deps.childrenCallCount["root"] != childrenCallsBefore {
+		t.Fatalf("did not expect subtree refresh for invoke, before=%d after=%d", childrenCallsBefore, deps.childrenCallCount["root"])
+	}
+}
+
 func TestWindowsProvider_FollowCursorPauseAndLock(t *testing.T) {
 	deps := &fakeAdapter{
 		root:  &uiaElement{Ref: "root", RuntimeID: "1", Name: "Root"},
