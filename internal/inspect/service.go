@@ -59,6 +59,20 @@ type service struct {
 	provider WindowsProvider
 }
 
+type InspectMode string
+
+const (
+	InspectModeUIATree    InspectMode = "UIA_TREE"
+	InspectModeWindowTree InspectMode = "WINDOW_TREE"
+)
+
+type InspectModeState struct {
+	ActiveMode   InspectMode `json:"activeMode"`
+	FallbackUsed bool        `json:"fallbackUsed"`
+	FailureStage string      `json:"failureStage,omitempty"`
+	GuidanceText string      `json:"guidanceText,omitempty"`
+}
+
 func NewService() Service {
 	return service{provider: newWindowsProvider()}
 }
@@ -87,7 +101,8 @@ type ListWindowsResponse struct {
 type InspectWindowRequest struct {
 	// InspectWindow is metadata-only and does not refresh the UIA tree cache.
 	// Call GetTreeRoot with Refresh=true when a cache refresh is required.
-	HWND string `json:"hwnd"`
+	HWND string      `json:"hwnd"`
+	Mode InspectMode `json:"mode,omitempty"`
 }
 
 type InspectWindowResponse struct {
@@ -96,8 +111,9 @@ type InspectWindowResponse struct {
 }
 
 type GetTreeRootRequest struct {
-	HWND    string `json:"hwnd"`
-	Refresh bool   `json:"refresh,omitempty"`
+	HWND    string      `json:"hwnd"`
+	Refresh bool        `json:"refresh,omitempty"`
+	Mode    InspectMode `json:"mode,omitempty"`
 }
 
 type TreeNodeDTO struct {
@@ -117,7 +133,8 @@ type TreeNodeDTO struct {
 }
 
 type GetTreeRootResponse struct {
-	Root TreeNodeDTO `json:"root"`
+	Root  TreeNodeDTO      `json:"root"`
+	State InspectModeState `json:"state"`
 }
 
 type GetNodeChildrenRequest struct {

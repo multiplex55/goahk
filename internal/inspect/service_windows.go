@@ -20,9 +20,12 @@ type windowAdapter interface {
 }
 
 type windowsProvider struct {
-	core       *providerCore
+	uiaCore    *providerCore
+	windowCore *providerCore
 	highlights *highlightController
 	windows    windowAdapter
+	modeMu     sync.RWMutex
+	activeMode InspectMode
 
 	followMu            sync.RWMutex
 	followCursorEnabled bool
@@ -30,20 +33,29 @@ type windowsProvider struct {
 }
 
 func newWindowsProvider() WindowsProvider {
-	return newWindowsProviderWithDeps(newUIAAdapter(newNativeUIADeps()), window.NewOSProvider())
+	return newWindowsProviderWithModeAdapters(newUIAAdapter(newNativeUIADeps()), newUIAAdapter(newNativeUIADeps()), window.NewOSProvider())
 }
 
 func newWindowsProviderWithDeps(adapter uiaAdapter, windows windowAdapter) WindowsProvider {
-	if adapter == nil {
-		adapter = newUIAAdapter(nil)
+	return newWindowsProviderWithModeAdapters(adapter, adapter, windows)
+}
+
+func newWindowsProviderWithModeAdapters(uiaAdapter uiaAdapter, windowTreeAdapter uiaAdapter, windows windowAdapter) WindowsProvider {
+	if uiaAdapter == nil {
+		uiaAdapter = newUIAAdapter(nil)
+	}
+	if windowTreeAdapter == nil {
+		windowTreeAdapter = newUIAAdapter(newNativeUIADeps())
 	}
 	if windows == nil {
 		windows = window.NewOSProvider()
 	}
 	return &windowsProvider{
-		core:       newProviderCore(adapter),
+		uiaCore:    newProviderCore(uiaAdapter),
+		windowCore: newProviderCore(windowTreeAdapter),
 		highlights: newHighlightController(newNativeHighlightOverlay()),
 		windows:    windows,
+		activeMode: InspectModeUIATree,
 	}
 }
 
@@ -67,10 +79,12 @@ func (p *windowsProvider) ListWindows(ctx context.Context, req ListWindowsReques
 }
 
 func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRequest) (InspectWindowResponse, error) {
-	root, err := p.core.treeRoot(ctx, req.HWND, false)
+	mode := normalizeInspectMode(req.Mode)
+	root, resolvedMode, err := p.resolveTreeRoot(ctx, req.HWND, mode, false)
 	if err != nil {
 		return InspectWindowResponse{}, err
 	}
+	p.setActiveMode(resolvedMode)
 	return InspectWindowResponse{Window: WindowSummary{HWND: req.HWND}, RootNodeID: root.NodeID}, nil
 }
 
@@ -78,16 +92,26 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 	if req.Refresh {
 		_ = p.highlights.Clear(ctx)
 	}
-	root, err := p.core.treeRoot(ctx, req.HWND, req.Refresh)
+	mode := normalizeInspectMode(req.Mode)
+	root, resolvedMode, err := p.resolveTreeRoot(ctx, req.HWND, mode, req.Refresh)
 	if err != nil {
 		return GetTreeRootResponse{}, err
 	}
+	p.setActiveMode(resolvedMode)
 	_ = p.highlights.ClearOnWindowSwitch(ctx, req.HWND)
-	return GetTreeRootResponse{Root: root}, nil
+	state := InspectModeState{
+		ActiveMode:   resolvedMode,
+		FallbackUsed: mode != resolvedMode,
+	}
+	if state.FallbackUsed {
+		state.FailureStage = "ResolveWindowRoot"
+		state.GuidanceText = "UIA tree is unavailable. Switch to Window Tree mode to continue inspecting this window."
+	}
+	return GetTreeRootResponse{Root: root, State: state}, nil
 }
 
 func (p *windowsProvider) GetNodeChildren(ctx context.Context, req GetNodeChildrenRequest) (GetNodeChildrenResponse, error) {
-	children, err := p.core.nodeChildren(ctx, req.NodeID)
+	children, err := p.activeCore().nodeChildren(ctx, req.NodeID)
 	if err != nil {
 		return GetNodeChildrenResponse{}, err
 	}
@@ -95,7 +119,7 @@ func (p *windowsProvider) GetNodeChildren(ctx context.Context, req GetNodeChildr
 }
 
 func (p *windowsProvider) SelectNode(ctx context.Context, req SelectNodeRequest) (SelectNodeResponse, error) {
-	selected, err := p.core.inspectByNodeID(ctx, req.NodeID)
+	selected, err := p.activeCore().inspectByNodeID(ctx, req.NodeID)
 	if err != nil {
 		_ = p.highlights.Clear(ctx)
 		return SelectNodeResponse{}, err
@@ -113,12 +137,13 @@ func (p *windowsProvider) SelectNode(ctx context.Context, req SelectNodeRequest)
 }
 
 func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetailsRequest) (GetNodeDetailsResponse, error) {
-	selected, err := p.core.inspectByNodeID(ctx, req.NodeID)
+	core := p.activeCore()
+	selected, err := core.inspectByNodeID(ctx, req.NodeID)
 	if err != nil {
 		return GetNodeDetailsResponse{}, err
 	}
 	properties := buildPropertyList(selected)
-	patterns, err := p.core.getPatternActions(ctx, req.NodeID)
+	patterns, err := core.getPatternActions(ctx, req.NodeID)
 	if err != nil {
 		return GetNodeDetailsResponse{}, err
 	}
@@ -234,7 +259,7 @@ func (p *windowsProvider) nodePath(ctx context.Context, nodeID string) []TreeNod
 	var reversed []TreeNodeDTO
 	current := nodeID
 	for i := 0; i < 256 && current != ""; i++ {
-		details, err := p.core.inspectByNodeID(ctx, current)
+		details, err := p.activeCore().inspectByNodeID(ctx, current)
 		if err != nil {
 			break
 		}
@@ -257,7 +282,7 @@ func (p *windowsProvider) nodePath(ctx context.Context, nodeID string) []TreeNod
 }
 
 func (p *windowsProvider) windowInfoForSelection(ctx context.Context, processID int) WindowInfoDTO {
-	hwnd := p.core.childrenCache.window()
+	hwnd := p.activeCore().childrenCache.window()
 	info := WindowInfoDTO{HWND: hwnd}
 	if hwnd == "" {
 		return info
@@ -295,7 +320,7 @@ func (p *windowsProvider) windowInfoForSelection(ctx context.Context, processID 
 }
 
 func (p *windowsProvider) GetFocusedElement(ctx context.Context, req GetFocusedElementRequest) (GetFocusedElementResponse, error) {
-	el, err := p.core.focused(ctx)
+	el, err := p.activeCore().focused(ctx)
 	if err != nil {
 		return GetFocusedElementResponse{}, err
 	}
@@ -303,7 +328,7 @@ func (p *windowsProvider) GetFocusedElement(ctx context.Context, req GetFocusedE
 }
 
 func (p *windowsProvider) GetElementUnderCursor(ctx context.Context, req GetElementUnderCursorRequest) (GetElementUnderCursorResponse, error) {
-	el, err := p.core.underCursor(ctx)
+	el, err := p.activeCore().underCursor(ctx)
 	if err != nil {
 		return GetElementUnderCursorResponse{}, err
 	}
@@ -316,12 +341,13 @@ func (p *windowsProvider) GetElementUnderCursor(ctx context.Context, req GetElem
 }
 
 func (p *windowsProvider) HighlightNode(ctx context.Context, req HighlightNodeRequest) (HighlightNodeResponse, error) {
-	selected, err := p.core.inspectByNodeID(ctx, req.NodeID)
+	core := p.activeCore()
+	selected, err := core.inspectByNodeID(ctx, req.NodeID)
 	if err != nil {
 		_ = p.highlights.Clear(ctx)
 		return HighlightNodeResponse{}, err
 	}
-	highlighted, err := p.highlights.ShowNode(ctx, req.NodeID, selected, p.core.childrenCache.window())
+	highlighted, err := p.highlights.ShowNode(ctx, req.NodeID, selected, core.childrenCache.window())
 	if err != nil {
 		return HighlightNodeResponse{}, err
 	}
@@ -336,7 +362,7 @@ func (p *windowsProvider) ClearHighlight(ctx context.Context, _ ClearHighlightRe
 }
 
 func (p *windowsProvider) CopyBestSelector(ctx context.Context, req CopyBestSelectorRequest) (CopyBestSelectorResponse, error) {
-	selected, err := p.core.inspectByNodeID(ctx, req.NodeID)
+	selected, err := p.activeCore().inspectByNodeID(ctx, req.NodeID)
 	if err != nil {
 		return CopyBestSelectorResponse{}, err
 	}
@@ -351,7 +377,7 @@ func (p *windowsProvider) CopyBestSelector(ctx context.Context, req CopyBestSele
 }
 
 func (p *windowsProvider) GetPatternActions(ctx context.Context, req GetPatternActionsRequest) (GetPatternActionsResponse, error) {
-	actions, err := p.core.getPatternActions(ctx, req.NodeID)
+	actions, err := p.activeCore().getPatternActions(ctx, req.NodeID)
 	if err != nil {
 		return GetPatternActionsResponse{}, err
 	}
@@ -359,7 +385,7 @@ func (p *windowsProvider) GetPatternActions(ctx context.Context, req GetPatternA
 }
 
 func (p *windowsProvider) InvokePattern(ctx context.Context, req InvokePatternRequest) (InvokePatternResponse, error) {
-	return p.core.invokePattern(ctx, req)
+	return p.activeCore().invokePattern(ctx, req)
 }
 
 func (p *windowsProvider) ToggleFollowCursor(_ context.Context, req ToggleFollowCursorRequest) (ToggleFollowCursorResponse, error) {
@@ -385,7 +411,8 @@ func (p *windowsProvider) ActivateWindow(ctx context.Context, req ActivateWindow
 
 func (p *windowsProvider) RefreshWindows(ctx context.Context, req RefreshWindowsRequest) (RefreshWindowsResponse, error) {
 	_ = p.highlights.Clear(ctx)
-	p.core.invalidateWindowCache("")
+	p.uiaCore.invalidateWindowCache("")
+	p.windowCore.invalidateWindowCache("")
 
 	infos, err := p.windows.EnumerateWindows(ctx)
 	if err != nil {
@@ -438,6 +465,61 @@ func containsFold(haystack, needle string) bool {
 		return true
 	}
 	return strings.Contains(strings.ToLower(strings.TrimSpace(haystack)), strings.ToLower(strings.TrimSpace(needle)))
+}
+
+func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode InspectMode, refresh bool) (TreeNodeDTO, InspectMode, error) {
+	core := p.coreForMode(mode)
+	root, err := core.treeRoot(ctx, hwnd, refresh)
+	if err == nil {
+		return root, mode, nil
+	}
+	if mode != InspectModeUIATree || !shouldFallbackToWindowTree(err) {
+		return TreeNodeDTO{}, mode, err
+	}
+	root, fallbackErr := p.windowCore.treeRoot(ctx, hwnd, refresh)
+	if fallbackErr != nil {
+		return TreeNodeDTO{}, mode, err
+	}
+	return root, InspectModeWindowTree, nil
+}
+
+func shouldFallbackToWindowTree(err error) bool {
+	if errors.Is(err, ErrProviderActionUnsupported) {
+		return true
+	}
+	var pErr *ProviderCallError
+	if errors.As(err, &pErr) {
+		msg := strings.ToLower(pErr.Err.Error())
+		return strings.Contains(msg, "access is denied") || strings.Contains(msg, "e_accessdenied")
+	}
+	return false
+}
+
+func normalizeInspectMode(mode InspectMode) InspectMode {
+	if mode == InspectModeWindowTree {
+		return InspectModeWindowTree
+	}
+	return InspectModeUIATree
+}
+
+func (p *windowsProvider) coreForMode(mode InspectMode) *providerCore {
+	if mode == InspectModeWindowTree {
+		return p.windowCore
+	}
+	return p.uiaCore
+}
+
+func (p *windowsProvider) activeCore() *providerCore {
+	p.modeMu.RLock()
+	mode := p.activeMode
+	p.modeMu.RUnlock()
+	return p.coreForMode(normalizeInspectMode(mode))
+}
+
+func (p *windowsProvider) setActiveMode(mode InspectMode) {
+	p.modeMu.Lock()
+	p.activeMode = normalizeInspectMode(mode)
+	p.modeMu.Unlock()
 }
 
 func parseHWND(raw string) (window.HWND, error) {
