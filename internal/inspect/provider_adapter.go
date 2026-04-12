@@ -422,9 +422,11 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 		names = append(names, p.Action)
 	}
 	node := TreeNodeDTO{
-		NodeID: nodeID, NodeId: nodeID, HWND: strings.TrimSpace(el.HWND),
+		NodeID: nodeID, NodeId: nodeID, RuntimeID: strings.TrimSpace(el.RuntimeID), HWND: strings.TrimSpace(el.HWND),
 		Name: el.Name, ControlType: normalizeControlType(el.ControlType, el.LocalizedControlType),
 		LocalizedControlType: normalizeLocalizedControlType(el.LocalizedControlType, el.ControlType),
+		DisplayLabel:         formatDisplayLabel(el.Name, normalizeLocalizedControlType(el.LocalizedControlType, el.ControlType), normalizeControlType(el.ControlType, el.LocalizedControlType)),
+		DebugMeta:            buildDebugMeta(el),
 		ClassName:            el.ClassName, Patterns: names,
 	}
 	if count, ok, err := p.adapter.GetChildCount(context.Background(), el.Ref); err == nil && ok {

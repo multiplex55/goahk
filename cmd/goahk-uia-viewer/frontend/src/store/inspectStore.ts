@@ -17,6 +17,8 @@ export type InspectTreeNode = {
   nodeID: string;
   name?: string;
   controlType?: string;
+  localizedControlType?: string;
+  displayLabel?: string;
   className?: string;
   hasChildren: boolean;
   parentNodeID?: string;
@@ -108,6 +110,7 @@ type NodeDetailsResponse = {
     fullPath?: InspectTreeNode[];
     selectorSuggestions?: SelectorCandidate[];
   };
+  selectorOptions?: SelectorResolution;
 };
 
 export type InspectBindings = {
@@ -716,4 +719,4 @@ export function createInspectStore(
     selectPreviousTreeNode: () => selectTreeNodeByDelta(-1)
   };
 }
-import { ElementDetails, Selector, SelectorCandidate, WindowInfoDetails } from '../types';
+import { ElementDetails, Selector, SelectorCandidate, SelectorResolution, WindowInfoDetails } from '../types';
