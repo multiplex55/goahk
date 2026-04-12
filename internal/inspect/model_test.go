@@ -24,7 +24,7 @@ func TestCanonicalDTO_JSONFieldNames(t *testing.T) {
 		Details: GetNodeDetailsResponse{
 			WindowInfo: WindowInfoDTO{HWND: "0x1", Title: "Notepad", Text: "Notepad", Class: "Notepad", Process: "notepad.exe", PID: 100},
 			Element:    ElementPropertiesDTO{Name: "Root", ControlType: "Window", IsEnabled: true},
-			Properties: []PropertyDTO{{Name: "name", Value: "Root"}},
+			Properties: []PropertyDTO{{Name: "name", Group: "semantics", Value: ptr("Root"), Status: "ok"}},
 			Patterns:   []PatternActionDTO{{Name: "invoke", Pattern: "Invoke", DisplayName: "Invoke"}},
 			StatusText: "ok", BestSelector: "#main",
 			Path: []TreeNodeDTO{{NodeID: "node-root", Name: "Root", HasChildren: true}},
@@ -79,3 +79,5 @@ func TestCanonicalDTO_AliasCompatibility(t *testing.T) {
 	var _ NodeDetailsRequestDTO = GetNodeDetailsRequest{}
 	var _ NodeDetailsDTO = GetNodeDetailsResponse{}
 }
+
+func ptr(v string) *string { return &v }

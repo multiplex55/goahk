@@ -1,5 +1,5 @@
-export function propertyCopySource(name: string, value: string): string {
-  return `${name}=${value}`;
+export function propertyCopySource(name: string, value: string | null): string {
+  return `${name}=${value ?? 'null'}`;
 }
 
 export function statusCopySource(value: string): string {

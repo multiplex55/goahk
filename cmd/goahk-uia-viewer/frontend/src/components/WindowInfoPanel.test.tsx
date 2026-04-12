@@ -7,7 +7,7 @@ describe('WindowInfoPanel', () => {
     render(
       <WindowInfoPanel
         windowTitle="Calculator"
-        properties={[{ name: 'Name', value: 'Calculator' }]}
+        properties={[{ name: 'Name', value: 'Calculator', group: 'semantics', status: 'ok' }]}
         patternActions={[{ id: 'invoke', label: 'Invoke', supported: true }]}
         details={{ bestSelector: 'name=Calculator', selectorPath: { fullPath: [{ nodeID: 'node:root', name: 'Calculator' }] } }}
         onInvokePattern={vi.fn()}

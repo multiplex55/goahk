@@ -297,6 +297,73 @@ func TestWindowsProvider_NodeAndPatternMethods(t *testing.T) {
 	}
 }
 
+func TestBuildPropertyList_IncludesDenseSetAndUnsupportedMarkers(t *testing.T) {
+	selected := InspectElement{
+		RuntimeID:            "1.2.3",
+		LocalizedControlType: "button",
+		ControlType:          "Button",
+		Name:                 "Submit",
+		AutomationID:         "submit-btn",
+		BoundingRect:         &Rect{Left: 1, Top: 2, Width: 3, Height: 4},
+		ClassName:            "Button",
+		HelpText:             strPtr("help"),
+		AccessKey:            strPtr("alt+s"),
+		AcceleratorKey:       strPtr("ctrl+s"),
+		HasKeyboardFocus:     true,
+		IsKeyboardFocusable:  true,
+		ItemType:             strPtr("action"),
+		ItemStatus:           strPtr("ready"),
+		ProcessID:            88,
+		IsEnabled:            true,
+		IsPassword:           false,
+		IsOffscreen:          false,
+		FrameworkID:          "WPF",
+		IsRequiredForForm:    true,
+		LabeledBy:            strPtr("Submit label"),
+		UnsupportedProps: map[string]bool{
+			"HelpText":          true,
+			"BoundingRectangle": true,
+			"ProcessId":         true,
+		},
+	}
+
+	properties := buildPropertyList(selected)
+	if len(properties) != 22 {
+		t.Fatalf("expected dense property list of 22, got %d", len(properties))
+	}
+	assertProperty := func(name string, expectedGroup string, expectedStatus string, expectValue string) {
+		t.Helper()
+		for _, property := range properties {
+			if property.Name != name {
+				continue
+			}
+			if property.Group != expectedGroup || property.Status != expectedStatus {
+				t.Fatalf("unexpected metadata for %s: %+v", name, property)
+			}
+			if expectValue == "<nil>" {
+				if property.Value != nil {
+					t.Fatalf("expected nil value for %s, got %q", name, *property.Value)
+				}
+				return
+			}
+			if property.Value == nil || *property.Value != expectValue {
+				t.Fatalf("unexpected value for %s: %+v", name, property.Value)
+			}
+			return
+		}
+		t.Fatalf("missing property %s", name)
+	}
+
+	assertProperty("RuntimeID", "identity", "ok", "1.2.3")
+	assertProperty("HelpText", "semantics", "unsupported", "<nil>")
+	assertProperty("ProcessId", "identity", "unsupported", "<nil>")
+	assertProperty("BoundingRectangle", "geometry", "unsupported", "<nil>")
+	assertProperty("IsEnabled", "state", "ok", "true")
+	assertProperty("LabeledBy", "relation", "ok", "Submit label")
+}
+
+func strPtr(v string) *string { return &v }
+
 func TestWindowsProvider_GetNodeDetailsStatusAndPathFallbacks(t *testing.T) {
 	deps := &fakeAdapter{
 		root: &uiaElement{Ref: "root", Name: "Root"},

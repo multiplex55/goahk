@@ -158,8 +158,10 @@ type GetNodeDetailsRequest struct {
 }
 
 type PropertyDTO struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Name   string  `json:"name"`
+	Group  string  `json:"group"`
+	Value  *string `json:"value"`
+	Status string  `json:"status"`
 }
 
 type WindowInfoDTO struct {

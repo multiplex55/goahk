@@ -6,7 +6,9 @@ export type WindowItem = {
 
 export type PropertyItem = {
   name: string;
-  value: string;
+  value: string | null;
+  status: 'ok' | 'unsupported';
+  group: 'identity' | 'semantics' | 'state' | 'geometry' | 'relation';
 };
 
 export type Rect = {

@@ -78,7 +78,7 @@ export function createInspectBindings(): InspectBindings {
       const dto = (response ?? {}) as unknown as {
         windowInfo?: WindowInfoDetails;
         element?: ElementDetails;
-        properties?: { name: string; value: string }[];
+        properties?: { name: string; value: string | null; status?: 'ok' | 'unsupported'; group?: 'identity' | 'semantics' | 'state' | 'geometry' | 'relation' }[];
         patterns?: { name: string; payloadSchema?: string }[];
         statusText?: string;
         bestSelector?: string;
@@ -92,7 +92,14 @@ export function createInspectBindings(): InspectBindings {
       return {
         windowInfo: dto.windowInfo,
         element: dto.element,
-        properties: Array.isArray(dto.properties) ? dto.properties : [],
+        properties: Array.isArray(dto.properties)
+          ? dto.properties.map((property) => ({
+              name: property.name,
+              value: property.value ?? null,
+              status: property.status === 'unsupported' ? 'unsupported' : 'ok',
+              group: property.group ?? 'semantics'
+            }))
+          : [],
         patterns: Array.isArray(dto.patterns) ? dto.patterns : [],
         statusText: dto.statusText,
         bestSelector: dto.bestSelector,

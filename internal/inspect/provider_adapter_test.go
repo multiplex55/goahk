@@ -123,7 +123,11 @@ func (f *fakeAdapter) Collapse(context.Context, string) error {
 
 func TestProviderAdapter_PropertyMappingAndNormalization(t *testing.T) {
 	help := "h"
-	el := &uiaElement{RuntimeID: " 1.2 ", Name: "Save", ControlType: "button", LocalizedControlType: "BUTTON", AutomationID: "SaveBtn", BoundingRect: &uiaRect{Left: 1, Top: 2, Width: 3, Height: 4}, HelpText: &help, SupportedPatterns: []string{"Invoke", "Value"}}
+	el := &uiaElement{
+		RuntimeID: " 1.2 ", Name: "Save", ControlType: "button", LocalizedControlType: "BUTTON", AutomationID: "SaveBtn",
+		BoundingRect: &uiaRect{Left: 1, Top: 2, Width: 3, Height: 4}, HelpText: &help, SupportedPatterns: []string{"Invoke", "Value"},
+		UnsupportedProps: map[string]bool{"HelpText": true},
+	}
 	mapped := toInspectElement("node:x", "node:p", el)
 	if mapped.ControlType != "Button" || mapped.LocalizedControlType != "button" {
 		t.Fatalf("unexpected control type normalization: %#v", mapped)
@@ -136,6 +140,9 @@ func TestProviderAdapter_PropertyMappingAndNormalization(t *testing.T) {
 	}
 	if len(mapped.Patterns) != 2 {
 		t.Fatalf("pattern extraction failed: %+v", mapped.Patterns)
+	}
+	if !mapped.UnsupportedProps["HelpText"] {
+		t.Fatalf("unsupported property metadata not mapped")
 	}
 }
 
