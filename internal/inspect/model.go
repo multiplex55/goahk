@@ -43,10 +43,19 @@ type Selector struct {
 //
 // Compatibility: action names are contract values used by clients.
 type PatternAction struct {
-	Pattern       string `json:"pattern"`
-	Action        string `json:"action"`
-	DisplayName   string `json:"displayName,omitempty"`
-	PayloadSchema string `json:"payloadSchema,omitempty"`
+	Pattern       string               `json:"pattern"`
+	Action        string               `json:"action"`
+	DisplayName   string               `json:"displayName,omitempty"`
+	PayloadSchema string               `json:"payloadSchema,omitempty"`
+	Supported     bool                 `json:"supported"`
+	Preconditions []PreconditionStatus `json:"preconditions,omitempty"`
+}
+
+// PreconditionStatus describes whether an action precondition is currently satisfied.
+type PreconditionStatus struct {
+	Name      string `json:"name"`
+	Satisfied bool   `json:"satisfied"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 // TreeNodeSummary is the lightweight tree row model shown in the inspect explorer.

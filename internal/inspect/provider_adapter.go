@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 var errNilElementReference = errors.New("inspect: nil element reference")
@@ -224,7 +225,7 @@ func (p *providerCore) invokePattern(ctx context.Context, req InvokePatternReque
 	}
 	action := strings.TrimSpace(req.Action)
 	if action == "" {
-		return InvokePatternResponse{}, ErrUnsupportedPatternAction
+		return InvokePatternResponse{}, newPatternActionError(patternErrorClassNotSupported, "action_required", "action is required", req.Action, req.NodeID, ErrUnsupportedPatternAction)
 	}
 	var allowed bool
 	for _, a := range available {
@@ -234,7 +235,7 @@ func (p *providerCore) invokePattern(ctx context.Context, req InvokePatternReque
 		}
 	}
 	if !allowed {
-		return InvokePatternResponse{}, ErrUnsupportedPatternAction
+		return InvokePatternResponse{}, newPatternActionError(patternErrorClassNotSupported, "action_not_supported", "action is not supported for this node", action, req.NodeID, ErrUnsupportedPatternAction)
 	}
 
 	switch action {
@@ -245,7 +246,7 @@ func (p *providerCore) invokePattern(ctx context.Context, req InvokePatternReque
 	case "setValue":
 		value, ok := valueFromPayload(req.Payload)
 		if !ok {
-			return InvokePatternResponse{}, ErrMissingPatternInput
+			return InvokePatternResponse{}, newPatternActionError(patternErrorClassInvalidInput, "missing_input", "setValue requires a non-empty payload.value", action, req.NodeID, ErrMissingPatternInput)
 		}
 		err = p.SetValue(ctx, req.NodeID, value)
 	case "doDefaultAction":
@@ -257,7 +258,7 @@ func (p *providerCore) invokePattern(ctx context.Context, req InvokePatternReque
 	case "collapse":
 		err = p.Collapse(ctx, req.NodeID)
 	default:
-		return InvokePatternResponse{}, ErrUnsupportedPatternAction
+		return InvokePatternResponse{}, newPatternActionError(patternErrorClassNotSupported, "action_not_supported", "action is not supported for this node", action, req.NodeID, ErrUnsupportedPatternAction)
 	}
 	if err != nil {
 		return InvokePatternResponse{}, p.wrapActionErr(action, req.NodeID, err)
@@ -277,6 +278,8 @@ func (p *providerCore) getPatternActions(ctx context.Context, nodeID string) ([]
 			Pattern:       a.Pattern,
 			DisplayName:   a.DisplayName,
 			PayloadSchema: a.PayloadSchema,
+			Supported:     a.Supported,
+			Preconditions: a.Preconditions,
 		})
 	}
 	return actions, nil
@@ -375,7 +378,28 @@ func (p *providerCore) wrapActionErr(action, nodeID string, err error) error {
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("%w: action=%s node=%s: %v", ErrPatternExecutionFailure, action, nodeID, err)
+	class := patternErrorClassTransientState
+	code := "action_failed"
+	message := "action failed due to transient state"
+	switch {
+	case errors.Is(err, ErrProviderActionUnsupported), errors.Is(err, ErrUnsupportedPatternAction):
+		class = patternErrorClassNotSupported
+		code = "action_not_supported"
+		message = "action is not supported by the provider"
+	case errors.Is(err, ErrMissingPatternInput), errors.Is(err, ErrInvalidNodeID):
+		class = patternErrorClassInvalidInput
+		code = "invalid_input"
+		message = "request input is invalid"
+	case errors.Is(err, syscall.EACCES):
+		class = patternErrorClassAccessDenied
+		code = "access_denied"
+		message = "access denied while invoking action"
+	case errors.Is(err, ErrStaleCache), errors.Is(err, errStaleElementReference), errors.Is(err, ErrProviderTransientFailure), errors.Is(err, ErrTransientFailure):
+		class = patternErrorClassTransientState
+		code = "transient_state"
+		message = "action could not run due to transient state"
+	}
+	return newPatternActionError(class, code, message, action, nodeID, fmt.Errorf("%w: %v", ErrPatternExecutionFailure, err))
 }
 
 func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
@@ -544,11 +568,11 @@ func normalizeLocalizedControlType(localized, controlType string) string {
 
 func patternActionsFromSupported(patterns []string) []PatternAction {
 	m := map[string][]PatternAction{
-		"Invoke":         {{Pattern: "Invoke", Action: "invoke", DisplayName: "Invoke"}},
-		"ExpandCollapse": {{Pattern: "ExpandCollapse", Action: "expand", DisplayName: "Expand"}, {Pattern: "ExpandCollapse", Action: "collapse", DisplayName: "Collapse"}},
-		"SelectionItem":  {{Pattern: "SelectionItem", Action: "select", DisplayName: "Select"}},
-		"Value":          {{Pattern: "Value", Action: "setValue", DisplayName: "Set Value", PayloadSchema: `{"type":"object","required":["value"]}`}},
-		"Toggle":         {{Pattern: "Toggle", Action: "toggle", DisplayName: "Toggle"}},
+		"Invoke":         {{Pattern: "Invoke", Action: "invoke", DisplayName: "Invoke", Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}}}},
+		"ExpandCollapse": {{Pattern: "ExpandCollapse", Action: "expand", DisplayName: "Expand", Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}}}, {Pattern: "ExpandCollapse", Action: "collapse", DisplayName: "Collapse", Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}}}},
+		"SelectionItem":  {{Pattern: "SelectionItem", Action: "select", DisplayName: "Select", Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}}}},
+		"Value":          {{Pattern: "Value", Action: "setValue", DisplayName: "Set Value", PayloadSchema: `{"type":"object","required":["value"]}`, Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}, {Name: "input:value", Satisfied: true, Reason: "requires payload.value"}}}},
+		"Toggle":         {{Pattern: "Toggle", Action: "toggle", DisplayName: "Toggle", Supported: true, Preconditions: []PreconditionStatus{{Name: "enabled", Satisfied: true}}}},
 	}
 	seen := map[string]bool{}
 	var out []PatternAction
