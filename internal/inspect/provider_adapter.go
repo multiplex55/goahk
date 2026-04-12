@@ -97,19 +97,25 @@ type uiaAdapter interface {
 }
 
 type providerCore struct {
-	adapter       uiaAdapter
-	mu            sync.RWMutex
-	nodeToRef     map[string]string
-	parentByID    map[string]string
-	childrenCache *nodeChildrenCache
+	adapter         uiaAdapter
+	probeChildCount bool
+	mu              sync.RWMutex
+	nodeToRef       map[string]string
+	parentByID      map[string]string
+	childrenCache   *nodeChildrenCache
 }
 
 func newProviderCore(adapter uiaAdapter) *providerCore {
+	return newProviderCoreWithChildCountProbe(adapter, true)
+}
+
+func newProviderCoreWithChildCountProbe(adapter uiaAdapter, probeChildCount bool) *providerCore {
 	return &providerCore{
-		adapter:       adapter,
-		nodeToRef:     map[string]string{},
-		parentByID:    map[string]string{},
-		childrenCache: newNodeChildrenCache(),
+		adapter:         adapter,
+		probeChildCount: probeChildCount,
+		nodeToRef:       map[string]string{},
+		parentByID:      map[string]string{},
+		childrenCache:   newNodeChildrenCache(),
 	}
 }
 
@@ -438,9 +444,11 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 		DebugMeta:            buildDebugMeta(el),
 		ClassName:            el.ClassName, Patterns: names,
 	}
-	if count, ok, err := p.adapter.GetChildCount(context.Background(), el.Ref); err == nil && ok {
-		node.ChildCount = &count
-		node.HasChildren = count > 0
+	if p.probeChildCount {
+		if count, ok, err := p.adapter.GetChildCount(context.Background(), el.Ref); err == nil && ok {
+			node.ChildCount = &count
+			node.HasChildren = count > 0
+		}
 	}
 	return node
 }

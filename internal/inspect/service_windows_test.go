@@ -151,6 +151,43 @@ func TestWindowsProvider_GetTreeRoot_ManualWindowTreeMode(t *testing.T) {
 	}
 }
 
+func TestWindowsProvider_UIAModeTreeExpansionUsesUIAChildrenOnly(t *testing.T) {
+	uia := &fakeAdapter{
+		root: &uiaElement{Ref: "uia-root", RuntimeID: "1", HWND: "0x1", Name: "UIA Root"},
+		kids: map[string][]*uiaElement{
+			"uia-root": {{Ref: "uia-child", RuntimeID: "2", ParentRef: "uia-root", Name: "UIA Child"}},
+		},
+	}
+	windowTree := &fakeAdapter{
+		root: &uiaElement{Ref: "window-root", RuntimeID: "100", HWND: "0x1", Name: "Window Root"},
+		kids: map[string][]*uiaElement{
+			"window-root": {{Ref: "window-child", RuntimeID: "200", ParentRef: "window-root", Name: "Window Child"}},
+		},
+	}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newWindowTreeAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
+
+	rootResp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+	if err != nil {
+		t.Fatalf("GetTreeRoot failed: %v", err)
+	}
+	childrenResp, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: rootResp.Root.NodeID})
+	if err != nil {
+		t.Fatalf("GetNodeChildren failed: %v", err)
+	}
+	if len(childrenResp.Children) != 1 || childrenResp.Children[0].Name != "UIA Child" {
+		t.Fatalf("expected UIA child payload, got %+v", childrenResp.Children)
+	}
+	if got := uia.childrenCallCount["uia-root"]; got != 1 {
+		t.Fatalf("expected exactly one UIA child call, got %d", got)
+	}
+	if got := windowTree.childrenCallCount["window-root"]; got != 0 {
+		t.Fatalf("expected no window-tree child calls in UIA mode, got %d", got)
+	}
+	if got := uia.childCountCalls["uia-root"]; got != 0 {
+		t.Fatalf("expected no UIA child-count probes during tree expansion, got %d", got)
+	}
+}
+
 func TestWindowsProvider_ModeAdaptersAreDistinct(t *testing.T) {
 	uia := &fakeAdapter{root: &uiaElement{Ref: "root-uia", RuntimeID: "1", HWND: "0x1", Name: "UIA Root"}}
 	windowTree := &fakeAdapter{root: &uiaElement{Ref: "root-window", RuntimeID: "2", HWND: "0x1", Name: "Window Root"}}
@@ -509,6 +546,58 @@ func TestWindowsProvider_GetNodeDetailsStatusAndPathFallbacks(t *testing.T) {
 	}
 	if _, err := provider.GetNodeDetails(context.Background(), GetNodeDetailsRequest{NodeID: "node:missing"}); !errors.Is(err, ErrStaleCache) {
 		t.Fatalf("expected stale cache on missing node details, got %v", err)
+	}
+}
+
+func TestWindowsProvider_GetNodeDetails_WindowInfoAndElementRemainIndependentlySourced(t *testing.T) {
+	uia := &fakeAdapter{
+		root: &uiaElement{Ref: "root", RuntimeID: "1", HWND: "0xAAA", Name: "Root"},
+		byRef: map[string]*uiaElement{
+			"root": {Ref: "root", RuntimeID: "1", HWND: "0xAAA", Name: "Root", ControlType: "Window"},
+			"child": {
+				Ref:                  "child",
+				RuntimeID:            "2",
+				ParentRef:            "root",
+				HWND:                 "0xCHILD",
+				Name:                 "Child",
+				ControlType:          "Button",
+				LocalizedControlType: "button",
+				ProcessID:            777,
+				ClassName:            "ChildClass",
+			},
+		},
+		kids: map[string][]*uiaElement{
+			"root": {{Ref: "child", RuntimeID: "2", ParentRef: "root", HWND: "0xCHILD", Name: "Child", ControlType: "Button", LocalizedControlType: "button", ProcessID: 777}},
+		},
+	}
+	windows := &fakeWindowAdapter{
+		windows: []window.Info{
+			{HWND: window.HWND(0x1), Title: "Selected Window", Class: "RootClass", Exe: "root.exe", PID: 100},
+		},
+	}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newWindowTreeAdapter(&fakeAdapter{}), windows).(*windowsProvider)
+
+	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+	if err != nil {
+		t.Fatalf("GetTreeRoot failed: %v", err)
+	}
+	kids, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: root.Root.NodeID})
+	if err != nil {
+		t.Fatalf("GetNodeChildren failed: %v", err)
+	}
+	if len(kids.Children) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(kids.Children))
+	}
+
+	resp, err := provider.GetNodeDetails(context.Background(), GetNodeDetailsRequest{NodeID: kids.Children[0].NodeID})
+	if err != nil {
+		t.Fatalf("GetNodeDetails failed: %v", err)
+	}
+	if resp.WindowInfo.HWND != "0x1" || resp.WindowInfo.Title != "Selected Window" || resp.WindowInfo.PID != 100 {
+		t.Fatalf("expected window info block from selected window context, got %+v", resp.WindowInfo)
+	}
+	if resp.Element.NodeID != kids.Children[0].NodeID || resp.Element.HWND != "0xCHILD" || resp.Element.Name != "Child" {
+		t.Fatalf("expected element properties block from selected child node, got %+v", resp.Element)
 	}
 }
 

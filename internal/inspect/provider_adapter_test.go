@@ -16,6 +16,7 @@ type fakeAdapter struct {
 	byRef             map[string]*uiaElement
 	kids              map[string][]*uiaElement
 	childCount        map[string]int
+	childCountCalls   map[string]int
 	childrenCallCount map[string]int
 	cursorX           int
 	cursorY           int
@@ -80,6 +81,10 @@ func (f *fakeAdapter) GetChildren(_ context.Context, ref string) ([]*uiaElement,
 	return nil, nil
 }
 func (f *fakeAdapter) GetChildCount(_ context.Context, ref string) (int, bool, error) {
+	if f.childCountCalls == nil {
+		f.childCountCalls = map[string]int{}
+	}
+	f.childCountCalls[ref]++
 	if f.childCount == nil {
 		return 0, false, nil
 	}
