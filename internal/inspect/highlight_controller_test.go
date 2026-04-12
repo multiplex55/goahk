@@ -178,3 +178,27 @@ func TestHighlightController_ConcurrencySafety(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestHighlightController_SyncSelectedNode_ValidInvalidTransitions(t *testing.T) {
+	overlay := &mockOverlay{screen: &Rect{Left: 0, Top: 0, Width: 400, Height: 400}}
+	controller := newHighlightController(overlay)
+
+	highlighted, err := controller.SyncSelectedNode(context.Background(), "node:1", InspectElement{BoundingRect: &Rect{Left: 10, Top: 10, Width: 40, Height: 40}}, "0x1")
+	if err != nil || !highlighted {
+		t.Fatalf("expected initial sync highlight, highlighted=%v err=%v", highlighted, err)
+	}
+	if len(overlay.showCalls) != 1 {
+		t.Fatalf("expected one show call, got %d", len(overlay.showCalls))
+	}
+
+	highlighted, err = controller.SyncSelectedNode(context.Background(), "node:2", InspectElement{}, "0x1")
+	if err != nil {
+		t.Fatalf("expected invalid rect transition to clear, err=%v", err)
+	}
+	if highlighted {
+		t.Fatalf("expected invalid rect to not be highlighted")
+	}
+	if overlay.clearCalls == 0 {
+		t.Fatalf("expected clear call after invalid rect transition")
+	}
+}

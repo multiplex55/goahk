@@ -2,6 +2,7 @@ package inspect
 
 import (
 	"context"
+	"strings"
 	"sync"
 )
 
@@ -11,6 +12,7 @@ type highlightController struct {
 	mu                  sync.Mutex
 	highlightedWindowID string
 	highlightedNodeID   string
+	lastRect            *Rect
 }
 
 func newHighlightController(overlay highlightOverlay) *highlightController {
@@ -46,8 +48,16 @@ func (c *highlightController) ShowNode(ctx context.Context, nodeID string, eleme
 	c.mu.Lock()
 	c.highlightedNodeID = nodeID
 	c.highlightedWindowID = windowID
+	c.lastRect = &rect
 	c.mu.Unlock()
 	return true, nil
+}
+
+func (c *highlightController) SyncSelectedNode(ctx context.Context, nodeID string, element InspectElement, windowID string) (bool, error) {
+	if strings.TrimSpace(nodeID) == "" {
+		return false, c.Clear(ctx)
+	}
+	return c.ShowNode(ctx, nodeID, element, windowID)
 }
 
 func (c *highlightController) Clear(ctx context.Context) error {
@@ -57,6 +67,7 @@ func (c *highlightController) Clear(ctx context.Context) error {
 	c.mu.Lock()
 	c.highlightedNodeID = ""
 	c.highlightedWindowID = ""
+	c.lastRect = nil
 	c.mu.Unlock()
 	return nil
 }

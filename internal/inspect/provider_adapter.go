@@ -236,7 +236,39 @@ func (p *providerCore) inspectByNodeID(ctx context.Context, nodeID string) (Insp
 		p.parentByID[nodeID] = parentID
 		p.mu.Unlock()
 	}
-	return toInspectElement(nodeID, p.parentOf(nodeID), el), nil
+	selected := toInspectElement(nodeID, p.parentOf(nodeID), el)
+	best, suggestions := p.selectorCandidatesForNode(ctx, nodeID, el)
+	selected.BestSelector = best
+	selected.SelectorSuggestions = suggestions
+	return selected, nil
+}
+
+func (p *providerCore) selectorCandidatesForNode(ctx context.Context, nodeID string, el *uiaElement) (*Selector, []SelectorCandidate) {
+	ref, ok := p.lookupRef(nodeID)
+	if !ok {
+		return selectorCandidatesForElement(el)
+	}
+	selectorCtx := selectorContext{}
+	if parentRef := strings.TrimSpace(el.ParentRef); parentRef != "" {
+		if siblings, err := p.adapter.GetChildren(ctx, parentRef); err == nil {
+			selectorCtx.siblings = siblings
+		}
+		current := parentRef
+		for i := 0; i < 4 && current != ""; i++ {
+			parent, err := p.adapter.GetElementByRef(ctx, current)
+			if err != nil || parent == nil {
+				break
+			}
+			selectorCtx.ancestry = append(selectorCtx.ancestry, parent)
+			current = strings.TrimSpace(parent.ParentRef)
+		}
+	}
+	if len(selectorCtx.siblings) == 0 {
+		if siblings, err := p.adapter.GetChildren(ctx, ref); err == nil {
+			selectorCtx.siblings = siblings
+		}
+	}
+	return selectorCandidatesForElementWithContext(el, selectorCtx)
 }
 
 func (p *providerCore) invokePattern(ctx context.Context, req InvokePatternRequest) (InvokePatternResponse, error) {
@@ -838,7 +870,16 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+type selectorContext struct {
+	siblings []*uiaElement
+	ancestry []*uiaElement
+}
+
 func selectorCandidatesForElement(el *uiaElement) (*Selector, []SelectorCandidate) {
+	return selectorCandidatesForElementWithContext(el, selectorContext{})
+}
+
+func selectorCandidatesForElementWithContext(el *uiaElement, ctx selectorContext) (*Selector, []SelectorCandidate) {
 	if el == nil {
 		return nil, nil
 	}
@@ -847,25 +888,47 @@ func selectorCandidatesForElement(el *uiaElement) (*Selector, []SelectorCandidat
 		why   string
 		score int
 		src   string
+		tie   int
 	}
 	var cands []cand
-	if v := strings.TrimSpace(el.AutomationID); v != "" {
-		cands = append(cands, cand{sel: Selector{AutomationID: v}, why: "automation id is stable", score: 100, src: "automationId"})
-	}
 	ct := normalizeControlType(el.ControlType, el.LocalizedControlType)
 	if aid := strings.TrimSpace(el.AutomationID); aid != "" && ct != "" {
-		cands = append(cands, cand{sel: Selector{AutomationID: aid, ControlType: ct}, why: "automation id with control type narrows duplicates", score: 95, src: "automationId+controlType"})
+		score, rationale, tie := candidateUniquenessScore(ctx.siblings, el, func(other *uiaElement) bool {
+			return strings.EqualFold(strings.TrimSpace(other.AutomationID), aid) && normalizeControlType(other.ControlType, other.LocalizedControlType) == ct
+		}, "automation id + control type is unique among siblings")
+		cands = append(cands, cand{sel: Selector{AutomationID: aid, ControlType: ct}, why: rationale, score: 100 + score, src: "automationId+controlType", tie: tie})
 	}
 	if n := strings.TrimSpace(el.Name); n != "" && ct != "" {
-		cands = append(cands, cand{sel: Selector{Name: n, ControlType: ct, ClassName: strings.TrimSpace(el.ClassName)}, why: "name+type fallback", score: 70, src: "name+controlType"})
+		score, rationale, tie := candidateUniquenessScore(ctx.siblings, el, func(other *uiaElement) bool {
+			return strings.EqualFold(strings.TrimSpace(other.Name), n) && normalizeControlType(other.ControlType, other.LocalizedControlType) == ct
+		}, "name + control type is unique among siblings")
+		cands = append(cands, cand{sel: Selector{Name: n, ControlType: ct}, why: rationale, score: 80 + score, src: "name+controlType", tie: tie})
 	}
-	if strings.TrimSpace(el.Name) != "" {
-		cands = append(cands, cand{sel: Selector{Name: strings.TrimSpace(el.Name)}, why: "name-only broad fallback", score: 40, src: "name"})
+	if n := strings.TrimSpace(el.Name); n != "" {
+		ancestor := firstNonEmpty(ancestryControlTypes(ctx.ancestry)...)
+		score, rationale, tie := candidateUniquenessScore(ctx.siblings, el, func(other *uiaElement) bool {
+			return strings.EqualFold(strings.TrimSpace(other.Name), n)
+		}, "name with ancestry disambiguates siblings")
+		cands = append(cands, cand{sel: Selector{Name: n, FrameworkID: ancestor}, why: rationale, score: 60 + score, src: "name+ancestry", tie: tie})
 	}
-	if strings.TrimSpace(el.ClassName) != "" && strings.TrimSpace(el.FrameworkID) != "" {
-		cands = append(cands, cand{sel: Selector{ClassName: strings.TrimSpace(el.ClassName), FrameworkID: strings.TrimSpace(el.FrameworkID), ControlType: ct}, why: "framework class fallback", score: 35, src: "class+framework"})
+	if class := strings.TrimSpace(el.ClassName); class != "" {
+		ancestor := firstNonEmpty(ancestryControlTypes(ctx.ancestry)...)
+		score, rationale, tie := candidateUniquenessScore(ctx.siblings, el, func(other *uiaElement) bool {
+			return strings.EqualFold(strings.TrimSpace(other.ClassName), class)
+		}, "class name with ancestry fallback")
+		cands = append(cands, cand{sel: Selector{ClassName: class, FrameworkID: ancestor}, why: rationale, score: 40 + score, src: "className+ancestry", tie: tie})
 	}
-	sort.SliceStable(cands, func(i, j int) bool { return cands[i].score > cands[j].score })
+	if aid := strings.TrimSpace(el.AutomationID); aid != "" {
+		cands = append(cands, cand{sel: Selector{AutomationID: aid}, why: "fallback automation id", score: 20, src: "fallback", tie: len(cands)})
+	} else if n := strings.TrimSpace(el.Name); n != "" {
+		cands = append(cands, cand{sel: Selector{Name: n}, why: "fallback name", score: 10, src: "fallback", tie: len(cands)})
+	}
+	sort.SliceStable(cands, func(i, j int) bool {
+		if cands[i].score == cands[j].score {
+			return cands[i].tie < cands[j].tie
+		}
+		return cands[i].score > cands[j].score
+	})
 	out := make([]SelectorCandidate, 0, len(cands))
 	for i, c := range cands {
 		out = append(out, SelectorCandidate{Rank: i + 1, Selector: c.sel, Rationale: c.why, Score: c.score, Source: c.src, Meta: map[string]any{"index": strconv.Itoa(i)}})
@@ -875,4 +938,34 @@ func selectorCandidatesForElement(el *uiaElement) (*Selector, []SelectorCandidat
 	}
 	best := out[0].Selector
 	return &best, out
+}
+
+func candidateUniquenessScore(siblings []*uiaElement, self *uiaElement, matches func(*uiaElement) bool, uniqueReason string) (int, string, int) {
+	if len(siblings) == 0 {
+		return 0, uniqueReason, 1
+	}
+	matchesCount := 0
+	for _, sibling := range siblings {
+		if sibling == nil || sibling.Ref == self.Ref {
+			continue
+		}
+		if matches(sibling) {
+			matchesCount++
+		}
+	}
+	if matchesCount == 0 {
+		return 10, uniqueReason, 0
+	}
+	return 0, "candidate may match sibling peers", matchesCount
+}
+
+func ancestryControlTypes(ancestry []*uiaElement) []string {
+	out := make([]string, 0, len(ancestry))
+	for _, ancestor := range ancestry {
+		if ancestor == nil {
+			continue
+		}
+		out = append(out, normalizeControlType(ancestor.ControlType, ancestor.LocalizedControlType))
+	}
+	return out
 }

@@ -40,6 +40,7 @@ type fakeAdapter struct {
 	collapseCount     int
 	lastSetValue      string
 	resolveRootCalls  int
+	pointCalls        int
 }
 
 func (f *fakeAdapter) ResolveWindowRoot(context.Context, string) (*uiaElement, error) {
@@ -53,6 +54,7 @@ func (f *fakeAdapter) GetCursorPosition(context.Context) (int, int, error) {
 	return f.cursorX, f.cursorY, nil
 }
 func (f *fakeAdapter) ElementFromPoint(context.Context, int, int) (*uiaElement, error) {
+	f.pointCalls++
 	return f.under, f.pointErr
 }
 func (f *fakeAdapter) GetElementByRef(_ context.Context, ref string) (*uiaElement, error) {
@@ -372,7 +374,7 @@ func TestProviderAdapter_FixtureDrivenNotepadLikeTree(t *testing.T) {
 func TestProviderAdapter_PatternMappingAndSelectorFallbacks(t *testing.T) {
 	el := &uiaElement{Name: "OK", ControlType: "Button", ClassName: "ButtonClass", FrameworkID: "Win32", SupportedPatterns: []string{"ExpandCollapse", "Toggle"}}
 	best, suggestions := selectorCandidatesForElement(el)
-	if best == nil || best.Name != "OK" {
+	if best == nil || best.Name != "OK" || best.ControlType != "Button" {
 		t.Fatalf("expected name-based selector fallback, got %+v", best)
 	}
 	if len(suggestions) == 0 {
@@ -431,8 +433,8 @@ func TestSelectorCandidatesForElement_DeterministicScoring(t *testing.T) {
 				ClassName:    "Edit",
 				FrameworkID:  "Win32",
 			},
-			wantSource: []string{"automationId", "automationId+controlType", "name+controlType", "name", "class+framework"},
-			wantScores: []int{100, 95, 70, 40, 35},
+			wantSource: []string{"automationId+controlType", "name+controlType", "name+ancestry", "className+ancestry", "fallback"},
+			wantScores: []int{100, 80, 60, 40, 20},
 		},
 		{
 			name: "name fallback only",
@@ -440,8 +442,8 @@ func TestSelectorCandidatesForElement_DeterministicScoring(t *testing.T) {
 				Name:        "Untitled - Notepad",
 				ControlType: "Window",
 			},
-			wantSource: []string{"name+controlType", "name"},
-			wantScores: []int{70, 40},
+			wantSource: []string{"name+controlType", "name+ancestry", "fallback"},
+			wantScores: []int{80, 60, 10},
 		},
 	}
 
@@ -460,6 +462,24 @@ func TestSelectorCandidatesForElement_DeterministicScoring(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSelectorCandidatesForElement_SiblingUniquenessTieBreaks(t *testing.T) {
+	el := &uiaElement{Ref: "self", Name: "Item", ControlType: "ListItem", ClassName: "ListViewItem"}
+	siblings := []*uiaElement{
+		{Ref: "sib1", Name: "Item", ControlType: "ListItem", ClassName: "ListViewItem"},
+		{Ref: "sib2", Name: "Item", ControlType: "ListItem", ClassName: "Other"},
+	}
+	_, got := selectorCandidatesForElementWithContext(el, selectorContext{
+		siblings: siblings,
+		ancestry: []*uiaElement{{ControlType: "List"}},
+	})
+	if len(got) < 3 {
+		t.Fatalf("expected ranked selector list, got %+v", got)
+	}
+	if got[0].Source != "name+controlType" {
+		t.Fatalf("expected control-type candidate to remain first with tie-break ordering, got %+v", got)
 	}
 }
 

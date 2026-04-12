@@ -34,6 +34,7 @@ type windowsProvider struct {
 	followCursorLocked  bool
 	lockedNodeID        string
 	focusedUnderCursor  TreeNodeDTO
+	selectedNodeID      string
 
 	diagMu          sync.RWMutex
 	lastDiagnostics *InspectDiagnostics
@@ -121,6 +122,7 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 	}
 	p.clearDiagnostics()
 	p.setActiveMode(resolvedMode)
+	_ = p.refreshHighlightForCurrentSelection(ctx)
 	_ = p.highlights.ClearOnWindowSwitch(ctx, req.HWND)
 	state := InspectModeState{
 		ActiveMode:   resolvedMode,
@@ -151,12 +153,14 @@ func (p *windowsProvider) GetNodeChildren(ctx context.Context, req GetNodeChildr
 }
 
 func (p *windowsProvider) SelectNode(ctx context.Context, req SelectNodeRequest) (SelectNodeResponse, error) {
-	selected, err := p.activeCore().inspectByNodeID(ctx, req.NodeID)
+	core := p.activeCore()
+	selected, err := core.inspectByNodeID(ctx, req.NodeID)
 	if err != nil {
 		_ = p.highlights.Clear(ctx)
 		return SelectNodeResponse{}, err
 	}
-	_ = p.highlights.ClearOnDeselection(ctx, selected)
+	_ = p.refreshHighlightSelection(ctx, req.NodeID, selected, core.childrenCache.window())
+	p.setSelectedNodeID(req.NodeID)
 	return SelectNodeResponse{Selected: TreeNodeDTO{
 		NodeID:               selected.NodeID,
 		NodeId:               selected.NodeID,
@@ -450,28 +454,40 @@ func (p *windowsProvider) GetFocusedElement(ctx context.Context, req GetFocusedE
 
 func (p *windowsProvider) GetElementUnderCursor(ctx context.Context, req GetElementUnderCursorRequest) (GetElementUnderCursorResponse, error) {
 	p.followMu.RLock()
+	enabled := p.followCursorEnabled
 	paused := p.followCursorPaused
 	locked := p.followCursorLocked
 	lockedNodeID := p.lockedNodeID
 	lockedElement := p.focusedUnderCursor
 	p.followMu.RUnlock()
 	if paused {
-		return GetElementUnderCursorResponse{Element: TreeNodeDTO{}}, nil
+		return GetElementUnderCursorResponse{Element: lockedElement}, nil
 	}
 	if locked && strings.TrimSpace(lockedNodeID) != "" {
 		return GetElementUnderCursorResponse{Element: lockedElement}, nil
 	}
-	el, err := p.activeCore().underCursor(ctx)
+	core := p.cursorCoreForActiveMode()
+	el, err := core.underCursor(ctx)
 	if err != nil {
 		p.setDiagnostics(diagnosticsFromError("ElementFromPoint", err, ""))
 		return GetElementUnderCursorResponse{}, err
 	}
 	p.clearDiagnostics()
+	changed := false
 	p.followMu.Lock()
-	if p.followCursorEnabled {
+	if enabled {
+		changed = p.focusedUnderCursor.NodeID != el.NodeID
 		p.focusedUnderCursor = el
+		if changed {
+			p.selectedNodeID = el.NodeID
+		}
 	}
 	p.followMu.Unlock()
+	if enabled && changed {
+		if inspectEl, inspectErr := core.inspectByNodeID(ctx, el.NodeID); inspectErr == nil {
+			_ = p.refreshHighlightSelection(ctx, el.NodeID, inspectEl, core.childrenCache.window())
+		}
+	}
 	return GetElementUnderCursorResponse{Element: el}, nil
 }
 
@@ -553,8 +569,14 @@ func (p *windowsProvider) ToggleFollowCursor(_ context.Context, req ToggleFollow
 		p.followCursorPaused = false
 		p.followCursorLocked = false
 		p.lockedNodeID = ""
+		p.selectedNodeID = ""
 	}
 	p.followMu.Unlock()
+	if !req.Enabled {
+		_ = p.highlights.Clear(context.Background())
+	} else {
+		_ = p.refreshHighlightForCurrentSelection(context.Background())
+	}
 	return ToggleFollowCursorResponse{Enabled: req.Enabled}, nil
 }
 
@@ -562,6 +584,7 @@ func (p *windowsProvider) PauseFollowCursor(_ context.Context, _ PauseFollowCurs
 	p.followMu.Lock()
 	p.followCursorPaused = true
 	p.followMu.Unlock()
+	_ = p.refreshHighlightForCurrentSelection(context.Background())
 	return PauseFollowCursorResponse{Paused: true}, nil
 }
 
@@ -569,24 +592,34 @@ func (p *windowsProvider) ResumeFollowCursor(_ context.Context, _ ResumeFollowCu
 	p.followMu.Lock()
 	p.followCursorPaused = false
 	p.followMu.Unlock()
+	_ = p.refreshHighlightForCurrentSelection(context.Background())
 	return ResumeFollowCursorResponse{Paused: false}, nil
 }
 
 func (p *windowsProvider) LockFollowCursor(ctx context.Context, req LockFollowCursorRequest) (LockFollowCursorResponse, error) {
 	p.followMu.Lock()
-	defer p.followMu.Unlock()
 	p.followCursorLocked = true
 	if strings.TrimSpace(req.NodeID) != "" {
 		p.lockedNodeID = req.NodeID
+		p.selectedNodeID = req.NodeID
+		p.followMu.Unlock()
+		_ = p.refreshHighlightForCurrentSelection(context.Background())
 		return LockFollowCursorResponse{Locked: true, NodeID: req.NodeID}, nil
 	}
-	el, err := p.activeCore().underCursor(ctx)
+	p.followMu.Unlock()
+	el, err := p.cursorCoreForActiveMode().underCursor(ctx)
 	if err != nil {
+		p.followMu.Lock()
 		p.followCursorLocked = false
+		p.followMu.Unlock()
 		return LockFollowCursorResponse{}, err
 	}
+	p.followMu.Lock()
 	p.focusedUnderCursor = el
 	p.lockedNodeID = el.NodeID
+	p.selectedNodeID = el.NodeID
+	p.followMu.Unlock()
+	_ = p.refreshHighlightForCurrentSelection(context.Background())
 	return LockFollowCursorResponse{Locked: true, NodeID: el.NodeID}, nil
 }
 
@@ -595,6 +628,7 @@ func (p *windowsProvider) UnlockFollowCursor(_ context.Context, _ UnlockFollowCu
 	p.followCursorLocked = false
 	p.lockedNodeID = ""
 	p.followMu.Unlock()
+	_ = p.refreshHighlightForCurrentSelection(context.Background())
 	return UnlockFollowCursorResponse{Locked: false}, nil
 }
 
@@ -645,6 +679,45 @@ func (p *windowsProvider) RefreshTreeRoot(ctx context.Context, req RefreshTreeRo
 	return RefreshTreeRootResponse{Root: resp.Root, State: resp.State, Diagnostics: resp.Diagnostics}, nil
 }
 
+func (p *windowsProvider) cursorCoreForActiveMode() *providerCore {
+	if p.activeModeForRead() == InspectModeUIATree {
+		return p.uiaCore
+	}
+	return p.activeCore()
+}
+
+func (p *windowsProvider) refreshHighlightSelection(ctx context.Context, nodeID string, selected InspectElement, windowID string) error {
+	if strings.TrimSpace(nodeID) == "" {
+		return p.highlights.Clear(ctx)
+	}
+	if _, ok := normalizeHighlightRect(selected.BoundingRect, selected.IsOffscreen, nil); !ok {
+		return p.highlights.Clear(ctx)
+	}
+	_, err := p.highlights.SyncSelectedNode(ctx, nodeID, selected, windowID)
+	return err
+}
+
+func (p *windowsProvider) setSelectedNodeID(nodeID string) {
+	p.followMu.Lock()
+	p.selectedNodeID = strings.TrimSpace(nodeID)
+	p.followMu.Unlock()
+}
+
+func (p *windowsProvider) refreshHighlightForCurrentSelection(ctx context.Context) error {
+	p.followMu.RLock()
+	selectedNodeID := strings.TrimSpace(p.selectedNodeID)
+	p.followMu.RUnlock()
+	if selectedNodeID == "" {
+		return p.highlights.Clear(ctx)
+	}
+	core := p.activeCore()
+	selected, err := core.inspectByNodeID(ctx, selectedNodeID)
+	if err != nil {
+		return p.highlights.Clear(ctx)
+	}
+	return p.refreshHighlightSelection(ctx, selectedNodeID, selected, core.childrenCache.window())
+}
+
 func (p *windowsProvider) RefreshNodeChildren(ctx context.Context, req RefreshNodeChildrenRequest) (RefreshNodeChildrenResponse, error) {
 	core := p.activeCore()
 	core.childrenCache.invalidateNode(core.childrenCache.window(), req.NodeID)
@@ -654,6 +727,7 @@ func (p *windowsProvider) RefreshNodeChildren(ctx context.Context, req RefreshNo
 		return RefreshNodeChildrenResponse{}, err
 	}
 	p.clearDiagnostics()
+	_ = p.refreshHighlightForCurrentSelection(ctx)
 	return RefreshNodeChildrenResponse{ParentNodeID: req.NodeID, Children: children}, nil
 }
 
@@ -664,6 +738,7 @@ func (p *windowsProvider) RefreshNodeDetails(ctx context.Context, req RefreshNod
 		return RefreshNodeDetailsResponse{}, err
 	}
 	p.clearDiagnostics()
+	_ = p.refreshHighlightForCurrentSelection(ctx)
 	return RefreshNodeDetailsResponse{Details: details}, nil
 }
 
