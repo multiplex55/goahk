@@ -6,12 +6,10 @@ package inspect
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"unsafe"
 
 	"goahk/internal/window"
-	"golang.org/x/sys/windows"
 )
 
 type nativeUIABridge interface {
@@ -67,50 +65,16 @@ func (d *nativeUIADeps) GetElementByRef(_ context.Context, ref string) (*uiaElem
 	return el, nil
 }
 
-func (d *nativeUIADeps) GetChildren(_ context.Context, ref string) ([]*uiaElement, error) {
-	hwnd, err := parseElementRef(ref)
-	if err != nil {
-		return nil, errUIANilElement
-	}
-	children, err := d.bridge.ChildHWNDs(hwnd)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*uiaElement, 0, len(children))
-	for _, child := range children {
-		el, err := d.bridge.ElementByHWND(child)
-		if err != nil {
-			return nil, err
-		}
-		if el == nil {
-			continue
-		}
-		out = append(out, el)
-	}
-	return out, nil
+func (d *nativeUIADeps) GetChildren(context.Context, string) ([]*uiaElement, error) {
+	return nil, ErrProviderActionUnsupported
 }
 
-func (d *nativeUIADeps) GetParent(_ context.Context, ref string) (*uiaElement, error) {
-	hwnd, err := parseElementRef(ref)
-	if err != nil {
-		return nil, errUIANilElement
-	}
-	parent, ok, err := d.bridge.ParentHWND(hwnd)
-	if err != nil {
-		return nil, err
-	}
-	if !ok || parent == 0 {
-		return nil, errUIAElementNotAvailable
-	}
-	return d.bridge.ElementByHWND(parent)
+func (d *nativeUIADeps) GetParent(context.Context, string) (*uiaElement, error) {
+	return nil, ErrProviderActionUnsupported
 }
 
-func (d *nativeUIADeps) GetChildCount(ctx context.Context, ref string) (int, bool, error) {
-	children, err := d.GetChildren(ctx, ref)
-	if err != nil {
-		return 0, false, err
-	}
-	return len(children), true, nil
+func (d *nativeUIADeps) GetChildCount(context.Context, string) (int, bool, error) {
+	return 0, false, ErrProviderActionUnsupported
 }
 
 func (d *nativeUIADeps) GetFocusedElement(_ context.Context) (*uiaElement, error) {
@@ -230,83 +194,3 @@ func (win32UIABridge) DoDefaultAction(window.HWND) error  { return ErrProviderAc
 func (win32UIABridge) Toggle(window.HWND) error           { return ErrProviderActionUnsupported }
 func (win32UIABridge) Expand(window.HWND) error           { return ErrProviderActionUnsupported }
 func (win32UIABridge) Collapse(window.HWND) error         { return ErrProviderActionUnsupported }
-
-var (
-	user32DLL                = windows.NewLazySystemDLL("user32.dll")
-	procGetParent            = user32DLL.NewProc("GetParent")
-	procGetWindow            = user32DLL.NewProc("GetWindow")
-	procGetForegroundWindow  = user32DLL.NewProc("GetForegroundWindow")
-	procGetCursorPos         = user32DLL.NewProc("GetCursorPos")
-	procWindowFromPoint      = user32DLL.NewProc("WindowFromPoint")
-	procGetWindowTextLengthW = user32DLL.NewProc("GetWindowTextLengthW")
-	procGetWindowTextW       = user32DLL.NewProc("GetWindowTextW")
-	procGetClassNameW        = user32DLL.NewProc("GetClassNameW")
-)
-
-const (
-	gwChild    = 5
-	gwHwndNext = 2
-)
-
-type winPoint struct{ X, Y int32 }
-
-func describeHWND(hwnd window.HWND) (*uiaElement, error) {
-	if hwnd == 0 {
-		return nil, errUIAElementNotAvailable
-	}
-	title, _ := getWindowText(hwnd)
-	className, _ := getClassName(hwnd)
-	parent, _, _ := win32UIABridge{}.ParentHWND(hwnd)
-	return &uiaElement{
-		Ref:         makeElementRef(hwnd),
-		RuntimeID:   strconv.FormatUint(uint64(hwnd), 10),
-		HWND:        hwnd.String(),
-		ParentRef:   makeElementRef(parent),
-		Name:        title,
-		ControlType: "Window",
-		ClassName:   className,
-		FrameworkID: "Win32",
-		IsEnabled:   true,
-		UnsupportedProps: map[string]bool{
-			"LocalizedControlType": true,
-			"Value":                true,
-			"AutomationId":         true,
-			"BoundingRectangle":    true,
-			"HelpText":             true,
-			"AccessKey":            true,
-			"AcceleratorKey":       true,
-			"HasKeyboardFocus":     true,
-			"IsKeyboardFocusable":  true,
-			"ItemType":             true,
-			"ItemStatus":           true,
-			"ProcessId":            true,
-			"IsPassword":           true,
-			"IsOffscreen":          true,
-			"IsRequiredForForm":    true,
-			"LabeledBy":            true,
-		},
-		SupportedPatterns: []string{},
-	}, nil
-}
-
-func getWindowText(hwnd window.HWND) (string, error) {
-	l, _, _ := procGetWindowTextLengthW.Call(uintptr(hwnd))
-	buf := make([]uint16, l+1)
-	_, _, err := procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
-	if err != windows.ERROR_SUCCESS && err != nil {
-		return "", err
-	}
-	return windows.UTF16ToString(buf), nil
-}
-
-func getClassName(hwnd window.HWND) (string, error) {
-	buf := make([]uint16, 256)
-	ret, _, err := procGetClassNameW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
-	if ret == 0 {
-		if err != windows.ERROR_SUCCESS && err != nil {
-			return "", err
-		}
-		return "", nil
-	}
-	return windows.UTF16ToString(buf[:ret]), nil
-}

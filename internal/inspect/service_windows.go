@@ -40,7 +40,7 @@ type windowsProvider struct {
 }
 
 func newWindowsProvider() WindowsProvider {
-	return newWindowsProviderWithModeAdapters(newUIAAdapter(newNativeUIADeps()), newUIAAdapter(newNativeUIADeps()), window.NewOSProvider())
+	return newWindowsProviderWithModeAdapters(newUIAAdapter(newNativeUIADeps()), newWindowTreeAdapter(newNativeWindowTreeDeps()), window.NewOSProvider())
 }
 
 func newWindowsProviderWithDeps(adapter uiaAdapter, windows windowAdapter) WindowsProvider {
@@ -92,7 +92,21 @@ func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRe
 		return InspectWindowResponse{}, err
 	}
 	p.setActiveMode(resolvedMode)
-	return InspectWindowResponse{Window: WindowSummary{HWND: req.HWND}, RootNodeID: root.NodeID}, nil
+	state := InspectModeState{
+		ActiveMode:   resolvedMode,
+		FallbackUsed: mode != resolvedMode,
+	}
+	var diagnostics *InspectDiagnostics
+	if state.FallbackUsed {
+		state.FailureStage = "ResolveWindowRoot"
+		state.GuidanceText = "UIA tree is unavailable. Switch to Window Tree mode to continue inspecting this window."
+		diagnostics = &InspectDiagnostics{
+			Stage:        state.FailureStage,
+			Message:      state.GuidanceText,
+			FallbackMode: resolvedMode,
+		}
+	}
+	return InspectWindowResponse{Window: WindowSummary{HWND: req.HWND}, RootNodeID: root.NodeID, State: state, Diagnostics: diagnostics}, nil
 }
 
 func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootRequest) (GetTreeRootResponse, error) {
