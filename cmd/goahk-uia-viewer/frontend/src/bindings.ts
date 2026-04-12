@@ -50,6 +50,47 @@ const normalizeNode = <T extends { nodeID?: string; nodeId?: string }>(node: T):
   return { ...node, nodeID: resolved, nodeId: resolved };
 };
 
+const normalizeMode = (mode?: string): 'UIA_TREE' | 'WINDOW_TREE' | undefined => {
+  if (mode === 'WINDOW_TREE') return 'WINDOW_TREE';
+  if (mode === 'UIA_TREE') return 'UIA_TREE';
+  return undefined;
+};
+
+const normalizeState = (state?: inspect.InspectModeState) =>
+  state
+    ? {
+        activeMode: normalizeMode(state.activeMode),
+        fallbackUsed: !!state.fallbackUsed,
+        failureStage: state.failureStage,
+        guidanceText: state.guidanceText
+      }
+    : undefined;
+
+const normalizeDiagnostics = (diag?: inspect.InspectDiagnostics) =>
+  diag
+    ? {
+        stage: diag.stage,
+        errorCode: diag.errorCode,
+        hresult: diag.hresult,
+        message: diag.message,
+        fallbackMode: normalizeMode(diag.fallbackMode),
+        privilegeHint: diag.privilegeHint
+      }
+    : undefined;
+
+const normalizePatternError = (err?: inspect.PatternActionErrorDTO) =>
+  err
+    ? {
+        class:
+          err.class === 'not_supported' || err.class === 'invalid_input' || err.class === 'transient_state' || err.class === 'access_denied'
+            ? err.class
+            : 'transient_state',
+        code: err.code ?? '',
+        message: err.message ?? '',
+        retryable: !!err.retryable
+      }
+    : undefined;
+
 export function createInspectBindings(): InspectBindings {
   return {
     RefreshWindows: async (req: inspect.RefreshWindowsRequest) => {
@@ -65,7 +106,7 @@ export function createInspectBindings(): InspectBindings {
       if (!response?.root) {
         throw new Error('Tree root response was empty');
       }
-      return { root: normalizeNode(response.root), state: response?.state, diagnostics: response?.diagnostics };
+      return { root: normalizeNode(response.root), state: normalizeState(response?.state), diagnostics: normalizeDiagnostics(response?.diagnostics) };
     },
     GetNodeChildren: async (req: inspect.GetNodeChildrenRequest) => {
       const response = await call(() => GetNodeChildren(req), 'Failed to load node children');
@@ -136,7 +177,7 @@ export function createInspectBindings(): InspectBindings {
         action: response?.action ?? req.action,
         nodeID: response?.nodeID ?? req.nodeID,
         result: response?.result,
-        error: response?.error
+        error: normalizePatternError(response?.error)
       };
     },
     ClearHighlight: async (req: inspect.ClearHighlightRequest = {}) => {
@@ -170,7 +211,7 @@ export function createInspectBindings(): InspectBindings {
     RefreshTreeRoot: async (req: inspect.RefreshTreeRootRequest) => {
       const response = await call(() => RefreshTreeRoot(req), 'Failed to refresh root');
       if (!response?.root) throw new Error('Tree root response was empty');
-      return { root: normalizeNode(response.root), state: response?.state, diagnostics: response?.diagnostics };
+      return { root: normalizeNode(response.root), state: normalizeState(response?.state), diagnostics: normalizeDiagnostics(response?.diagnostics) };
     },
     RefreshNodeChildren: async (req: inspect.RefreshNodeChildrenRequest) => {
       const response = await call(() => RefreshNodeChildren(req), 'Failed to refresh children');
@@ -185,7 +226,7 @@ export function createInspectBindings(): InspectBindings {
     },
     GetDiagnostics: async () => {
       const response = await call(() => GetDiagnostics({}), 'Failed to read diagnostics');
-      return { diagnostics: response?.diagnostics };
+      return { diagnostics: normalizeDiagnostics(response?.diagnostics) };
     },
     CopyBestSelector: async (req: inspect.CopyBestSelectorRequest) => {
       const response = await call(() => CopyBestSelector(req), 'Failed to copy selector');

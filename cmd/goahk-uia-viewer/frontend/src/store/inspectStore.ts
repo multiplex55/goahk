@@ -400,6 +400,7 @@ export function createInspectStore(
       let rootResp: {
         root: InspectTreeNode;
         state?: { activeMode?: 'UIA_TREE' | 'WINDOW_TREE'; fallbackUsed?: boolean; failureStage?: string; guidanceText?: string };
+        diagnostics?: InspectStoreState['diagnostics'];
       };
       try {
         rootResp = await bindings.GetTreeRoot({ hwnd: windowID, refresh: true, mode: state.inspectionMode });
@@ -435,9 +436,18 @@ export function createInspectStore(
         return;
       }
 
+      const normalizedFallbackState = rootResp.state
+        ? {
+            activeMode: rootResp.state.activeMode ?? state.inspectionMode,
+            fallbackUsed: rootResp.state.fallbackUsed ?? false,
+            failureStage: rootResp.state.failureStage,
+            guidanceText: rootResp.state.guidanceText
+          }
+        : undefined;
+
       setState({
         inspectionMode: rootResp.state?.activeMode ?? state.inspectionMode,
-        fallbackState: rootResp.state,
+        fallbackState: normalizedFallbackState,
         diagnostics: rootResp.diagnostics,
         selectedNodeID,
         loadingWindow: false,
