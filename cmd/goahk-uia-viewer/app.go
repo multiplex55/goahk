@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"goahk/internal/inspect"
-
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type followCursorEvent struct {
@@ -69,11 +67,6 @@ func NewViewerApp(service inspect.Service) *ViewerApp {
 
 func (a *ViewerApp) OnStartup(ctx context.Context) {
 	a.runtimeCtx = ctx
-	a.logDebugf = wailsRuntime.LogDebugf
-	a.logErrorf = wailsRuntime.LogErrorf
-	a.SetEventEmitter(func(name string, payload any) {
-		wailsRuntime.EventsEmit(a.runtimeContext(), name, payload)
-	})
 }
 
 func (a *ViewerApp) OnShutdown(ctx context.Context) {
