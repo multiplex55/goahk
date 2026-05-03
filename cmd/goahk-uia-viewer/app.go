@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -303,21 +302,4 @@ func (a *ViewerApp) runtimeContext() context.Context {
 		return a.runtimeCtx
 	}
 	return context.Background()
-}
-
-func normalizeInspectError(err error) string {
-	switch {
-	case err == nil:
-		return "none"
-	case errors.Is(err, inspect.ErrProviderActionUnsupported):
-		return "ErrProviderActionUnsupported"
-	case errors.Is(err, inspect.ErrStaleCache):
-		return "ErrStaleCache"
-	case errors.Is(err, inspect.ErrInvalidNodeID):
-		return "ErrInvalidNodeID"
-	case errors.Is(err, inspect.ErrTransientFailure), errors.Is(err, inspect.ErrProviderTransientFailure):
-		return "ErrTransientFailure"
-	default:
-		return fmt.Sprintf("%T", err)
-	}
 }
