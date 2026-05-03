@@ -18,6 +18,8 @@ type fakeInspectService struct {
 	inspectWindowReqs []inspect.InspectWindowRequest
 	inspectWindowResp inspect.InspectWindowResponse
 	refreshReqs       []inspect.RefreshWindowsRequest
+	nodeChildrenReqs  []inspect.GetNodeChildrenRequest
+	childrenByNode    map[string][]inspect.TreeNodeDTO
 	clearCalls        int
 }
 
@@ -33,8 +35,12 @@ func (f *fakeInspectService) InspectWindow(_ context.Context, req inspect.Inspec
 func (f *fakeInspectService) GetTreeRoot(context.Context, inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {
 	return inspect.GetTreeRootResponse{}, nil
 }
-func (f *fakeInspectService) GetNodeChildren(context.Context, inspect.GetNodeChildrenRequest) (inspect.GetNodeChildrenResponse, error) {
-	return inspect.GetNodeChildrenResponse{}, nil
+func (f *fakeInspectService) GetNodeChildren(_ context.Context, req inspect.GetNodeChildrenRequest) (inspect.GetNodeChildrenResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nodeChildrenReqs = append(f.nodeChildrenReqs, req)
+	children := f.childrenByNode[req.NodeID]
+	return inspect.GetNodeChildrenResponse{Children: children}, nil
 }
 func (f *fakeInspectService) SelectNode(context.Context, inspect.SelectNodeRequest) (inspect.SelectNodeResponse, error) {
 	return inspect.SelectNodeResponse{}, nil
