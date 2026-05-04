@@ -165,14 +165,12 @@ Run for local manual inspection (Windows only):
 go run ./cmd/goahk-uia-viewer
 ```
 
-Helper scripts:
+Helper build scripts:
 
-- `build/build-uia-viewer.sh`
 - `build/build-uia-viewer.bat`
-- `build/dev-uia-viewer.sh`
-- `build/dev-uia-viewer.bat`
+- `build/build-uia-viewer.sh`
 
-These scripts now use `go build`/`go run` directly (no Wails toolchain).
+Use the direct `go build` command above if you prefer script-free invocation.
 
 ## Toolchain expectations
 

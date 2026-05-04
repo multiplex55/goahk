@@ -48,7 +48,13 @@ jobs:
         shell: pwsh
         run: Invoke-Pester -Path build/tests -CI
 
-      - name: Build application
+      - name: Build application package
+        run: cmd /c build\build.bat
+
+      - name: Build UIA viewer package
+        run: cmd /c build\build-uia-viewer.bat
+
+      - name: Build all packages (compile check)
         run: go build -v ./...
 
       - name: Run static analysis (stdversion + vet checks)

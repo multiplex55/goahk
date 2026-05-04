@@ -137,6 +137,15 @@ func mustContainAll(t *testing.T, text string, wants ...string) {
 	}
 }
 
+func mustNotContainAll(t *testing.T, text string, bans ...string) {
+	t.Helper()
+	lower := strings.ToLower(text)
+	for _, ban := range bans {
+		if strings.Contains(lower, strings.ToLower(ban)) {
+			t.Fatalf("expected content not to contain %q", ban)
+		}
+	}
+}
 func TestArchitectureRuntimePlaneSectionsPresent(t *testing.T) {
 	t.Parallel()
 
@@ -228,5 +237,34 @@ func TestStopGuidanceIsCanonicalAndExplicit(t *testing.T) {
 				"not interchangeable",
 			)
 		})
+	}
+}
+
+func TestBuildAndReleaseDocsUseCurrentScriptsAndNoWailsNpm(t *testing.T) {
+	t.Parallel()
+
+	buildDoc, err := os.ReadFile(filepath.Join(".", "BUILD.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(BUILD.md) error = %v", err)
+	}
+	releaseDoc, err := os.ReadFile(filepath.Join(".", "release-artifacts.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(release-artifacts.md) error = %v", err)
+	}
+	readme, err := os.ReadFile(filepath.Join("..", "README.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(README.md) error = %v", err)
+	}
+
+	mustContainAll(t, string(buildDoc),
+		"build\\build.bat",
+		"build\\build-uia-viewer.bat",
+		"build\\check-no-source-binaries.bat",
+	)
+	mustContain(t, string(releaseDoc), "dist/goahk*")
+	mustContain(t, string(releaseDoc), "dist/goahk-uia-viewer/goahk-uia-viewer*")
+
+	for _, text := range []string{string(buildDoc), string(releaseDoc), string(readme)} {
+		mustNotContainAll(t, text, "wails", "npm", "npx", "yarn", "pnpm")
 	}
 }

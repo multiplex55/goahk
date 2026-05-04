@@ -29,7 +29,9 @@ if not defined BUILD_DATE (
 
 set "LDFLAGS=-X main.version=%VERSION% -X main.commit=%COMMIT% -X main.buildDate=%BUILD_DATE%"
 
-go build -trimpath -buildvcs=false -ldflags "%LDFLAGS%" -o "%OUT_DIR%\goahk" "%ROOT%\cmd\goahk"
-if errorlevel 1 exit /b 1
+pushd "%ROOT%" || exit /b 1
+go build -trimpath -buildvcs=false -ldflags "%LDFLAGS%" -o "%OUT_DIR%\goahk" ./cmd/goahk
+set "EXIT_CODE=%ERRORLEVEL%"
+popd
 
-exit /b 0
+exit /b %EXIT_CODE%

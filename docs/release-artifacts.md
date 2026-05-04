@@ -37,3 +37,10 @@ CI enforcement details:
 - GitHub Actions sets that variable only for PRs carrying the `release-artifacts` label.
 
 This means normal feature/fix PRs fail fast if generated binaries are committed, while release PRs remain explicit and reviewable.
+
+
+## Canonical build outputs
+
+- Main runtime artifact path: `dist/goahk*` (for example `dist/goahk.exe` on Windows).
+- UIA viewer artifact path: `dist/goahk-uia-viewer/goahk-uia-viewer*`.
+- Release-only committed binaries (exception path): `dist/releases/`.
