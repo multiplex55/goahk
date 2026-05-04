@@ -4,52 +4,55 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"goahk/internal/inspect"
 )
 
+type Clipboard interface{ CopyText(string) error }
+type Dialogs interface {
+	PromptSetValue(defaultValue string) (string, bool, error)
+}
+
 type Controller struct {
-	service inspect.Service
-	ctx     context.Context
+	service   inspect.Service
+	ctx       context.Context
+	clipboard Clipboard
+	dialogs   Dialogs
 
-	mu sync.Mutex
-
-	selectedWindowID string
-	selectedNodeID   string
-	visibleOnly      bool
-	titleOnly        bool
-	activateOnSelect bool
-	mode             inspect.InspectMode
-
-	nodesByID      map[string]inspect.TreeNodeDTO
-	nodeChildren   map[string][]string
-	nodeExpanded   map[string]bool
-	nodeLoadFailed map[string]error
-
-	followEnabled  bool
-	followPaused   bool
-	followLocked   bool
-	lastFollowNode string
-	followCtx      context.Context
-	followCancel   context.CancelFunc
-	followDone     chan struct{}
-	followTicker   func() <-chan time.Time
-	followInterval time.Duration
-
+	mu                    sync.Mutex
+	selectedWindowID      string
+	selectedNodeID        string
+	visibleOnly           bool
+	titleOnly             bool
+	activateOnSelect      bool
+	mode                  inspect.InspectMode
+	nodesByID             map[string]inspect.TreeNodeDTO
+	nodeChildren          map[string][]string
+	nodeExpanded          map[string]bool
+	nodeLoadFailed        map[string]error
+	followEnabled         bool
+	followPaused          bool
+	followLocked          bool
+	lastFollowNode        string
+	followCtx             context.Context
+	followCancel          context.CancelFunc
+	followDone            chan struct{}
+	followTicker          func() <-chan time.Time
+	followInterval        time.Duration
 	accPathCaptureEnabled bool
 	lastACCPath           string
 	statusText            string
 	lastError             string
 	diagnostics           *inspect.InspectDiagnostics
-
-	onFollowElement []func(inspect.TreeNodeDTO)
-	onFollowError   []func(error)
+	onFollowElement       []func(inspect.TreeNodeDTO)
+	onFollowError         []func(error)
 }
 
 func NewController(ctx context.Context, svc inspect.Service) *Controller {
-	c := &Controller{ctx: ctx, service: svc, followInterval: 120 * time.Millisecond, nodesByID: map[string]inspect.TreeNodeDTO{}, nodeChildren: map[string][]string{}, nodeExpanded: map[string]bool{}, nodeLoadFailed: map[string]error{}}
+	c := &Controller{ctx: ctx, service: svc, followInterval: 120 * time.Millisecond, nodesByID: map[string]inspect.TreeNodeDTO{}, nodeChildren: map[string][]string{}, nodeExpanded: map[string]bool{}, nodeLoadFailed: map[string]error{}, statusText: "Click status to enable ACC path capture"}
 	c.followTicker = func() <-chan time.Time {
 		t := time.NewTicker(c.followInterval)
 		out := make(chan time.Time)
@@ -69,7 +72,8 @@ func NewController(ctx context.Context, svc inspect.Service) *Controller {
 	}
 	return c
 }
-
+func (c *Controller) WithClipboard(cb Clipboard) *Controller { c.clipboard = cb; return c }
+func (c *Controller) WithDialogs(d Dialogs) *Controller      { c.dialogs = d; return c }
 func (c *Controller) runtimeContext() context.Context {
 	if c.ctx != nil {
 		return c.ctx
@@ -86,16 +90,16 @@ func (c *Controller) OnFollowCursorError(cb func(error)) {
 	defer c.mu.Unlock()
 	c.onFollowError = append(c.onFollowError, cb)
 }
-
 func (c *Controller) RefreshWindows(filter string, visibleOnly, titleOnly bool) (inspect.RefreshWindowsResponse, error) {
+	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 	c.mu.Lock()
 	c.visibleOnly = visibleOnly
 	c.titleOnly = titleOnly
 	c.mu.Unlock()
 	return c.service.RefreshWindows(c.runtimeContext(), inspect.RefreshWindowsRequest{Filter: filter, VisibleOnly: visibleOnly, TitleOnly: titleOnly})
 }
-
 func (c *Controller) SelectWindow(hwnd string) error {
+	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 	c.mu.Lock()
 	activate := c.activateOnSelect
 	mode := c.mode
@@ -120,7 +124,6 @@ func (c *Controller) SelectWindow(hwnd string) error {
 	_, err = c.service.GetNodeDetails(c.runtimeContext(), inspect.GetNodeDetailsRequest{NodeID: root.Root.NodeID})
 	return err
 }
-
 func (c *Controller) LoadTreeRoot() (inspect.GetTreeRootResponse, error) {
 	c.mu.Lock()
 	hwnd := c.selectedWindowID
@@ -146,18 +149,22 @@ func (c *Controller) ExpandNode(nodeID string) (inspect.GetNodeChildrenResponse,
 	delete(c.nodeLoadFailed, nodeID)
 	return resp, nil
 }
-
 func (c *Controller) SelectNode(nodeID string) error {
 	if _, err := c.service.SelectNode(c.runtimeContext(), inspect.SelectNodeRequest{NodeID: nodeID}); err != nil {
 		return err
 	}
-	if _, err := c.service.GetNodeDetails(c.runtimeContext(), inspect.GetNodeDetailsRequest{NodeID: nodeID}); err != nil {
+	details, err := c.service.GetNodeDetails(c.runtimeContext(), inspect.GetNodeDetailsRequest{NodeID: nodeID})
+	if err != nil {
 		return err
 	}
-	_, err := c.service.HighlightNode(c.runtimeContext(), inspect.HighlightNodeRequest{NodeID: nodeID})
+	_, err = c.service.HighlightNode(c.runtimeContext(), inspect.HighlightNodeRequest{NodeID: nodeID})
 	if err == nil {
 		c.mu.Lock()
 		c.selectedNodeID = nodeID
+		if c.accPathCaptureEnabled && strings.TrimSpace(details.ACCPath) != "" {
+			c.lastACCPath = details.ACCPath
+			c.statusText = "Path: " + details.ACCPath
+		}
 		c.mu.Unlock()
 	}
 	return err
@@ -171,7 +178,40 @@ func (c *Controller) RefreshSelectedNodeDetails() (inspect.GetNodeDetailsRespons
 func (c *Controller) InvokePattern(nodeID, action string, payload map[string]any) (inspect.InvokePatternResponse, error) {
 	return c.service.InvokePattern(c.runtimeContext(), inspect.InvokePatternRequest{NodeID: nodeID, Action: action, Payload: payload})
 }
-func (c *Controller) CopyProperty(v string) string { return v }
+func (c *Controller) InvokePatternForSelection(action string) (inspect.InvokePatternResponse, error) {
+	c.mu.Lock()
+	nodeID := c.selectedNodeID
+	c.mu.Unlock()
+	return c.InvokePattern(nodeID, action, nil)
+}
+func (c *Controller) InvokeSetValue() (inspect.InvokePatternResponse, error) {
+	c.mu.Lock()
+	nodeID := c.selectedNodeID
+	c.mu.Unlock()
+	if c.dialogs == nil {
+		return inspect.InvokePatternResponse{}, errors.New("setValue dialog unavailable")
+	}
+	value, ok, err := c.dialogs.PromptSetValue("")
+	if err != nil {
+		return inspect.InvokePatternResponse{}, err
+	}
+	if !ok {
+		return inspect.InvokePatternResponse{}, nil
+	}
+	return c.InvokePattern(nodeID, "setValue", map[string]any{"value": value})
+}
+func (c *Controller) CopyProperty(v string) string {
+	if c.clipboard != nil {
+		_ = c.clipboard.CopyText(v)
+	}
+	return v
+}
+func (c *Controller) CopySelectedText(v string) error {
+	if c.clipboard == nil {
+		return nil
+	}
+	return c.clipboard.CopyText(v)
+}
 func (c *Controller) CopyBestSelector(nodeID string) (inspect.CopyBestSelectorResponse, error) {
 	return c.service.CopyBestSelector(c.runtimeContext(), inspect.CopyBestSelectorRequest{NodeID: nodeID})
 }
@@ -179,7 +219,30 @@ func (c *Controller) ToggleAccPathCapture() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.accPathCaptureEnabled = !c.accPathCaptureEnabled
+	if c.accPathCaptureEnabled {
+		c.statusText = "ACC path capture enabled"
+	} else {
+		c.statusText = "ACC path capture paused"
+	}
 	return c.accPathCaptureEnabled
+}
+func (c *Controller) OnStatusInteraction() string {
+	c.mu.Lock()
+	path := strings.TrimSpace(c.lastACCPath)
+	c.mu.Unlock()
+	if path == "" {
+		c.ToggleAccPathCapture()
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.statusText
+	}
+	if c.clipboard != nil {
+		_ = c.clipboard.CopyText(path)
+	}
+	c.mu.Lock()
+	c.statusText = "ACC path copied"
+	c.mu.Unlock()
+	return "ACC path copied"
 }
 func (c *Controller) PauseFollowCursor() {
 	c.mu.Lock()
@@ -206,7 +269,6 @@ func (c *Controller) UnlockFollowCursor() {
 	c.mu.Unlock()
 	_, _ = c.service.UnlockFollowCursor(c.runtimeContext(), inspect.UnlockFollowCursorRequest{})
 }
-
 func (c *Controller) ToggleFollowCursor(enabled bool) error {
 	c.mu.Lock()
 	if enabled == c.followEnabled {
@@ -222,6 +284,7 @@ func (c *Controller) ToggleFollowCursor(enabled bool) error {
 		done := c.followDone
 		c.mu.Unlock()
 		go c.runFollow(loopCtx, done)
+		_, _ = c.service.ToggleFollowCursor(c.runtimeContext(), inspect.ToggleFollowCursorRequest{Enabled: true})
 		return nil
 	}
 	cancel := c.followCancel
@@ -295,12 +358,10 @@ func (c *Controller) emitFollowErr(err error) {
 		cb(err)
 	}
 }
-
 func (c *Controller) Shutdown() {
 	_ = c.ToggleFollowCursor(false)
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 }
-
 func normalizeInspectError(err error) string {
 	switch {
 	case err == nil:

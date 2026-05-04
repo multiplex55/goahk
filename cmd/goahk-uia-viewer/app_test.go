@@ -21,6 +21,8 @@ type fakeInspectService struct {
 	nodeChildrenReqs  []inspect.GetNodeChildrenRequest
 	childrenByNode    map[string][]inspect.TreeNodeDTO
 	clearCalls        int
+	nodeDetailsResp   inspect.GetNodeDetailsResponse
+	invokeReqs        []inspect.InvokePatternRequest
 }
 
 func (f *fakeInspectService) ListWindows(context.Context, inspect.ListWindowsRequest) (inspect.ListWindowsResponse, error) {
@@ -46,7 +48,7 @@ func (f *fakeInspectService) SelectNode(context.Context, inspect.SelectNodeReque
 	return inspect.SelectNodeResponse{}, nil
 }
 func (f *fakeInspectService) GetNodeDetails(context.Context, inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
-	return inspect.GetNodeDetailsResponse{}, nil
+	return f.nodeDetailsResp, nil
 }
 func (f *fakeInspectService) GetFocusedElement(context.Context, inspect.GetFocusedElementRequest) (inspect.GetFocusedElementResponse, error) {
 	return inspect.GetFocusedElementResponse{}, nil
@@ -79,7 +81,8 @@ func (f *fakeInspectService) CopyBestSelector(context.Context, inspect.CopyBestS
 func (f *fakeInspectService) GetPatternActions(context.Context, inspect.GetPatternActionsRequest) (inspect.GetPatternActionsResponse, error) {
 	return inspect.GetPatternActionsResponse{}, nil
 }
-func (f *fakeInspectService) InvokePattern(context.Context, inspect.InvokePatternRequest) (inspect.InvokePatternResponse, error) {
+func (f *fakeInspectService) InvokePattern(_ context.Context, req inspect.InvokePatternRequest) (inspect.InvokePatternResponse, error) {
+	f.invokeReqs = append(f.invokeReqs, req)
 	return inspect.InvokePatternResponse{}, nil
 }
 func (f *fakeInspectService) ActivateWindow(context.Context, inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
