@@ -29,17 +29,22 @@ func (ui *viewerUI) buildWindow() error {
 		return fmt.Errorf("create root composite: %w", err)
 	}
 	ui.root = root
-	if err := ui.root.SetLayout(walk.NewGridLayout()); err != nil {
+	if err := ui.root.SetLayout(walk.NewVBoxLayout()); err != nil {
 		return fmt.Errorf("set root layout: %w", err)
 	}
 
-	if err := ui.buildLeftPane(); err != nil {
+	splitter, err := walk.NewHSplitter(ui.root)
+	if err != nil {
+		return fmt.Errorf("create horizontal splitter: %w", err)
+	}
+
+	if err := ui.buildLeftPane(splitter); err != nil {
 		return err
 	}
-	if err := ui.buildMiddlePane(); err != nil {
+	if err := ui.buildMiddlePane(splitter); err != nil {
 		return err
 	}
-	if err := ui.buildRightPane(); err != nil {
+	if err := ui.buildRightPane(splitter); err != nil {
 		return err
 	}
 
@@ -68,71 +73,143 @@ func (ui *viewerUI) activateOnSelect() bool {
 	return ui.activateChk.Checked()
 }
 
-func (ui *viewerUI) buildLeftPane() error {
+func (ui *viewerUI) buildLeftPane(parent walk.Container) error {
 	var err error
-	parent := walk.Container(ui.root)
-	if parent == nil {
-		parent = ui.mw
+	leftPane, err := walk.NewComposite(parent)
+	if err != nil {
+		return fmt.Errorf("create left pane: %w", err)
 	}
-	if ui.refreshBtn, err = walk.NewPushButton(parent); err != nil {
+	if err := leftPane.SetLayout(walk.NewVBoxLayout()); err != nil {
+		return fmt.Errorf("set left pane layout: %w", err)
+	}
+
+	toolbar, err := walk.NewComposite(leftPane)
+	if err != nil {
+		return fmt.Errorf("create left toolbar: %w", err)
+	}
+	toolLayout := walk.NewHBoxLayout()
+	toolLayout.SetMargins(walk.Margins{Left: 0, Top: 0, Right: 0, Bottom: 0})
+	toolLayout.SetSpacing(6)
+	if err := toolbar.SetLayout(toolLayout); err != nil {
+		return fmt.Errorf("set left toolbar layout: %w", err)
+	}
+
+	if ui.refreshBtn, err = walk.NewPushButton(toolbar); err != nil {
 		return err
 	}
 	ui.refreshBtn.SetText("Refresh")
-	ui.refreshBtn.SetBounds(walk.Rectangle{X: 8, Y: 8, Width: 80, Height: 28})
-	if ui.visibleChk, err = walk.NewCheckBox(parent); err != nil {
+	if ui.visibleChk, err = walk.NewCheckBox(toolbar); err != nil {
 		return err
 	}
 	ui.visibleChk.SetText("Visible")
 	ui.visibleChk.SetChecked(true)
-	ui.visibleChk.SetBounds(walk.Rectangle{X: 96, Y: 10, Width: 80, Height: 24})
-	if ui.titleChk, err = walk.NewCheckBox(parent); err != nil {
+	if ui.titleChk, err = walk.NewCheckBox(toolbar); err != nil {
 		return err
 	}
 	ui.titleChk.SetText("Title")
 	ui.titleChk.SetChecked(true)
-	ui.titleChk.SetBounds(walk.Rectangle{X: 180, Y: 10, Width: 80, Height: 24})
-	if ui.activateChk, err = walk.NewCheckBox(parent); err != nil {
+	if ui.activateChk, err = walk.NewCheckBox(toolbar); err != nil {
 		return err
 	}
 	ui.activateChk.SetText("Activate")
-	ui.activateChk.SetBounds(walk.Rectangle{X: 264, Y: 10, Width: 90, Height: 24})
-	if ui.windowTable, err = walk.NewTableView(parent); err != nil {
+
+	if ui.windowTable, err = walk.NewTableView(leftPane); err != nil {
 		return err
 	}
-	ui.windowTable.SetBounds(walk.Rectangle{X: 8, Y: 44, Width: 450, Height: 760})
+	ui.windowTable.SetColumnsOrderable(true)
+	ui.windowTable.SetFullRowSelect(true)
+	ui.windowTable.SetGridLines(true)
+	ui.windowTable.SetAlternatingRowBG(true)
+	ui.windowTable.SetMultiSelection(false)
+	ui.windowTable.SetHeaderHidden(false)
+	if err := ui.windowTable.Columns().Add(walk.NewTableViewColumn()); err != nil {
+		return err
+	}
+	col := ui.windowTable.Columns().At(0)
+	col.SetName("Title")
+	col.SetTitle("Title")
+	col.SetWidth(260)
+	if err := ui.windowTable.Columns().Add(walk.NewTableViewColumn()); err != nil {
+		return err
+	}
+	col = ui.windowTable.Columns().At(1)
+	col.SetName("Process")
+	col.SetTitle("Process")
+	col.SetWidth(120)
+	if err := ui.windowTable.Columns().Add(walk.NewTableViewColumn()); err != nil {
+		return err
+	}
+	col = ui.windowTable.Columns().At(2)
+	col.SetName("ID")
+	col.SetTitle("ID")
+	col.SetWidth(120)
 	return nil
 }
-func (ui *viewerUI) buildMiddlePane() error {
+
+func (ui *viewerUI) buildMiddlePane(parent walk.Container) error {
 	var err error
-	parent := walk.Container(ui.root)
-	if parent == nil {
-		parent = ui.mw
+	middlePane, err := walk.NewComposite(parent)
+	if err != nil {
+		return fmt.Errorf("create middle pane: %w", err)
 	}
-	if ui.infoView, err = walk.NewTextEdit(parent); err != nil {
+	if err := middlePane.SetLayout(walk.NewVBoxLayout()); err != nil {
+		return fmt.Errorf("set middle pane layout: %w", err)
+	}
+
+	if ui.infoView, err = walk.NewTextEdit(middlePane); err != nil {
 		return err
 	}
 	ui.infoView.SetReadOnly(true)
-	ui.infoView.SetBounds(walk.Rectangle{X: 470, Y: 8, Width: 470, Height: 220})
-	if ui.propertiesTV, err = walk.NewTableView(parent); err != nil {
+	ui.infoView.SetText("Select a window from the left pane.")
+
+	if ui.propertiesTV, err = walk.NewTableView(middlePane); err != nil {
 		return err
 	}
-	ui.propertiesTV.SetBounds(walk.Rectangle{X: 470, Y: 236, Width: 470, Height: 280})
-	if ui.patternsTree, err = walk.NewTreeView(parent); err != nil {
+	ui.propertiesTV.SetColumnsOrderable(true)
+	ui.propertiesTV.SetFullRowSelect(true)
+	ui.propertiesTV.SetGridLines(true)
+	ui.propertiesTV.SetAlternatingRowBG(true)
+	ui.propertiesTV.SetHeaderHidden(false)
+	if err := ui.propertiesTV.Columns().Add(walk.NewTableViewColumn()); err != nil {
 		return err
 	}
-	ui.patternsTree.SetBounds(walk.Rectangle{X: 470, Y: 524, Width: 470, Height: 280})
+	propCol := ui.propertiesTV.Columns().At(0)
+	propCol.SetName("PropertyId")
+	propCol.SetTitle("PropertyId")
+	propCol.SetWidth(190)
+	if err := ui.propertiesTV.Columns().Add(walk.NewTableViewColumn()); err != nil {
+		return err
+	}
+	propCol = ui.propertiesTV.Columns().At(1)
+	propCol.SetName("Value")
+	propCol.SetTitle("Value")
+	propCol.SetWidth(230)
+	if err := ui.propertiesTV.Columns().Add(walk.NewTableViewColumn()); err != nil {
+		return err
+	}
+	propCol = ui.propertiesTV.Columns().At(2)
+	propCol.SetName("Status")
+	propCol.SetTitle("Status")
+	propCol.SetWidth(100)
+
+	if ui.patternsTree, err = walk.NewTreeView(middlePane); err != nil {
+		return err
+	}
 	return nil
 }
-func (ui *viewerUI) buildRightPane() error {
+
+func (ui *viewerUI) buildRightPane(parent walk.Container) error {
 	var err error
-	parent := walk.Container(ui.root)
-	if parent == nil {
-		parent = ui.mw
+	rightPane, err := walk.NewComposite(parent)
+	if err != nil {
+		return fmt.Errorf("create right pane: %w", err)
 	}
-	if ui.treeView, err = walk.NewTreeView(parent); err != nil {
+	if err := rightPane.SetLayout(walk.NewVBoxLayout()); err != nil {
+		return fmt.Errorf("set right pane layout: %w", err)
+	}
+	if ui.treeView, err = walk.NewTreeView(rightPane); err != nil {
 		return err
 	}
-	ui.treeView.SetBounds(walk.Rectangle{X: 952, Y: 8, Width: 430, Height: 796})
 	return nil
 }
 
@@ -147,7 +224,7 @@ func (ui *viewerUI) buildStatusBar() error {
 		return err
 	}
 	ui.statusText = item
-	ui.statusText.SetText("ready")
+	ui.statusText.SetText("Ready. Click Refresh to enumerate windows.")
 	return nil
 }
 
