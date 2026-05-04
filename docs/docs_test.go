@@ -170,7 +170,7 @@ func TestUsageReliabilityLinksStayCurrent(t *testing.T) {
 	}
 }
 
-func TestBuildDocReferencesViewerScriptsAndGuide(t *testing.T) {
+func TestBuildDocReferencesViewerBuildAndGuide(t *testing.T) {
 	t.Parallel()
 
 	body, err := os.ReadFile(filepath.Join(".", "BUILD.md"))
@@ -179,11 +179,10 @@ func TestBuildDocReferencesViewerScriptsAndGuide(t *testing.T) {
 	}
 	text := string(body)
 	mustContainAll(t, text,
-		"build\\dev-uia-viewer.bat",
-		"./build/dev-uia-viewer.sh",
-		"build\\build-uia-viewer.bat",
-		"./build/build-uia-viewer.sh",
-		"dist/goahk-uia-viewer",
+		"go build -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer",
+		"go build -o dist/goahk-uia-viewer/goahk-uia-viewer ./cmd/goahk-uia-viewer",
+		"dist/goahk-uia-viewer/",
+		"docs/uia-viewer.md",
 	)
 }
 

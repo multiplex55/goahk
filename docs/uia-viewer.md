@@ -4,40 +4,35 @@ This document describes the `goahk-uia-viewer` desktop app (`cmd/goahk-uia-viewe
 
 ## Architecture
 
-`goahk-uia-viewer` is a Wails application with a Go backend and a React frontend.
+`goahk-uia-viewer` is a native Windows desktop application built with Walk. The app is split into a UI shell, a controller layer, and the `internal/inspect` backend services.
 
-- **Backend (Go):** `cmd/goahk-uia-viewer/app.go` exposes methods bound into Wails and emits events for UI updates.
-- **Frontend (React/TypeScript):** `cmd/goahk-uia-viewer/frontend/src/App.tsx` renders the viewer panes, invokes backend methods, and reacts to app events.
-- **Transport:** Wails runtime bindings (`frontend/src/bindings.ts`) provide typed calls from the frontend to backend methods.
+- **Walk native app (`cmd/goahk-uia-viewer`):** Owns windows, panes, table/tree models, and user interactions.
+- **Controller (`cmd/goahk-uia-viewer/controller.go`):** Coordinates UI events with backend calls, controls refresh/selection flows, and keeps pane state synchronized.
+- **Inspection backend (`internal/inspect`):** Provides window listing, UIA tree traversal, element details, selector generation, and highlight/pattern operations via service interfaces.
 
-At startup, `main.go` wires the app state and launches Wails. The frontend then requests snapshots and detail payloads via bound methods.
+At startup, the Walk app wires models and event handlers, then delegates inspection actions through the controller into `internal/inspect`-backed services.
 
 ## API contract
 
 The viewer API surface is intentionally small and request/response based.
 
-### Core backend methods
+### Core controller/backend calls
 
-The backend exposes Wails-bound methods on `ViewerApp` in `cmd/goahk-uia-viewer/app.go`.
+The controller drives these core operations through backend service interfaces:
 
-- `ListWindows`, `RefreshWindows`, `ActivateWindow`: enumerate and focus candidate windows.
-- `InspectWindow`: starts inspection context for a chosen top-level window.
-- `GetTreeRoot`, `GetNodeChildren`: tree navigation and lazy expansion.
-- `SelectNode`, `GetNodeDetails`: selected node state and detailed property payloads.
-- `GetFocusedElement`, `GetElementUnderCursor`: focus/cursor-driven discovery.
-- `HighlightNode`, `ClearHighlight`: visual feedback overlays for selected elements.
-- `CopyBestSelector`: selector/export text generation.
-- `GetPatternActions`, `InvokePattern`: discover and execute supported UIA pattern actions.
-- `ToggleFollowCursor`: starts/stops cursor-follow polling and emits selection-style events.
+- `RefreshWindows` / `ListWindows` and optional activate paths for top-level window selection.
+- `InspectWindow`, `GetTreeRoot`, and `GetNodeChildren` for tree initialization and expansion.
+- `SelectNode` and `GetNodeDetails` for property/pattern/selector pane hydration.
+- `HighlightNode` and `ClearHighlight` for visual focus feedback.
+- `CopyBestSelector` for selector export workflows.
+- `GetPatternActions` and `InvokePattern` for supported control-pattern actions.
+- `GetFocusedElement` and `GetElementUnderCursor` for focus/cursor-driven discovery.
 
-### Event contract
+### State/event behavior
 
-Backend may emit Wails events for non-request updates.
-
-- `inspect:follow-cursor`: emitted when cursor-follow selects a new node.
-- `inspect:follow-cursor-error`: emitted when cursor-follow polling fails.
-
-Frontend should treat these as advisory updates and keep request methods as source-of-truth for deterministic state.
+- UI state should be driven by controller-managed model updates.
+- Selection changes should update tree, property, pattern, and selector panes as one flow.
+- Refresh and window switching should clear stale highlight and stale selection safely.
 
 ## Pane responsibilities
 
@@ -56,35 +51,14 @@ Recommended behavior contracts:
 
 ## Troubleshooting
 
-### `wails: command not found`
+### `go test` on viewer package fails on non-Windows
 
-Install Wails CLI and verify it is on PATH:
+Some viewer tests are Windows-specific (`*_windows_test.go`). Run general tests on all platforms, and run Windows-specific checks in a Windows environment.
 
-```powershell
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
-wails doctor
-```
+### Viewer binary not found in `dist/goahk-uia-viewer`
 
-### Viewer builds, but dist folder is empty
+Build from repository root using the Go build command documented in `docs/BUILD.md`, then verify the output path exists.
 
-Run the build script from repo root and verify `cmd/goahk-uia-viewer/build/bin` exists after `wails build`.
+### UI tree appears stale after switching target windows
 
-- Windows: `build\build-uia-viewer.bat`
-- POSIX: `./build/build-uia-viewer.sh`
-
-Both scripts copy `build/bin` outputs to `dist/goahk-uia-viewer`.
-
-### Frontend dependency issues
-
-From `cmd/goahk-uia-viewer/frontend`:
-
-```bash
-npm ci
-npm run test
-```
-
-Then rerun viewer dev/build scripts.
-
-### UI tree looks stale
-
-Use refresh actions in the viewer and ensure target application window remains available and interactive. If stale state persists, restart the viewer dev session (`build/dev-uia-viewer.*`).
+Use the refresh action, then re-select the target window to force a new root/details fetch path. If stale state persists, restart the viewer process and retry.

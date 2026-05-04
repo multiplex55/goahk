@@ -73,7 +73,7 @@ This ladder defines the minimum vertical slice that must stay healthy in `goahk-
 ### 6) Pattern action
 
 - **Required backend method calls**
-  - `InvokePattern({ nodeID, action, payload? })` from `PatternPanel`.
+  - `InvokePattern({ nodeID, action, payload? })` from pattern actions UI.
 - **Expected UI/store state**
   - Unsupported actions render disabled.
   - Payload-required actions stay disabled until payload is provided.
@@ -83,15 +83,13 @@ This ladder defines the minimum vertical slice that must stay healthy in `goahk-
 
 ## Automated suite cross-reference
 
-Coverage for this ladder is split across Go service tests and frontend store/component tests:
+Coverage for this ladder is split across controller and model tests in the native viewer package:
 
-- **Go backend**
-  - `internal/inspect/service_windows_test.go`
-- **TypeScript store/components**
-  - `cmd/goahk-uia-viewer/frontend/src/store/inspectStore.test.ts`
-  - `cmd/goahk-uia-viewer/frontend/src/components/TreePane.test.tsx`
-  - `cmd/goahk-uia-viewer/frontend/src/components/PatternPanel.test.tsx`
-  - `cmd/goahk-uia-viewer/frontend/src/components/StatusBar.test.tsx`
+- `cmd/goahk-uia-viewer/controller_test.go`
+- `cmd/goahk-uia-viewer/model_window_table_windows_test.go`
+- `cmd/goahk-uia-viewer/model_property_table_windows_test.go`
+- `cmd/goahk-uia-viewer/model_pattern_tree_windows_test.go`
+- `cmd/goahk-uia-viewer/model_uia_tree_windows_test.go`
 
 ## Gating rule
 
