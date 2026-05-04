@@ -188,8 +188,7 @@ func TestBuildDocReferencesViewerBuildAndGuide(t *testing.T) {
 	}
 	text := string(body)
 	mustContainAll(t, text,
-		"go build -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer",
-		"go build -o dist/goahk-uia-viewer/goahk-uia-viewer ./cmd/goahk-uia-viewer",
+		"go build -trimpath -v -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer",
 		"dist/goahk-uia-viewer/",
 		"docs/uia-viewer.md",
 	)

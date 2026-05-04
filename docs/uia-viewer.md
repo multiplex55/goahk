@@ -6,9 +6,9 @@ This document describes the `goahk-uia-viewer` desktop app (`cmd/goahk-uia-viewe
 
 `goahk-uia-viewer` is a native Windows desktop application built with Walk. The active architecture is controller/service driven and intentionally keeps runtime inspection logic outside the UI shell.
 
-- **Walk shell (`cmd/goahk-uia-viewer`)**: owns native windows, pane widgets, table/tree models, and event wiring.
-- **Controller (`cmd/goahk-uia-viewer/controller.go`)**: orchestrates user intent, service calls, view-state updates, refresh transitions, and error/status reporting.
-- **Inspection services (`internal/inspect` and related adapters)**: provide window listing, UIA tree traversal, node detail hydration, selector generation, highlight operations, and pattern invocation.
+- **Command package (`cmd/goahk-uia-viewer`)**: owns Walk controls, layout composition, event wiring, and UI-facing models.
+- **Controller (`cmd/goahk-uia-viewer/controller.go`)**: owns workflow state and orchestration across refresh/select/highlight/invoke flows.
+- **Inspection backend (`internal/inspect` and adapters)**: owns backend inspection, node/pattern invocation, selector production, and highlight responsibilities.
 
 Startup flow:
 
