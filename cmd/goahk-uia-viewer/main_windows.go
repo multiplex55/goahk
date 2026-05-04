@@ -3,19 +3,49 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"os"
+
+	"goahk/internal/inspect"
 )
 
-func runWindows(out io.Writer) error {
-	_, err := fmt.Fprintln(out, "goahk-uia-viewer Windows entrypoint is under migration")
-	return err
+type viewerWindow interface {
+	Run() error
+}
+
+var newViewerWindow = func(controller *Controller) (viewerWindow, error) {
+	return nil, fmt.Errorf("failed to start goahk-uia-viewer: NewViewerWindow is not wired")
+}
+
+func runWindows() (err error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	svc := inspect.NewService()
+	controller := NewController(ctx, svc)
+	controller.SetClipboard(walkClipboard{})
+	controller.SetDialogs(walkDialogs{})
+	defer controller.Shutdown()
+
+	ui, err := newViewerWindow(controller)
+	if err != nil {
+		return err
+	}
+	if ui == nil {
+		return fmt.Errorf("failed to start goahk-uia-viewer: NewViewerWindow returned nil")
+	}
+
+	if err := ui.Run(); err != nil {
+		return fmt.Errorf("goahk-uia-viewer event loop failed: %w", err)
+	}
+
+	return nil
 }
 
 func main() {
-	if err := runWindows(os.Stdout); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to write message: %v\n", err)
+	if err := runWindows(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }
