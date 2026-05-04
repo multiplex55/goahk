@@ -35,6 +35,12 @@ func TestUIAViewerActiveSourcesDoNotReferenceLegacyArtifacts(t *testing.T) {
 		"cmd/goahk-uia-viewer/frontend",
 		"migration placeholder",
 		"not wired",
+		"ttm_addtool failed",
+		"equivalent direct go build",
+		"direct equivalent",
+		"migration in progress",
+		"under migration",
+		"newviewerwindow is not wired",
 	}
 
 	for _, target := range include {
@@ -108,6 +114,18 @@ func containsAny(path string, patterns []string) bool {
 		}
 	}
 	return false
+}
+
+func TestLegacyUIAViewerFrontendDirectoryIsRemoved(t *testing.T) {
+	t.Parallel()
+
+	root := repoRoot(t)
+	legacyDir := filepath.Join(root, "cmd/goahk-uia-viewer/frontend")
+	if _, err := os.Stat(legacyDir); err == nil {
+		t.Fatalf("legacy UIA viewer frontend directory still exists: %q", filepath.ToSlash(legacyDir))
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("Stat(%q): %v", filepath.ToSlash(legacyDir), err)
+	}
 }
 
 func TestUIAViewerCanonicalBuildScriptAndManifestExist(t *testing.T) {
