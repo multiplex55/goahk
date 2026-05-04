@@ -2,11 +2,11 @@
 
 package main
 
-import "github.com/lxn/walk"
+import "errors"
 
 type walkDialogs struct{}
 
 func (walkDialogs) PromptSetValue(defaultValue string) (string, bool, error) {
-	value, ok := walk.InputBox(nil, "Set Value", "Enter new value", defaultValue)
-	return value, ok, nil
+	_ = defaultValue
+	return "", false, errors.New("set value dialog is not yet available in the walk shell")
 }

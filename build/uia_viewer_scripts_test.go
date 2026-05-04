@@ -33,38 +33,20 @@ func TestUIAViewerScriptsContainExpectedCommands(t *testing.T) {
 		path  string
 		wants []string
 	}{
-		{
-			path: "dev-uia-viewer.bat",
-			wants: []string{
-				`set "APP_DIR=%ROOT%\cmd\goahk-uia-viewer"`,
-				`set "DIST_DIR=%ROOT%\dist\goahk-uia-viewer"`,
-				"wails dev",
-			},
-		},
+		{path: "dev-uia-viewer.bat", wants: []string{"go run ./cmd/goahk-uia-viewer"}},
 		{
 			path: "build-uia-viewer.bat",
 			wants: []string{
-				`set "APP_DIR=%ROOT%\cmd\goahk-uia-viewer"`,
 				`set "DIST_DIR=%ROOT%\dist\goahk-uia-viewer"`,
-				"wails build -clean -o goahk-uia-viewer",
-				`robocopy "build\bin" "%DIST_DIR%" /E`,
+				`go build -o "%DIST_DIR%\goahk-uia-viewer.exe" ./cmd/goahk-uia-viewer`,
 			},
 		},
-		{
-			path: "dev-uia-viewer.sh",
-			wants: []string{
-				`APP_DIR="${ROOT}/cmd/goahk-uia-viewer"`,
-				`DIST_DIR="${ROOT}/dist/goahk-uia-viewer"`,
-				"wails dev",
-			},
-		},
+		{path: "dev-uia-viewer.sh", wants: []string{"go run ./cmd/goahk-uia-viewer"}},
 		{
 			path: "build-uia-viewer.sh",
 			wants: []string{
-				`APP_DIR="${ROOT}/cmd/goahk-uia-viewer"`,
 				`DIST_DIR="${ROOT}/dist/goahk-uia-viewer"`,
-				"wails build -clean -o goahk-uia-viewer",
-				`cp -a "${APP_DIR}/build/bin/." "${DIST_DIR}/"`,
+				`go build -o "${DIST_DIR}/goahk-uia-viewer.exe" ./cmd/goahk-uia-viewer`,
 			},
 		},
 	}

@@ -148,6 +148,32 @@ Thread-safety guidance:
 - `ctx.AppState` is safe for concurrent access (`Get` / `Set` / `LoadOrStore` are synchronized), and is the right place for shared counters/flags/cache values.
 - If you store composite values that require read-modify-write semantics across multiple operations, keep updates in one callback section or encode as single string values with `LoadOrStore`/`Set` boundaries.
 
+
+## UIA viewer build and run
+
+`goahk-uia-viewer` is the Windows-native inspection app in `cmd/goahk-uia-viewer`.
+
+Build from repo root:
+
+```powershell
+go build -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer
+```
+
+Run for local manual inspection (Windows only):
+
+```powershell
+go run ./cmd/goahk-uia-viewer
+```
+
+Helper scripts:
+
+- `build/build-uia-viewer.sh`
+- `build/build-uia-viewer.bat`
+- `build/dev-uia-viewer.sh`
+- `build/dev-uia-viewer.bat`
+
+These scripts now use `go build`/`go run` directly (no Wails toolchain).
+
 ## Toolchain expectations
 
 - Minimum supported Go version: **1.22.x** (matches `go.mod`).
