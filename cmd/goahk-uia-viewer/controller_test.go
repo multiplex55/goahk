@@ -33,6 +33,47 @@ func TestController_Refresh_ForwardsFilters(t *testing.T) {
 		t.Fatalf("expected 1 call")
 	}
 }
+
+func TestController_LoadTreeRoot_UsesSelectedWindow(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	if err := c.SelectWindow("0x1"); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := c.LoadTreeRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Root.NodeID != "root" || svc.treeRootCalls < 2 {
+		t.Fatalf("unexpected root response: %+v calls=%d", resp.Root, svc.treeRootCalls)
+	}
+}
+
+func TestController_ExpandNode_CachesChildren(t *testing.T) {
+	svc := &fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{"n1": {{NodeID: "c1"}, {NodeID: "c2"}}}}
+	c := NewController(context.Background(), svc)
+	resp, err := c.ExpandNode("n1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Children) != 2 {
+		t.Fatalf("children=%d", len(resp.Children))
+	}
+}
+
+func TestController_InvokePattern_ForSelection(t *testing.T) {
+	svc := &fakeInspectService{}
+	c := NewController(context.Background(), svc)
+	c.selectedNodeID = "node-1"
+	_, err := c.InvokePatternForSelection("invoke")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(svc.invokeReqs) != 1 || svc.invokeReqs[0].NodeID != "node-1" || svc.invokeReqs[0].Action != "invoke" {
+		t.Fatalf("unexpected invoke request: %+v", svc.invokeReqs)
+	}
+}
+
 func TestController_SelectWindow_Pipeline(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
 	c := NewController(context.Background(), svc)
