@@ -158,37 +158,23 @@ build\build.bat
 - Main packaged binary output: `dist/goahk`
 - Additional packaging metadata/assets are maintained in `build/`.
 
-### Viewer dev
-
-Run the UIA viewer in Wails dev mode from the repository root:
-
-```powershell
-build\dev-uia-viewer.bat
-```
-
-```bash
-./build/dev-uia-viewer.sh
-```
-
-Both scripts resolve the repo root and app directory (`cmd/goahk-uia-viewer`) and ensure `dist/goahk-uia-viewer` exists before starting `wails dev`.
-
 ### Viewer build
 
-Build a clean UIA viewer artifact set and copy outputs into `dist/goahk-uia-viewer`:
+Build the native UIA viewer binary directly with Go from the repository root:
 
 ```powershell
-build\build-uia-viewer.bat
+go build -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer
 ```
 
 ```bash
-./build/build-uia-viewer.sh
+go build -o dist/goahk-uia-viewer/goahk-uia-viewer ./cmd/goahk-uia-viewer
 ```
 
-Both scripts run:
+### Output artifact locations
 
-- `wails build -clean -o goahk-uia-viewer`
-- copy files from `cmd/goahk-uia-viewer/build/bin` into `dist/goahk-uia-viewer`.
-
+- Main packaged binary output: `dist/goahk`
+- UIA viewer binary output: `dist/goahk-uia-viewer/`
+- Additional packaging metadata/assets are maintained in `build/`.
 
 ## 5) Validation checklist
 
@@ -236,3 +222,4 @@ If CI evolves, update this document first (or in the same PR) so contributors an
 - Testing strategy and staged suites: [`docs/testing.md`](./testing.md)
 - Build metadata and packaging context: [`build/README.md`](../build/README.md)
 - Runtime usage/configuration: [`docs/USAGE.md`](./USAGE.md)
+- UIA viewer architecture and usage: [`docs/uia-viewer.md`](./uia-viewer.md)
