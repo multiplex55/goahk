@@ -52,6 +52,20 @@ func NewViewerWindow(controller *Controller) (viewerWindow, error) {
 }
 
 func (ui *viewerUI) Run() error {
-	ui.mw.Run()
+	if ui == nil {
+		return fmt.Errorf("viewer UI is nil")
+	}
+	if ui.mw == nil {
+		return fmt.Errorf("viewer main window is nil")
+	}
+
+	ui.mw.SetVisible(true)
+	ui.mw.Activate()
+	logStartup("visible/activate")
+	exitCode := ui.mw.Run()
+	logStartup("run returned")
+	if exitCode != 0 {
+		return fmt.Errorf("viewer exited with status code %d", exitCode)
+	}
 	return nil
 }
