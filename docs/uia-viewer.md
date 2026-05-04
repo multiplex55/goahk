@@ -4,50 +4,51 @@ This document describes the `goahk-uia-viewer` desktop app (`cmd/goahk-uia-viewe
 
 ## Architecture
 
-`goahk-uia-viewer` is a native Windows desktop application built with Walk. The app is split into a UI shell, a controller layer, and the `internal/inspect` backend services.
+`goahk-uia-viewer` is a native Windows desktop application built with Walk. The active architecture is controller/service driven and intentionally keeps runtime inspection logic outside the UI shell.
 
-- **Walk native app (`cmd/goahk-uia-viewer`):** Owns windows, panes, table/tree models, and user interactions.
-- **Controller (`cmd/goahk-uia-viewer/controller.go`):** Coordinates UI events with backend calls, controls refresh/selection flows, and keeps pane state synchronized.
-- **Inspection backend (`internal/inspect`):** Provides window listing, UIA tree traversal, element details, selector generation, and highlight/pattern operations via service interfaces.
+- **Walk shell (`cmd/goahk-uia-viewer`)**: owns native windows, pane widgets, table/tree models, and event wiring.
+- **Controller (`cmd/goahk-uia-viewer/controller.go`)**: orchestrates user intent, service calls, view-state updates, refresh transitions, and error/status reporting.
+- **Inspection services (`internal/inspect` and related adapters)**: provide window listing, UIA tree traversal, node detail hydration, selector generation, highlight operations, and pattern invocation.
 
-At startup, the Walk app wires models and event handlers, then delegates inspection actions through the controller into `internal/inspect`-backed services.
+Startup flow:
+
+1. Walk shell builds pane models and binds UI events.
+2. Controller receives intent from UI events and coordinates service operations.
+3. Controller updates shared view-state and pushes results into pane models.
 
 ## API contract
 
-The viewer API surface is intentionally small and request/response based.
+The viewer interface between controller and backend services is request/response based with explicit operations:
 
-### Core controller/backend calls
-
-The controller drives these core operations through backend service interfaces:
-
-- `RefreshWindows` / `ListWindows` and optional activate paths for top-level window selection.
+- `RefreshWindows` / `ListWindows` and optional activation paths for top-level window selection.
 - `InspectWindow`, `GetTreeRoot`, and `GetNodeChildren` for tree initialization and expansion.
-- `SelectNode` and `GetNodeDetails` for property/pattern/selector pane hydration.
+- `SelectNode` and `GetNodeDetails` for property, pattern, and selector pane hydration.
 - `HighlightNode` and `ClearHighlight` for visual focus feedback.
 - `CopyBestSelector` for selector export workflows.
 - `GetPatternActions` and `InvokePattern` for supported control-pattern actions.
 - `GetFocusedElement` and `GetElementUnderCursor` for focus/cursor-driven discovery.
 
-### State/event behavior
+Controller/state behavior contracts:
 
-- UI state should be driven by controller-managed model updates.
-- Selection changes should update tree, property, pattern, and selector panes as one flow.
-- Refresh and window switching should clear stale highlight and stale selection safely.
+- Selection updates tree + property + selector panes as one transaction.
+- Window refresh/switch paths clear stale highlight and stale selection safely.
+- Status messages should preserve actionable stage context (`RefreshWindows`, `GetTreeRoot`, `GetNodeDetails`, etc.).
 
 ## Pane responsibilities
 
-Use strict pane boundaries so each panel has one job.
+Each pane has one primary responsibility:
 
-- **Tree pane:** displays hierarchy, expansion state, and node selection.
-- **Property pane:** displays selected node attributes (name, class, automation id, control type, patterns, bounds).
-- **Selector pane:** previews generated selector snippets and copy actions.
-- **Status pane/toolbar:** refresh, timing/status text, and transient diagnostics.
+- **Tree pane**: hierarchy presentation, expansion state, selected node ownership.
+- **Property pane**: selected-node metadata (name, class, automation id, control type, bounds, pattern list).
+- **Selector pane**: generated selector preview and copy/export interactions.
+- **Pattern/actions pane**: enabled/disabled action state and invocation controls for supported patterns.
+- **Status/toolbar pane**: refresh, filter controls, short diagnostics, timing/status text.
 
 Recommended behavior contracts:
 
-- Selection state is owned by the tree pane and shared to property/selector panes.
-- Property and selector panes render empty-state guidance when no node is selected.
-- Refresh should preserve user context when possible (same logical node) and gracefully fallback if node no longer exists.
+- Tree selection is the source of truth for node-focused panes.
+- Property/selector/pattern panes render empty guidance when no node is selected.
+- Refresh attempts to preserve logical user position; if unavailable, fallback to root safely.
 
 ## Troubleshooting
 

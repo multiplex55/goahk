@@ -240,6 +240,23 @@ func TestStopGuidanceIsCanonicalAndExplicit(t *testing.T) {
 	}
 }
 
+func TestUIAViewerDocsUseControllerServiceTerminology(t *testing.T) {
+	t.Parallel()
+
+	viewerDoc, err := os.ReadFile(filepath.Join(".", "uia-viewer.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(uia-viewer.md) error = %v", err)
+	}
+	testingDoc, err := os.ReadFile(filepath.Join(".", "testing-uia-viewer.md"))
+	if err != nil {
+		t.Fatalf("ReadFile(testing-uia-viewer.md) error = %v", err)
+	}
+
+	mustContainAll(t, string(viewerDoc), "controller", "service", "Pane responsibilities")
+	mustContainAll(t, string(testingDoc), "controller/view-state", "Required service calls")
+	mustNotContainAll(t, string(testingDoc), "react", "redux", "zustand", "store")
+}
+
 func TestBuildAndReleaseDocsUseCurrentScriptsAndNoWailsNpm(t *testing.T) {
 	t.Parallel()
 

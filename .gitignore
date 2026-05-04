@@ -27,6 +27,8 @@
 coverage.*
 *.coverprofile
 profile.cov
+coverage.txt
+*.cov
 
 # Temporary build outputs for local cmd/examples iteration
 /cmd/*/tmp/
