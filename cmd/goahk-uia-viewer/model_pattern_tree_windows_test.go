@@ -37,16 +37,20 @@ func TestController_InvokeSetValue_DialogFlow(t *testing.T) {
 	c.selectedNodeID = "node-1"
 
 	c.SetDialogs(&fakeDialogs{ok: false})
-	if _, err := c.InvokeSetValue(); err != nil {
+	if _, accepted, err := c.InvokeSetValue(); err != nil {
 		t.Fatalf("cancel should be noop: %v", err)
+	} else if accepted {
+		t.Fatalf("cancel should not accept")
 	}
 	if len(svc.invokeReqs) != 0 {
 		t.Fatalf("expected no invoke on cancel")
 	}
 
 	c.SetDialogs(&fakeDialogs{ok: true, value: "hello"})
-	if _, err := c.InvokeSetValue(); err != nil {
+	if _, accepted, err := c.InvokeSetValue(); err != nil {
 		t.Fatalf("confirm failed: %v", err)
+	} else if !accepted {
+		t.Fatalf("confirm should accept")
 	}
 	if len(svc.invokeReqs) != 1 || svc.invokeReqs[0].Action != "setValue" || svc.invokeReqs[0].Payload["value"] != "hello" {
 		t.Fatalf("unexpected invoke req: %+v", svc.invokeReqs)

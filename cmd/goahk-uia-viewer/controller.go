@@ -27,7 +27,6 @@ type Controller struct {
 	selectedNodeID        string
 	visibleOnly           bool
 	titleOnly             bool
-	activateOnSelect      bool
 	mode                  inspect.InspectMode
 	nodesByID             map[string]inspect.TreeNodeDTO
 	nodeChildren          map[string][]string
@@ -107,10 +106,9 @@ func (c *Controller) RefreshWindows(filter string, visibleOnly, titleOnly bool) 
 	c.mu.Unlock()
 	return c.service.RefreshWindows(c.runtimeContext(), inspect.RefreshWindowsRequest{Filter: filter, VisibleOnly: visibleOnly, TitleOnly: titleOnly})
 }
-func (c *Controller) SelectWindow(hwnd string) error {
+func (c *Controller) SelectWindow(hwnd string, activate bool) error {
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 	c.mu.Lock()
-	activate := c.activateOnSelect
 	mode := c.mode
 	c.selectedWindowID = hwnd
 	c.mu.Unlock()
@@ -193,21 +191,22 @@ func (c *Controller) InvokePatternForSelection(action string) (inspect.InvokePat
 	c.mu.Unlock()
 	return c.InvokePattern(nodeID, action, nil)
 }
-func (c *Controller) InvokeSetValue() (inspect.InvokePatternResponse, error) {
+func (c *Controller) InvokeSetValue() (inspect.InvokePatternResponse, bool, error) {
 	c.mu.Lock()
 	nodeID := c.selectedNodeID
 	c.mu.Unlock()
 	if c.dialogs == nil {
-		return inspect.InvokePatternResponse{}, errors.New("setValue dialog unavailable")
+		return inspect.InvokePatternResponse{}, false, errors.New("setValue dialog unavailable")
 	}
 	value, ok, err := c.dialogs.PromptSetValue("")
 	if err != nil {
-		return inspect.InvokePatternResponse{}, err
+		return inspect.InvokePatternResponse{}, false, err
 	}
 	if !ok {
-		return inspect.InvokePatternResponse{}, nil
+		return inspect.InvokePatternResponse{}, false, nil
 	}
-	return c.InvokePattern(nodeID, "setValue", map[string]any{"value": value})
+	resp, err := c.InvokePattern(nodeID, "setValue", map[string]any{"value": value})
+	return resp, true, err
 }
 func (c *Controller) CopyProperty(v string) string {
 	if c.clipboard != nil {

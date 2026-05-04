@@ -17,13 +17,20 @@ func (walkDialogs) PromptSetValue(defaultValue string) (string, bool, error) {
 	}
 	defer dlg.Dispose()
 	dlg.SetTitle("Set Value")
-	dlg.SetSize(walk.Size{Width: 420, Height: 140})
+	dlg.SetSize(walk.Size{Width: 420, Height: 170})
+
+	label, err := walk.NewTextLabel(dlg)
+	if err != nil {
+		return "", false, fmt.Errorf("create set value label: %w", err)
+	}
+	label.SetText("Enter a value:")
+	label.SetBounds(walk.Rectangle{X: 12, Y: 12, Width: 392, Height: 20})
 
 	edit, err := walk.NewLineEdit(dlg)
 	if err != nil {
 		return "", false, fmt.Errorf("create set value editor: %w", err)
 	}
-	edit.SetBounds(walk.Rectangle{X: 12, Y: 12, Width: 392, Height: 24})
+	edit.SetBounds(walk.Rectangle{X: 12, Y: 38, Width: 392, Height: 24})
 	edit.SetText(defaultValue)
 
 	okBtn, err := walk.NewPushButton(dlg)
@@ -31,14 +38,14 @@ func (walkDialogs) PromptSetValue(defaultValue string) (string, bool, error) {
 		return "", false, fmt.Errorf("create set value ok button: %w", err)
 	}
 	okBtn.SetText("OK")
-	okBtn.SetBounds(walk.Rectangle{X: 236, Y: 52, Width: 80, Height: 28})
+	okBtn.SetBounds(walk.Rectangle{X: 236, Y: 84, Width: 80, Height: 28})
 
 	cancelBtn, err := walk.NewPushButton(dlg)
 	if err != nil {
 		return "", false, fmt.Errorf("create set value cancel button: %w", err)
 	}
 	cancelBtn.SetText("Cancel")
-	cancelBtn.SetBounds(walk.Rectangle{X: 324, Y: 52, Width: 80, Height: 28})
+	cancelBtn.SetBounds(walk.Rectangle{X: 324, Y: 84, Width: 80, Height: 28})
 
 	okBtn.Clicked().Attach(func() { dlg.Accept() })
 	cancelBtn.Clicked().Attach(func() { dlg.Cancel() })

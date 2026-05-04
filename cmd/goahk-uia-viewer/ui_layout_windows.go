@@ -21,6 +21,17 @@ func (ui *viewerUI) buildWindow() error {
 	ui.mw = mw
 	ui.mw.SetTitle("goahk UIA Viewer")
 	ui.mw.SetSize(walk.Size{Width: 1400, Height: 900})
+	if err := ui.mw.SetLayout(walk.NewVBoxLayout()); err != nil {
+		return fmt.Errorf("set main window layout: %w", err)
+	}
+	root, err := walk.NewComposite(ui.mw)
+	if err != nil {
+		return fmt.Errorf("create root composite: %w", err)
+	}
+	ui.root = root
+	if err := ui.root.SetLayout(walk.NewGridLayout()); err != nil {
+		return fmt.Errorf("set root layout: %w", err)
+	}
 
 	if err := ui.buildLeftPane(); err != nil {
 		return err
@@ -39,6 +50,8 @@ func (ui *viewerUI) buildWindow() error {
 }
 
 func (ui *viewerUI) defaultRefreshArgs() (visibleOnly, titleOnly bool) {
+	visibleOnly = true
+	titleOnly = true
 	if ui.visibleChk != nil {
 		visibleOnly = ui.visibleChk.Checked()
 	}
@@ -48,50 +61,78 @@ func (ui *viewerUI) defaultRefreshArgs() (visibleOnly, titleOnly bool) {
 	return visibleOnly, titleOnly
 }
 
+func (ui *viewerUI) activateOnSelect() bool {
+	if ui.activateChk == nil {
+		return true
+	}
+	return ui.activateChk.Checked()
+}
+
 func (ui *viewerUI) buildLeftPane() error {
 	var err error
-	if ui.refreshBtn, err = walk.NewPushButton(ui.mw); err != nil {
+	parent := walk.Container(ui.root)
+	if parent == nil {
+		parent = ui.mw
+	}
+	if ui.refreshBtn, err = walk.NewPushButton(parent); err != nil {
 		return err
 	}
 	ui.refreshBtn.SetText("Refresh")
-	if ui.visibleChk, err = walk.NewCheckBox(ui.mw); err != nil {
+	ui.refreshBtn.SetBounds(walk.Rectangle{X: 8, Y: 8, Width: 80, Height: 28})
+	if ui.visibleChk, err = walk.NewCheckBox(parent); err != nil {
 		return err
 	}
 	ui.visibleChk.SetText("Visible")
 	ui.visibleChk.SetChecked(true)
-	if ui.titleChk, err = walk.NewCheckBox(ui.mw); err != nil {
+	ui.visibleChk.SetBounds(walk.Rectangle{X: 96, Y: 10, Width: 80, Height: 24})
+	if ui.titleChk, err = walk.NewCheckBox(parent); err != nil {
 		return err
 	}
 	ui.titleChk.SetText("Title")
 	ui.titleChk.SetChecked(true)
-	if ui.activateChk, err = walk.NewCheckBox(ui.mw); err != nil {
+	ui.titleChk.SetBounds(walk.Rectangle{X: 180, Y: 10, Width: 80, Height: 24})
+	if ui.activateChk, err = walk.NewCheckBox(parent); err != nil {
 		return err
 	}
 	ui.activateChk.SetText("Activate")
-	if ui.windowTable, err = walk.NewTableView(ui.mw); err != nil {
+	ui.activateChk.SetBounds(walk.Rectangle{X: 264, Y: 10, Width: 90, Height: 24})
+	if ui.windowTable, err = walk.NewTableView(parent); err != nil {
 		return err
 	}
+	ui.windowTable.SetBounds(walk.Rectangle{X: 8, Y: 44, Width: 450, Height: 760})
 	return nil
 }
 func (ui *viewerUI) buildMiddlePane() error {
 	var err error
-	if ui.infoView, err = walk.NewTextEdit(ui.mw); err != nil {
+	parent := walk.Container(ui.root)
+	if parent == nil {
+		parent = ui.mw
+	}
+	if ui.infoView, err = walk.NewTextEdit(parent); err != nil {
 		return err
 	}
 	ui.infoView.SetReadOnly(true)
-	if ui.propertiesTV, err = walk.NewTableView(ui.mw); err != nil {
+	ui.infoView.SetBounds(walk.Rectangle{X: 470, Y: 8, Width: 470, Height: 220})
+	if ui.propertiesTV, err = walk.NewTableView(parent); err != nil {
 		return err
 	}
-	if ui.patternsTree, err = walk.NewTreeView(ui.mw); err != nil {
+	ui.propertiesTV.SetBounds(walk.Rectangle{X: 470, Y: 236, Width: 470, Height: 280})
+	if ui.patternsTree, err = walk.NewTreeView(parent); err != nil {
 		return err
 	}
+	ui.patternsTree.SetBounds(walk.Rectangle{X: 470, Y: 524, Width: 470, Height: 280})
 	return nil
 }
 func (ui *viewerUI) buildRightPane() error {
 	var err error
-	if ui.treeView, err = walk.NewTreeView(ui.mw); err != nil {
+	parent := walk.Container(ui.root)
+	if parent == nil {
+		parent = ui.mw
+	}
+	if ui.treeView, err = walk.NewTreeView(parent); err != nil {
 		return err
 	}
+	ui.treeView.SetBounds(walk.Rectangle{X: 952, Y: 8, Width: 430, Height: 796})
 	return nil
 }
 

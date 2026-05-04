@@ -14,6 +14,7 @@ type viewerUI struct {
 	dispatcher   UIThreadMarshaller
 	walkUIThread *walk.MainWindow
 	mw           *walk.MainWindow
+	root         *walk.Composite
 
 	windowTable *walk.TableView
 	windowModel *windowTableModel
@@ -28,6 +29,8 @@ type viewerUI struct {
 	patternsTree    *walk.TreeView
 	treeView        *walk.TreeView
 	treeModel       *uiaTreeModel
+	patternByLabel  map[string]string
+	nodeByLabel     map[string]string
 
 	statusBar  *walk.StatusBar
 	statusText *walk.StatusBarItem

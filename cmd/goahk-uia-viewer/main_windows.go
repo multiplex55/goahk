@@ -19,6 +19,11 @@ var newViewerWindow = func(controller *Controller) (viewerWindow, error) {
 }
 
 func runWindows() (err error) {
+	if os.Getenv("GOAHK_UIA_VIEWER_BOOTSTRAP_CHECK") == "1" {
+		if err := walkBootstrapCheck(); err != nil {
+			return fmt.Errorf("%w (try rebuilding with build/build-uia-viewer.bat to embed manifest resources)", err)
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

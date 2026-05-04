@@ -38,7 +38,8 @@ func TestUIAViewerScriptsContainExpectedCommands(t *testing.T) {
 			path: "build-uia-viewer.bat",
 			wants: []string{
 				`set "DIST_DIR=%ROOT%\dist\goahk-uia-viewer"`,
-				`go build -o "%DIST_DIR%\goahk-uia-viewer.exe" ./cmd/goahk-uia-viewer`,
+				`go build -trimpath -v -o "%DIST_DIR%\goahk-uia-viewer.exe" ./cmd/goahk-uia-viewer`,
+				`go run github.com/akavel/rsrc@v0.10.2 -manifest "%MANIFEST%" -o "%MANIFEST_SYSO%"`,
 			},
 		},
 		{path: "dev-uia-viewer.sh", wants: []string{"go run ./cmd/goahk-uia-viewer"}},

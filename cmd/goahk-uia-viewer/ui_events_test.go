@@ -44,7 +44,7 @@ func TestViewerEventAdapter_WindowSelectionPipeline(t *testing.T) {
 	view := &guardedView{}
 	adapter := NewViewerEventAdapter(c, view, mq)
 
-	adapter.OnWindowSelected("0x2")
+	adapter.OnWindowSelected("0x2", false)
 	select {
 	case fn := <-mq.ch:
 		view.enterQueue()
@@ -103,13 +103,30 @@ func TestViewerEventAdapter_WindowSelectionStatusSet(t *testing.T) {
 	view := &guardedView{}
 	adapter := NewViewerEventAdapter(c, view, mq)
 
-	adapter.OnWindowSelected("0x2")
+	adapter.OnWindowSelected("0x2", false)
 	fn := <-mq.ch
 	view.enterQueue()
 	fn()
 	view.exitQueue()
 	if len(view.status) == 0 || view.status[len(view.status)-1] != "window loaded" {
 		t.Fatalf("expected success status, got %v", view.status)
+	}
+}
+
+func TestViewerEventAdapter_WindowSelection_RespectsActivateFlag(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 4)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnWindowSelected("0x2", true)
+	fn := <-mq.ch
+	view.enterQueue()
+	fn()
+	view.exitQueue()
+	if svc.activateCalls != 1 {
+		t.Fatalf("expected activate call when requested, got %d", svc.activateCalls)
 	}
 }
 
