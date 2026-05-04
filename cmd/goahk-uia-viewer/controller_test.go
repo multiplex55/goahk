@@ -153,7 +153,7 @@ func TestController_Refresh_ForwardsFilters(t *testing.T) {
 func TestController_LoadTreeRoot_UsesSelectedWindow(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
 	c := NewController(context.Background(), svc)
-	if err := c.SelectWindow("0x1", false); err != nil {
+	if _, err := c.SelectWindow("0x1", false); err != nil {
 		t.Fatal(err)
 	}
 	resp, err := c.LoadTreeRoot()
@@ -193,14 +193,90 @@ func TestController_InvokePattern_ForSelection(t *testing.T) {
 func TestController_SelectWindow_Pipeline(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
 	c := NewController(context.Background(), svc)
-	if err := c.SelectWindow("0x1", true); err != nil {
+	if _, err := c.SelectWindow("0x1", true); err != nil {
 		t.Fatal(err)
 	}
 	if svc.clearCalls == 0 {
 		t.Fatal("expected highlight clear on switch")
 	}
-	if svc.activateCalls != 1 || svc.inspectCalls != 1 || svc.treeRootCalls != 1 || svc.nodeDetailsCalls != 1 {
+	if svc.activateCalls != 1 || svc.inspectCalls != 1 || svc.treeRootCalls != 1 || svc.nodeDetailsCalls != 2 {
 		t.Fatalf("unexpected pipeline calls: %+v", svc)
+	}
+}
+
+func TestSelectWindowReturnsRootAndDetails(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root"}}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	result, err := c.SelectWindow("0x1", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Root.Root.NodeID != "root" || result.Details.ACCPath != "root" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+func TestSelectWindowSetsSelectedNodeIDToRoot(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root-id"}}
+	c := NewController(context.Background(), svc)
+	if _, err := c.SelectWindow("0x1", false); err != nil {
+		t.Fatal(err)
+	}
+	if c.selectedNodeID != "root-id" {
+		t.Fatalf("selectedNodeID=%q", c.selectedNodeID)
+	}
+}
+func TestSelectWindowStoresRootNodeInCache(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root-id"}}
+	c := NewController(context.Background(), svc)
+	if _, err := c.SelectWindow("0x1", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := c.nodesByID["root-id"]; !ok {
+		t.Fatal("expected root in cache")
+	}
+}
+func TestSelectWindowHighlightsRootNode(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root-id"}}
+	c := NewController(context.Background(), svc)
+	if _, err := c.SelectWindow("0x1", false); err != nil {
+		t.Fatal(err)
+	}
+	if svc.highlightCalls != 1 || svc.selectCalls != 1 {
+		t.Fatalf("expected root select/highlight once: %+v", svc)
+	}
+}
+func TestSelectWindowActivateTrueCallsActivateWindow(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root-id"}}
+	c := NewController(context.Background(), svc)
+	if _, err := c.SelectWindow("0x1", true); err != nil {
+		t.Fatal(err)
+	}
+	if svc.activateCalls != 1 {
+		t.Fatalf("activate calls=%d", svc.activateCalls)
+	}
+}
+func TestSelectWindowActivateFalseDoesNotCallActivateWindow(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root-id"}}
+	c := NewController(context.Background(), svc)
+	if _, err := c.SelectWindow("0x1", false); err != nil {
+		t.Fatal(err)
+	}
+	if svc.activateCalls != 0 {
+		t.Fatalf("activate calls=%d", svc.activateCalls)
+	}
+}
+func TestRefreshSelectedNodeDetailsAfterSelectWindowUsesRoot(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root-id"}}, root: inspect.TreeNodeDTO{NodeID: "root-id"}}
+	c := NewController(context.Background(), svc)
+	if _, err := c.SelectWindow("0x1", false); err != nil {
+		t.Fatal(err)
+	}
+	details, err := c.RefreshSelectedNodeDetails()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if details.ACCPath != "root-id" {
+		t.Fatalf("node=%q", details.ACCPath)
 	}
 }
 func TestController_SelectNode_Pipeline(t *testing.T) {
@@ -357,6 +433,7 @@ type fakeControllerService struct {
 	fakeInspectService
 	root                                                                                      inspect.TreeNodeDTO
 	activateCalls, inspectCalls, treeRootCalls, nodeDetailsCalls, selectCalls, highlightCalls int
+	inspectErr                                                                                error
 }
 
 func (f *fakeControllerService) ActivateWindow(context.Context, inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
@@ -365,6 +442,9 @@ func (f *fakeControllerService) ActivateWindow(context.Context, inspect.Activate
 }
 func (f *fakeControllerService) InspectWindow(context.Context, inspect.InspectWindowRequest) (inspect.InspectWindowResponse, error) {
 	f.inspectCalls++
+	if f.inspectErr != nil {
+		return inspect.InspectWindowResponse{}, f.inspectErr
+	}
 	return inspect.InspectWindowResponse{}, nil
 }
 func (f *fakeControllerService) GetTreeRoot(context.Context, inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {

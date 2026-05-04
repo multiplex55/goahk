@@ -46,11 +46,38 @@ func TestViewerEventAdapter_WindowSelectionPipeline(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for queued callback")
 	}
-	if svc.inspectCalls != 1 || svc.treeRootCalls < 1 || svc.nodeDetailsCalls < 2 {
+	if svc.inspectCalls != 1 || svc.treeRootCalls < 1 || svc.nodeDetailsCalls < 1 {
 		t.Fatalf("pipeline incomplete: %+v", svc)
 	}
 	if len(view.busy) != 2 || !view.busy[0] || view.busy[1] {
 		t.Fatalf("busy toggles = %v, want [true false]", view.busy)
+	}
+}
+
+func TestOnWindowSelectedUpdatesTreeRootAndDetails(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 4)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if view.updates < 3 {
+		t.Fatalf("expected tree+window+node updates, got %d", view.updates)
+	}
+}
+func TestOnWindowSelectedDoesNotCallRefreshSelectedNodeDetailsWithEmptyNode(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 4)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if svc.nodeDetailsCalls != 2 {
+		t.Fatalf("expected details from select+selectNode only, got %d", svc.nodeDetailsCalls)
 	}
 }
 
@@ -129,6 +156,20 @@ func TestViewerEventAdapter_WindowSelection_RespectsActivateFlag(t *testing.T) {
 	view.exitQueue()
 	if svc.activateCalls != 1 {
 		t.Fatalf("expected activate call when requested, got %d", svc.activateCalls)
+	}
+}
+
+func TestOnWindowSelectedShowsErrorWhenInspectFails(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, inspectErr: context.DeadlineExceeded}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if len(view.status) == 0 {
+		t.Fatal("expected error status")
 	}
 }
 
