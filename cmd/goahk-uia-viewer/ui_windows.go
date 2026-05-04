@@ -10,28 +10,26 @@ import (
 
 type viewerUI struct {
 	controller *Controller
+	events     *ViewerEventAdapter
+	dispatcher walkUIThread
 	mw         *walk.MainWindow
 
-	windowFilter *walk.LineEdit
-	windowTable  *walk.TableView
-	windowModel  *windowTableModel
-	refreshBtn   *walk.PushButton
-	visibleChk   *walk.CheckBox
-	titleChk     *walk.CheckBox
-	activateChk  *walk.CheckBox
+	windowTable *walk.TableView
+	windowModel *windowTableModel
+	refreshBtn  *walk.PushButton
+	visibleChk  *walk.CheckBox
+	titleChk    *walk.CheckBox
+	activateChk *walk.CheckBox
 
 	infoView        *walk.TextEdit
 	propertiesTV    *walk.TableView
 	propertiesModel *propertyTableModel
-	patternsTV      *walk.TableView
+	patternsTree    *walk.TreeView
 	treeView        *walk.TreeView
 	treeModel       *uiaTreeModel
 
 	statusBar  *walk.StatusBar
 	statusText *walk.StatusBarItem
-
-	events     *ViewerEventAdapter
-	dispatcher walkUIThread
 }
 
 func NewViewerWindow(controller *Controller) (viewerWindow, error) {
