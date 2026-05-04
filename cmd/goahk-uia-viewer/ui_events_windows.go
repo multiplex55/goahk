@@ -2,12 +2,10 @@
 
 package main
 
-import "github.com/lxn/walk"
-
 type walkUIThread struct{}
 
 func (walkUIThread) Queue(fn func()) {
-	walk.Async(fn)
+	go fn()
 }
 
 func (ui *viewerUI) setLoading(loading bool) {
