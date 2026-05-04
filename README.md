@@ -149,28 +149,23 @@ Thread-safety guidance:
 - If you store composite values that require read-modify-write semantics across multiple operations, keep updates in one callback section or encode as single string values with `LoadOrStore`/`Set` boundaries.
 
 
-## UIA viewer build and run
+## UIA viewer build
 
-`goahk-uia-viewer` is the Windows-native inspection app in `cmd/goahk-uia-viewer`.
+`goahk-uia-viewer` is the Windows-only Walk inspection app in `cmd/goahk-uia-viewer`.
 
-Build from repo root:
-
-```powershell
-go build -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer
-```
-
-Run for local manual inspection (Windows only):
+Canonical build path from the repository root:
 
 ```powershell
-go run ./cmd/goahk-uia-viewer
+cmd /c build\build-uia-viewer.bat
 ```
 
-Helper build scripts:
+Equivalent direct Go build command:
 
-- `build/build-uia-viewer.bat`
-- `build/build-uia-viewer.sh`
+```powershell
+go build -trimpath -v -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer
+```
 
-Use the direct `go build` command above if you prefer script-free invocation.
+Use the batch script as the primary/repeatable build path. Use the direct `go build` command when you need an explicit one-liner.
 
 ## Toolchain expectations
 

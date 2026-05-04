@@ -139,35 +139,37 @@ Common hotkey-specific failure signatures:
 
 ## 4) Build commands
 
-### Debug/development build (matches current CI intent)
+### Core compile/test commands
+
+Run from repository root:
 
 ```powershell
+go mod download
 go build -v ./...
+go vet ./...
+go test -v ./...
 ```
 
-This validates that all packages compile.
-
-### Production/release build (project packaging script)
+### Packaging build script
 
 ```powershell
-build\build.bat
+cmd /c build\build.bat
 ```
 
-### Output artifact locations
+### UIA viewer build (Windows-only Walk GUI)
 
-- Main packaged binary output: `dist/goahk`
-- Additional packaging metadata/assets are maintained in `build/`.
+The viewer command (`cmd/goahk-uia-viewer`) is a Windows-only Walk desktop application.
 
-### Viewer build
-
-Build the native UIA viewer binary directly with Go from the repository root:
+Canonical script path:
 
 ```powershell
-go build -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer
+cmd /c build\build-uia-viewer.bat
 ```
 
-```bash
-go build -o dist/goahk-uia-viewer/goahk-uia-viewer ./cmd/goahk-uia-viewer
+Direct equivalent:
+
+```powershell
+go build -trimpath -v -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer
 ```
 
 ### Output artifact locations
@@ -176,50 +178,19 @@ go build -o dist/goahk-uia-viewer/goahk-uia-viewer ./cmd/goahk-uia-viewer
 - UIA viewer binary output: `dist/goahk-uia-viewer/`
 - Additional packaging metadata/assets are maintained in `build/`.
 
-## 5) Validation checklist
+## 5) CI-aligned command sequence
 
-After building, run this smoke checklist:
-
-- [ ] Binary/app starts successfully.
-- [ ] Hotkey can be registered.
-- [ ] Hotkey callback fires when chord is pressed.
-- [ ] App exits cleanly.
-- [ ] Hotkey can be registered again after restart (unregister worked).
-
-Platform-specific notes:
-
-- **Windows:** full checklist is applicable, including real hotkey registration/callback.
-- **Linux/macOS:** compile/unit-test validation is expected; real Windows global hotkey behavior is not authoritative.
-
-## 6) CI alignment
-
-This guide is the **single source of truth** for the command set used locally and in CI.
-
-Current CI workflow (`.github/workflows/go.yml`) runs on an explicit Go matrix (`1.22.x` and `1.25.x`) and executes:
+Current CI/local build sequence should stay aligned with existing scripts/files:
 
 ```powershell
 go mod download
-build\check-no-source-binaries.bat
-build\build.bat
-build\build-uia-viewer.bat
+cmd /c build\check-no-source-binaries.bat
+cmd /c build\build.bat
+cmd /c build\build-uia-viewer.bat
 go build -v ./...
 go vet ./...
 go test -v ./...
 ```
-
-Recommended local pre-PR command sequence (aligned to CI):
-
-```powershell
-go mod download
-build\check-no-source-binaries.bat
-build\build.bat
-build\build-uia-viewer.bat
-go build -v ./...
-go vet ./...
-go test -v ./...
-```
-
-If CI evolves, update this document first (or in the same PR) so contributors and automation remain synchronized.
 
 ## Related docs
 
