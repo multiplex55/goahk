@@ -200,6 +200,9 @@ func TestController_SelectWindow_Pipeline(t *testing.T) {
 	if svc.clearCalls == 0 {
 		t.Fatal("expected highlight clear on switch")
 	}
+	if svc.activateCalls != 1 || svc.inspectCalls != 1 || svc.treeRootCalls != 1 || svc.nodeDetailsCalls != 1 {
+		t.Fatalf("unexpected pipeline calls: %+v", svc)
+	}
 }
 func TestController_SelectNode_Pipeline(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root/child"}}}
@@ -227,6 +230,9 @@ func TestController_Shutdown_CleansUp(t *testing.T) {
 	}
 	if c.followEnabled || c.followPaused || c.followLocked || c.followCancel != nil {
 		t.Fatal("expected safe terminal follow state")
+	}
+	if c.selectedNodeID != "" || c.lastFollowNode != "" {
+		t.Fatal("expected selection and follow cache reset on shutdown")
 	}
 }
 func TestController_SetValuePromptAndInvoke(t *testing.T) {
@@ -303,6 +309,37 @@ func TestController_FollowCursor_EmitsOnNodeChange_RespectsPauseLock(t *testing.
 	defer mu.Unlock()
 	if len(got) != 3 {
 		t.Fatalf("got %v", got)
+	}
+}
+func TestController_FollowCursor_DisableClearsPauseAndLock(t *testing.T) {
+	svc := &fakeInspectService{}
+	c := NewController(context.Background(), svc)
+	tick := make(chan time.Time, 1)
+	c.followTicker = func() <-chan time.Time { return tick }
+	_ = c.ToggleFollowCursor(true)
+	c.PauseFollowCursor()
+	c.LockFollowCursor()
+	if err := c.ToggleFollowCursor(false); err != nil {
+		t.Fatal(err)
+	}
+	if c.followEnabled || c.followPaused || c.followLocked {
+		t.Fatal("expected follow flags reset when disabled")
+	}
+}
+func TestController_OnStatusInteractionUpdate_CopiesPathWhenEnabled(t *testing.T) {
+	cb := &fakeClipboard{}
+	c := NewController(context.Background(), &fakeInspectService{}).WithClipboard(cb)
+	c.ToggleAccPathCapture()
+	c.lastACCPath = "desktop/window/button"
+	upd := c.OnStatusInteractionUpdate()
+	if !upd.LastACCPathCopied || upd.Text != "ACC path copied" || len(cb.copied) != 1 {
+		t.Fatalf("unexpected update: %+v copied=%v", upd, cb.copied)
+	}
+}
+func TestController_InvokeSetValue_RequiresDialog(t *testing.T) {
+	c := NewController(context.Background(), &fakeInspectService{})
+	if _, err := c.InvokeSetValue(); err == nil {
+		t.Fatal("expected dialog unavailable error")
 	}
 }
 func TestNormalizeInspectError_StableMapping(t *testing.T) {
