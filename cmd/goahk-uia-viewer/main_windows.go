@@ -15,7 +15,7 @@ type viewerWindow interface {
 }
 
 var newViewerWindow = func(controller *Controller) (viewerWindow, error) {
-	return nil, fmt.Errorf("failed to start goahk-uia-viewer: NewViewerWindow is not wired")
+	return NewViewerWindow(controller)
 }
 
 func runWindows() (err error) {
@@ -30,7 +30,7 @@ func runWindows() (err error) {
 
 	ui, err := newViewerWindow(controller)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create goahk-uia-viewer window: %w", err)
 	}
 	if ui == nil {
 		return fmt.Errorf("failed to start goahk-uia-viewer: NewViewerWindow returned nil")
