@@ -32,17 +32,9 @@ func (m *uiaTreeModel) MarkChildrenLoaded(nodeID string) {
 	}
 }
 
-func (m *uiaTreeModel) AreChildrenLoaded(nodeID string) bool {
-	return m.loadedChildren[nodeID]
-}
-
-func (m *uiaTreeModel) SetExpanded(nodeID string, expanded bool) {
-	m.expanded[nodeID] = expanded
-}
-
-func (m *uiaTreeModel) IsExpanded(nodeID string) bool {
-	return m.expanded[nodeID]
-}
+func (m *uiaTreeModel) AreChildrenLoaded(nodeID string) bool     { return m.loadedChildren[nodeID] }
+func (m *uiaTreeModel) SetExpanded(nodeID string, expanded bool) { m.expanded[nodeID] = expanded }
+func (m *uiaTreeModel) IsExpanded(nodeID string) bool            { return m.expanded[nodeID] }
 
 func (m *uiaTreeModel) SetRoot(root inspect.TreeNodeDTO) {
 	m.rootID = root.NodeID
@@ -52,6 +44,7 @@ func (m *uiaTreeModel) SetRoot(root inspect.TreeNodeDTO) {
 }
 
 func (m *uiaTreeModel) RootID() string { return m.rootID }
+func (m *uiaTreeModel) NodeCount() int { return len(m.nodes) }
 
 func (m *uiaTreeModel) Reset() {
 	m.rootID = ""
@@ -77,6 +70,14 @@ func (m *uiaTreeModel) SetChildren(nodeID string, children []inspect.TreeNodeDTO
 		}
 	}
 	m.MarkChildrenLoaded(nodeID)
+}
+
+func (m *uiaTreeModel) NodeByID(nodeID string) (inspect.TreeNodeDTO, bool) {
+	n, ok := m.nodes[nodeID]
+	if !ok {
+		return inspect.TreeNodeDTO{}, false
+	}
+	return n.TreeNodeDTO, true
 }
 
 func (m *uiaTreeModel) ChildrenOf(nodeID string) []string {

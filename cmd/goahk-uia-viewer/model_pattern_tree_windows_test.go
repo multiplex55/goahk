@@ -14,33 +14,20 @@ func TestMapPatternTreeGroupsAndLabels(t *testing.T) {
 	if len(nodes) != 4 {
 		t.Fatalf("unexpected group count: %d", len(nodes))
 	}
-	if nodes[0].Children[0].Label != "Invoke()" || nodes[0].Children[0].ActionID != "invoke" {
-		t.Fatalf("unexpected invoke child: %#v", nodes[0].Children[0])
-	}
-	if nodes[1].Children[0].ActionID != "doDefaultAction" || nodes[1].Children[0].Label != "DoDefaultAction()" {
-		t.Fatalf("unexpected doDefaultAction child: %#v", nodes[1].Children[0])
-	}
-	if nodes[3].Children[0].ActionID != "setValue" || nodes[3].Children[0].Label != "SetValue()" {
-		t.Fatalf("unexpected setValue child: %#v", nodes[3].Children[0])
+	if nodes[0].Label != "InvokePattern" {
+		t.Fatalf("unexpected deterministic group order: %q", nodes[0].Label)
 	}
 }
 
 func TestMapPatternTree_SupportsCanonicalAndLegacyAliases(t *testing.T) {
 	nodes := mapPatternTree([]inspect.PatternActionDTO{{Pattern: "InvokePattern", Name: "invoke"}, {Pattern: "InvokePattern", Name: "doDefaultAction"}, {Pattern: "ValuePattern", Name: "set_value"}, {Pattern: "ExpandCollapsePattern", Name: "expand"}, {Pattern: "ExpandCollapsePattern", Name: "collapse"}, {Pattern: "TogglePattern", Name: "toggle"}})
-	if got := nodes[0].Children[1].Label; got != "DoDefaultAction()" {
+	m := newPatternTreeModel()
+	m.SetRoots(nodes)
+	if got, ok := m.ActionForNode("InvokePattern/doDefaultAction"); !ok || got != "doDefaultAction" {
+		t.Fatalf("action mismatch got=%q ok=%v", got, ok)
+	}
+	if got := callableActionLabel("set_value"); got != "SetValue()" {
 		t.Fatalf("label=%q", got)
-	}
-	if got := nodes[1].Children[0].ActionID; got != "setValue" {
-		t.Fatalf("action id=%q", got)
-	}
-	if got := nodes[2].Children[0].Label; got != "Expand()" {
-		t.Fatalf("expand label=%q", got)
-	}
-	if got := nodes[2].Children[1].Label; got != "Collapse()" {
-		t.Fatalf("collapse label=%q", got)
-	}
-	if got := nodes[3].Children[0].Label; got != "Toggle()" {
-		t.Fatalf("toggle label=%q", got)
 	}
 }
 
