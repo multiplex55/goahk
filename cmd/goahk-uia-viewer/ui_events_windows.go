@@ -10,6 +10,33 @@ import (
 	"goahk/internal/inspect"
 )
 
+func (ui *viewerUI) executePatternAction(action string) {
+	action = normalizePatternActionName(action)
+	ui.SetBusy(true)
+	go func() {
+		var err error
+		if action == "setValue" {
+			_, err = ui.controller.InvokeSetValue()
+		} else {
+			_, err = ui.controller.InvokePatternForSelection(action)
+		}
+		details, detailsErr := ui.controller.RefreshSelectedNodeDetails()
+		ui.dispatcher.Queue(func() {
+			ui.SetBusy(false)
+			if err != nil {
+				ui.setStatus("action failed: " + err.Error())
+				return
+			}
+			if detailsErr != nil {
+				ui.setStatus("action succeeded, refresh failed: " + detailsErr.Error())
+				return
+			}
+			ui.UpdateNodeDetails(details)
+			ui.setStatus("action completed: " + callableActionLabel(action))
+		})
+	}()
+}
+
 type walkUIThread struct{ mw *walk.MainWindow }
 
 func (m walkUIThread) Queue(fn func()) {
