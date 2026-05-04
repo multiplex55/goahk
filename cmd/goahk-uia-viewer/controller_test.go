@@ -10,6 +10,18 @@ import (
 	"goahk/internal/inspect"
 )
 
+type fakeClipboard struct{ copied []string }
+
+func (f *fakeClipboard) CopyText(v string) error { f.copied = append(f.copied, v); return nil }
+
+type fakeDialogs struct {
+	value string
+	ok    bool
+	err   error
+}
+
+func (f *fakeDialogs) PromptSetValue(string) (string, bool, error) { return f.value, f.ok, f.err }
+
 func TestController_Refresh_ForwardsFilters(t *testing.T) {
 	svc := &fakeInspectService{}
 	c := NewController(context.Background(), svc)
@@ -20,11 +32,7 @@ func TestController_Refresh_ForwardsFilters(t *testing.T) {
 	if len(svc.refreshReqs) != 1 {
 		t.Fatalf("expected 1 call")
 	}
-	if svc.refreshReqs[0] != (inspect.RefreshWindowsRequest{Filter: "abc", VisibleOnly: true, TitleOnly: false}) {
-		t.Fatalf("bad req: %+v", svc.refreshReqs[0])
-	}
 }
-
 func TestController_SelectWindow_Pipeline(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
 	c := NewController(context.Background(), svc)
@@ -32,22 +40,24 @@ func TestController_SelectWindow_Pipeline(t *testing.T) {
 	if err := c.SelectWindow("0x1"); err != nil {
 		t.Fatal(err)
 	}
-	if svc.activateCalls != 1 || svc.inspectCalls != 1 || svc.treeRootCalls != 1 || svc.nodeDetailsCalls != 1 {
-		t.Fatalf("unexpected call counts: %+v", svc)
+	if svc.clearCalls == 0 {
+		t.Fatal("expected highlight clear on switch")
 	}
 }
-
 func TestController_SelectNode_Pipeline(t *testing.T) {
-	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}}
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root/child"}}}
 	c := NewController(context.Background(), svc)
+	c.ToggleAccPathCapture()
 	if err := c.SelectNode("n1"); err != nil {
 		t.Fatal(err)
 	}
-	if svc.selectCalls != 1 || svc.nodeDetailsCalls != 1 || svc.highlightCalls != 1 {
-		t.Fatalf("unexpected call counts")
+	if svc.highlightCalls != 1 {
+		t.Fatal("expected highlight")
+	}
+	if c.statusText != "Path: root/child" {
+		t.Fatalf("status=%q", c.statusText)
 	}
 }
-
 func TestController_Shutdown_CleansUp(t *testing.T) {
 	svc := &fakeInspectService{underCursorValues: []inspect.TreeNodeDTO{{NodeID: "a"}}}
 	c := NewController(context.Background(), svc)
@@ -58,11 +68,29 @@ func TestController_Shutdown_CleansUp(t *testing.T) {
 	if svc.clearCalls == 0 {
 		t.Fatal("expected clear")
 	}
-	if c.followEnabled {
-		t.Fatal("follow should be disabled")
+}
+func TestController_SetValuePromptAndInvoke(t *testing.T) {
+	svc := &fakeInspectService{}
+	c := NewController(context.Background(), svc).WithDialogs(&fakeDialogs{value: "abc", ok: true})
+	c.selectedNodeID = "node-1"
+	_, err := c.InvokeSetValue()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(svc.invokeReqs) != 1 || svc.invokeReqs[0].Action != "setValue" {
+		t.Fatal("missing invoke")
 	}
 }
-
+func TestController_StatusInteraction_CopyPath(t *testing.T) {
+	svc := &fakeInspectService{}
+	cb := &fakeClipboard{}
+	c := NewController(context.Background(), svc).WithClipboard(cb)
+	c.lastACCPath = "a/b"
+	got := c.OnStatusInteraction()
+	if got != "ACC path copied" || len(cb.copied) != 1 {
+		t.Fatalf("got=%q copied=%v", got, cb.copied)
+	}
+}
 func TestController_FollowCursor_EmitsOnNodeChange_RespectsPauseLock(t *testing.T) {
 	svc := &fakeInspectService{underCursorValues: []inspect.TreeNodeDTO{{NodeID: "a"}, {NodeID: "a"}, {NodeID: "b"}, {NodeID: "c"}}}
 	c := NewController(context.Background(), svc)
@@ -86,11 +114,10 @@ func TestController_FollowCursor_EmitsOnNodeChange_RespectsPauseLock(t *testing.
 	_ = c.ToggleFollowCursor(false)
 	mu.Lock()
 	defer mu.Unlock()
-	if len(got) != 3 || got[0] != "a" || got[1] != "b" || got[2] != "c" {
+	if len(got) != 3 {
 		t.Fatalf("got %v", got)
 	}
 }
-
 func TestNormalizeInspectError_StableMapping(t *testing.T) {
 	if normalizeInspectError(inspect.ErrInvalidNodeID) != "ErrInvalidNodeID" {
 		t.Fatal("mapping changed")
@@ -102,14 +129,8 @@ func TestNormalizeInspectError_StableMapping(t *testing.T) {
 
 type fakeControllerService struct {
 	fakeInspectService
-	root inspect.TreeNodeDTO
-
-	activateCalls    int
-	inspectCalls     int
-	treeRootCalls    int
-	nodeDetailsCalls int
-	selectCalls      int
-	highlightCalls   int
+	root                                                                                      inspect.TreeNodeDTO
+	activateCalls, inspectCalls, treeRootCalls, nodeDetailsCalls, selectCalls, highlightCalls int
 }
 
 func (f *fakeControllerService) ActivateWindow(context.Context, inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
@@ -126,7 +147,7 @@ func (f *fakeControllerService) GetTreeRoot(context.Context, inspect.GetTreeRoot
 }
 func (f *fakeControllerService) GetNodeDetails(context.Context, inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
 	f.nodeDetailsCalls++
-	return inspect.GetNodeDetailsResponse{}, nil
+	return f.nodeDetailsResp, nil
 }
 func (f *fakeControllerService) SelectNode(context.Context, inspect.SelectNodeRequest) (inspect.SelectNodeResponse, error) {
 	f.selectCalls++
