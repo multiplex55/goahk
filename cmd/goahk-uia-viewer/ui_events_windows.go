@@ -66,6 +66,11 @@ func (ui *viewerUI) attachEvents() {
 		ui.activateChk.SetChecked(true)
 	}
 	ui.refreshBtn.Clicked().Attach(func() { ui.initialRefresh() })
+	if ui.statusBar != nil {
+		ui.statusBar.MouseDown().Attach(func(_, _ int, _ walk.MouseButton) {
+			ui.setStatus(ui.controller.OnStatusInteraction())
+		})
+	}
 }
 
 func (ui *viewerUI) initialRefresh() {
