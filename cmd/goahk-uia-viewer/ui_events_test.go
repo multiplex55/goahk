@@ -14,11 +14,13 @@ type queueMarshaller struct{ ch chan func() }
 func (m *queueMarshaller) Queue(fn func()) { m.ch <- fn }
 
 type guardedView struct {
-	mu      sync.Mutex
-	queued  bool
-	busy    []bool
-	status  []string
-	updates int
+	mu       sync.Mutex
+	queued   bool
+	busy     []bool
+	status   []string
+	updates  int
+	expanded []string
+	selected []string
 }
 
 func (v *guardedView) enterQueue()                                        { v.mu.Lock(); v.queued = true; v.mu.Unlock() }
@@ -29,6 +31,8 @@ func (v *guardedView) UpdateWindowDetails(inspect.GetNodeDetailsResponse) { v.up
 func (v *guardedView) UpdateNodeDetails(inspect.GetNodeDetailsResponse)   { v.updates++ }
 func (v *guardedView) UpdateTreeRoot(inspect.TreeNodeDTO)                 { v.updates++ }
 func (v *guardedView) UpdateNodeChildren(string, []inspect.TreeNodeDTO)   { v.updates++ }
+func (v *guardedView) ExpandTreeNode(nodeID string)                       { v.expanded = append(v.expanded, nodeID) }
+func (v *guardedView) SelectTreeNode(nodeID string)                       { v.selected = append(v.selected, nodeID) }
 
 func TestViewerEventAdapter_WindowSelectionPipeline(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
@@ -187,5 +191,51 @@ func TestViewerEventAdapter_TreeExpandStatusSet(t *testing.T) {
 	view.exitQueue()
 	if len(view.status) == 0 || view.status[len(view.status)-1] != "node expanded" {
 		t.Fatalf("expected expand status, got %v", view.status)
+	}
+}
+
+func TestOnTreeExpandedAddsChildren(t *testing.T) {
+	svc := &fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{"n1": {{NodeID: "c1"}}}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnTreeExpanded("n1", false)
+	fn := <-mq.ch
+	fn()
+	if view.updates == 0 {
+		t.Fatal("expected tree children update")
+	}
+}
+
+func TestOnTreeSelectedUpdatesDetails(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnTreeSelected("node-1")
+	fn := <-mq.ch
+	fn()
+	if view.updates == 0 {
+		t.Fatal("expected details update")
+	}
+}
+
+func TestOnWindowSelectedExpandsAndSelectsRoot(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 4)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if len(view.expanded) == 0 || view.expanded[0] != "root" {
+		t.Fatalf("expected root expanded, got %v", view.expanded)
+	}
+	if len(view.selected) == 0 || view.selected[0] != "root" {
+		t.Fatalf("expected root selected, got %v", view.selected)
 	}
 }

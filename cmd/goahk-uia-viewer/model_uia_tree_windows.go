@@ -12,10 +12,12 @@ type NodeID string
 
 type uiaTreeNode struct {
 	inspect.TreeNodeDTO
-	id       NodeID
-	parent   *uiaTreeNode
-	children []*uiaTreeNode
-	loaded   bool
+	id               NodeID
+	parent           *uiaTreeNode
+	children         []*uiaTreeNode
+	loaded           bool
+	maybeHasChildren bool
+	placeholder      bool
 }
 
 func (n *uiaTreeNode) Text() string {
@@ -75,11 +77,12 @@ func (m *uiaTreeModel) SetExpanded(nodeID string, expanded bool) {
 func (m *uiaTreeModel) IsExpanded(nodeID string) bool { return m.expanded[NodeID(nodeID)] }
 
 func (m *uiaTreeModel) SetRoot(root inspect.TreeNodeDTO) {
-	n := &uiaTreeNode{TreeNodeDTO: root, id: NodeID(root.NodeID)}
+	n := &uiaTreeNode{TreeNodeDTO: root, id: NodeID(root.NodeID), maybeHasChildren: true}
 	m.root = n
 	m.nodes = map[NodeID]*uiaTreeNode{n.id: n}
 	m.loadedChildren = map[NodeID]bool{}
 	m.expanded = map[NodeID]bool{}
+	m.attachPlaceholder(n)
 	m.PublishItemsReset(nil)
 }
 func (m *uiaTreeModel) RootID() string {
@@ -113,10 +116,28 @@ func (m *uiaTreeModel) SetChildren(nodeID string, children []inspect.TreeNodeDTO
 		}
 		child.TreeNodeDTO = ch
 		child.parent = parent
+		child.placeholder = false
+		child.maybeHasChildren = true
+		if !m.AreChildrenLoaded(ch.NodeID) {
+			m.attachPlaceholder(child)
+		}
 		parent.children = append(parent.children, child)
 	}
 	m.MarkChildrenLoaded(nodeID)
 	m.PublishItemChanged(parent)
+}
+
+func (m *uiaTreeModel) attachPlaceholder(parent *uiaTreeNode) {
+	if parent == nil || !parent.maybeHasChildren || m.AreChildrenLoaded(parent.NodeID) {
+		return
+	}
+	for _, existing := range parent.children {
+		if existing != nil && existing.placeholder {
+			return
+		}
+	}
+	placeholder := &uiaTreeNode{id: NodeID(parent.NodeID + "#placeholder"), parent: parent, placeholder: true}
+	parent.children = append(parent.children, placeholder)
 }
 
 func (m *uiaTreeModel) NodeByID(nodeID string) (inspect.TreeNodeDTO, bool) {
