@@ -47,7 +47,6 @@ func NewViewerWindow(controller *Controller) (viewerWindow, error) {
 	}
 	ui.attachEvents()
 	ui.events = NewViewerEventAdapter(controller, ui, ui.dispatcher)
-	ui.initialRefresh()
 	return ui, nil
 }
 

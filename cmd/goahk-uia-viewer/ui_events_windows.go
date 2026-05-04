@@ -32,7 +32,7 @@ func (ui *viewerUI) executePatternAction(action string) {
 		}
 		details, detailsErr := ui.controller.RefreshSelectedNodeDetails()
 		ui.dispatcher.Queue(func() {
-			ui.SetBusy(false)
+			ui.setLoading(false)
 			if err != nil {
 				ui.setStatus("action failed: " + err.Error())
 				return
@@ -137,7 +137,7 @@ func (ui *viewerUI) initialRefresh() {
 		visible, title := ui.defaultRefreshArgs()
 		resp, err := ui.controller.RefreshWindows("", visible, title)
 		ui.dispatcher.Queue(func() {
-			ui.SetBusy(false)
+			ui.setLoading(false)
 			if err != nil {
 				ui.setStatus("refresh failed: " + err.Error())
 				return
@@ -152,17 +152,15 @@ func (ui *viewerUI) initialRefresh() {
 }
 
 func (ui *viewerUI) setLoading(loading bool) {
-	ui.dispatcher.Queue(func() {
-		if ui.refreshBtn != nil {
-			ui.refreshBtn.SetEnabled(!loading)
-		}
-		if ui.windowTable != nil {
-			ui.windowTable.SetEnabled(!loading)
-		}
-		if ui.treeView != nil {
-			ui.treeView.SetEnabled(!loading)
-		}
-	})
+	if ui.refreshBtn != nil {
+		ui.refreshBtn.SetEnabled(!loading)
+	}
+	if ui.windowTable != nil {
+		ui.windowTable.SetEnabled(!loading)
+	}
+	if ui.treeView != nil {
+		ui.treeView.SetEnabled(!loading)
+	}
 }
 
 func (ui *viewerUI) SetBusy(b bool)     { ui.setLoading(b) }

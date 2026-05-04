@@ -21,17 +21,10 @@ type guardedView struct {
 	updates int
 }
 
-func (v *guardedView) enterQueue() { v.mu.Lock(); v.queued = true; v.mu.Unlock() }
-func (v *guardedView) exitQueue()  { v.mu.Lock(); v.queued = false; v.mu.Unlock() }
-func (v *guardedView) assertQueued(t *testing.T) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	if !v.queued {
-		t.Fatalf("view mutation was not marshaled onto UI queue")
-	}
-}
-func (v *guardedView) SetBusy(b bool)                                     { v.busy = append(v.busy, b) }
-func (v *guardedView) SetStatus(s string)                                 { v.status = append(v.status, s) }
+func (v *guardedView) enterQueue()                                        { v.mu.Lock(); v.queued = true; v.mu.Unlock() }
+func (v *guardedView) exitQueue()                                         { v.mu.Lock(); v.queued = false; v.mu.Unlock() }
+func (v *guardedView) SetBusy(b bool)                                     { v.mu.Lock(); v.busy = append(v.busy, b); v.mu.Unlock() }
+func (v *guardedView) SetStatus(s string)                                 { v.mu.Lock(); v.status = append(v.status, s); v.mu.Unlock() }
 func (v *guardedView) UpdateWindowDetails(inspect.GetNodeDetailsResponse) { v.updates++ }
 func (v *guardedView) UpdateNodeDetails(inspect.GetNodeDetailsResponse)   { v.updates++ }
 func (v *guardedView) UpdateTreeRoot(inspect.TreeNodeDTO)                 { v.updates++ }
@@ -56,6 +49,9 @@ func TestViewerEventAdapter_WindowSelectionPipeline(t *testing.T) {
 	if svc.inspectCalls != 1 || svc.treeRootCalls < 1 || svc.nodeDetailsCalls < 2 {
 		t.Fatalf("pipeline incomplete: %+v", svc)
 	}
+	if len(view.busy) != 2 || !view.busy[0] || view.busy[1] {
+		t.Fatalf("busy toggles = %v, want [true false]", view.busy)
+	}
 }
 
 func TestViewerEventAdapter_TreeExpandLazyLoad(t *testing.T) {
@@ -77,6 +73,9 @@ func TestViewerEventAdapter_TreeExpandLazyLoad(t *testing.T) {
 	if len(svc.nodeChildrenReqs) != 1 {
 		t.Fatalf("expected child load")
 	}
+	if len(view.busy) != 2 || !view.busy[0] || view.busy[1] {
+		t.Fatalf("busy toggles = %v, want [true false]", view.busy)
+	}
 }
 
 func TestViewerEventAdapter_TreeSelectPipeline(t *testing.T) {
@@ -93,6 +92,9 @@ func TestViewerEventAdapter_TreeSelectPipeline(t *testing.T) {
 	view.exitQueue()
 	if svc.selectCalls != 1 || svc.nodeDetailsCalls < 1 || svc.highlightCalls != 1 {
 		t.Fatalf("select pipeline incomplete: %+v", svc)
+	}
+	if len(view.busy) != 2 || !view.busy[0] || view.busy[1] {
+		t.Fatalf("busy toggles = %v, want [true false]", view.busy)
 	}
 }
 
