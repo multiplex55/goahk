@@ -6,11 +6,11 @@ This ladder defines the minimum vertical slice that must stay healthy in `goahk-
 
 ### 1) Window list
 
-- **Required backend method calls**
+- **Required service calls**
   - `RefreshWindows({ filter, visibleOnly, titleOnly })` for startup and filter changes.
   - `ClearHighlight({})` before loading a new window list.
-- **Expected UI/store state**
-  - `windows` is repopulated from backend response.
+- **Expected controller/view-state behavior**
+  - `windows` view-state is repopulated from service response.
   - `statusText` reports loaded count (for example, `Loaded 1 windows`).
   - Existing highlight is cleared before new rows are shown.
 - **Expected failure text when broken**
@@ -18,12 +18,12 @@ This ladder defines the minimum vertical slice that must stay healthy in `goahk-
 
 ### 2) Root resolution
 
-- **Required backend method calls**
+- **Required service calls**
   - Optional `ActivateWindow({ hwnd })` when activate-on-select is enabled.
   - `InspectWindow({ hwnd })`.
   - `GetTreeRoot({ hwnd, refresh: true })`.
   - `GetNodeDetails({ nodeID: rootNodeID })` for initial pane hydration.
-- **Expected UI/store state**
+- **Expected controller/view-state behavior**
   - `selectedWindowID` and `selectedNodeID` move to the chosen window/root.
   - Root node is present in `nodesByID` and path is initialized.
   - Property/pattern/selector panes populate for the root.
@@ -35,11 +35,11 @@ This ladder defines the minimum vertical slice that must stay healthy in `goahk-
 
 ### 3) Root details
 
-- **Required backend method calls**
+- **Required service calls**
   - `SelectNode({ nodeID })`.
   - `GetNodeDetails({ nodeID })`.
   - `HighlightNode({ nodeID })`.
-- **Expected UI/store state**
+- **Expected controller/view-state behavior**
   - `selectedNodeID` changes to the clicked node.
   - `properties`, `patterns`, `selectedPath`, and `selectorText` refresh from details.
   - Status reflects backend detail status text (for example `Loaded node details: Root` / `Details <nodeID>`).
@@ -49,10 +49,10 @@ This ladder defines the minimum vertical slice that must stay healthy in `goahk-
 
 ### 4) Child expansion
 
-- **Required backend method calls**
+- **Required service calls**
   - `GetNodeChildren({ nodeID })` on first expand.
   - Optional `GetNodeChildren({ nodeID, refresh: true })` to invalidate and reload that branch.
-- **Expected UI/store state**
+- **Expected controller/view-state behavior**
   - `expandedByID[nodeID]` toggles true/false on row expansion.
   - `childrenByParentID[nodeID]` is filled after initial load.
   - `childrenLoadedByID[nodeID]` prevents duplicate fetches for plain expand/collapse cycles.
@@ -61,10 +61,10 @@ This ladder defines the minimum vertical slice that must stay healthy in `goahk-
 
 ### 5) Highlight
 
-- **Required backend method calls**
+- **Required service calls**
   - `HighlightNode({ nodeID })` when selection changes.
   - `ClearHighlight({})` before list/root refreshes and teardown paths.
-- **Expected UI/store state**
+- **Expected controller/view-state behavior**
   - Selected row remains synchronized with overlay/highlight intent.
   - No stale highlight remains after refreshing windows or switching windows.
 - **Expected failure text when broken**
@@ -72,12 +72,12 @@ This ladder defines the minimum vertical slice that must stay healthy in `goahk-
 
 ### 6) Pattern action
 
-- **Required backend method calls**
+- **Required service calls**
   - `InvokePattern({ nodeID, action, payload? })` from pattern actions UI.
-- **Expected UI/store state**
+- **Expected controller/view-state behavior**
   - Unsupported actions render disabled.
   - Payload-required actions stay disabled until payload is provided.
-  - Success path emits action success feedback and store status updates for executed action.
+  - Success path emits action success feedback and status updates for executed action.
 - **Expected failure text when broken**
   - `<ActionLabel> failed` (for example `Invoke failed`).
 
