@@ -28,6 +28,8 @@ type viewerUI struct {
 	patternsTree    *walk.TreeView
 	treeView        *walk.TreeView
 	treeModel       *uiaTreeModel
+	patternByLabel  map[string]string
+	nodeByLabel     map[string]string
 
 	statusBar  *walk.StatusBar
 	statusText *walk.StatusBarItem

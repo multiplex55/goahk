@@ -64,6 +64,8 @@ func (ui *viewerUI) attachEvents() {
 	ui.windowModel = newWindowTableModel()
 	ui.propertiesModel = newPropertyTableModel()
 	ui.treeModel = newUIATreeModel()
+	ui.patternByLabel = map[string]string{}
+	ui.nodeByLabel = map[string]string{}
 	if ui.windowTable != nil {
 		ui.windowTable.SetModel(ui.windowModel)
 		ui.windowTable.CurrentIndexChanged().Attach(func() {
@@ -95,7 +97,7 @@ func (ui *viewerUI) attachEvents() {
 	if ui.patternsTree != nil {
 		ui.patternsTree.ItemActivated().Attach(func() {
 			if item := ui.patternsTree.CurrentItem(); item != nil {
-				action, _ := item.Data().(string)
+				action := ui.patternByLabel[item.Text()]
 				if strings.TrimSpace(action) != "" {
 					ui.executePatternAction(action)
 				}
@@ -103,18 +105,18 @@ func (ui *viewerUI) attachEvents() {
 		})
 	}
 	if ui.treeView != nil {
-		ui.treeView.ExpandedChanged().Attach(func() {
-			if item := ui.treeView.CurrentItem(); item != nil {
-				nodeID, _ := item.Data().(string)
-				if nodeID != "" {
+		ui.treeView.ExpandedChanged().Attach(func(item walk.TreeItem) {
+			if item != nil {
+				nodeID := ui.nodeByLabel[item.Text()]
+				if nodeID != "" && ui.events != nil {
 					ui.events.OnTreeExpanded(nodeID, ui.treeModel.AreChildrenLoaded(nodeID))
 				}
 			}
 		})
 		ui.treeView.CurrentItemChanged().Attach(func() {
 			if item := ui.treeView.CurrentItem(); item != nil {
-				nodeID, _ := item.Data().(string)
-				if nodeID != "" {
+				nodeID := ui.nodeByLabel[item.Text()]
+				if nodeID != "" && ui.events != nil {
 					ui.events.OnTreeSelected(nodeID)
 				}
 			}
@@ -176,14 +178,10 @@ func (ui *viewerUI) UpdateNodeDetails(details inspect.GetNodeDetailsResponse) {
 		ui.propertiesModel.SetRows(mapPropertyTableRows(details.Properties))
 	}
 	if ui.patternsTree != nil {
-		model := mapPatternTree(details.Patterns)
-		root := ui.patternsTree.Items()
-		root.Clear()
-		for _, group := range model {
-			parent := root.Add(group.Label)
+		ui.patternByLabel = map[string]string{}
+		for _, group := range mapPatternTree(details.Patterns) {
 			for _, child := range group.Children {
-				it := parent.Children().Add(child.Label)
-				it.SetData(child.ActionID)
+				ui.patternByLabel[child.Label] = child.ActionID
 			}
 		}
 	}
@@ -193,14 +191,15 @@ func (ui *viewerUI) UpdateTreeRoot(root inspect.TreeNodeDTO) {
 		ui.treeModel.SetRoot(root)
 	}
 	if ui.treeView != nil {
-		ui.treeView.Items().Clear()
-		it := ui.treeView.Items().Add(ui.treeModel.Label(root))
-		it.SetData(root.NodeID)
+		ui.nodeByLabel = map[string]string{ui.treeModel.Label(root): root.NodeID}
 	}
 }
 func (ui *viewerUI) UpdateNodeChildren(nodeID string, children []inspect.TreeNodeDTO) {
 	if ui.treeModel != nil {
 		ui.treeModel.SetChildren(nodeID, children)
+		for _, child := range children {
+			ui.nodeByLabel[ui.treeModel.Label(child)] = child.NodeID
+		}
 	}
 }
 
