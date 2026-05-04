@@ -15,10 +15,20 @@ func (ui *viewerUI) executePatternAction(action string) {
 	ui.SetBusy(true)
 	go func() {
 		var err error
+		cancelled := false
 		if action == "setValue" {
-			_, err = ui.controller.InvokeSetValue()
+			_, accepted, invokeErr := ui.controller.InvokeSetValue()
+			err = invokeErr
+			cancelled = !accepted && invokeErr == nil
 		} else {
 			_, err = ui.controller.InvokePatternForSelection(action)
+		}
+		if cancelled {
+			ui.dispatcher.Queue(func() {
+				ui.SetBusy(false)
+				ui.setStatus("action cancelled: " + callableActionLabel(action))
+			})
+			return
 		}
 		details, detailsErr := ui.controller.RefreshSelectedNodeDetails()
 		ui.dispatcher.Queue(func() {
@@ -63,7 +73,7 @@ func (ui *viewerUI) attachEvents() {
 				return
 			}
 			if ui.events != nil {
-				ui.events.OnWindowSelected(row.ID)
+				ui.events.OnWindowSelected(row.ID, ui.activateOnSelect())
 			}
 		})
 	}

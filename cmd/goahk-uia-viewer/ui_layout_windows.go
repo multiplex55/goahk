@@ -39,6 +39,8 @@ func (ui *viewerUI) buildWindow() error {
 }
 
 func (ui *viewerUI) defaultRefreshArgs() (visibleOnly, titleOnly bool) {
+	visibleOnly = true
+	titleOnly = true
 	if ui.visibleChk != nil {
 		visibleOnly = ui.visibleChk.Checked()
 	}
@@ -46,6 +48,13 @@ func (ui *viewerUI) defaultRefreshArgs() (visibleOnly, titleOnly bool) {
 		titleOnly = ui.titleChk.Checked()
 	}
 	return visibleOnly, titleOnly
+}
+
+func (ui *viewerUI) activateOnSelect() bool {
+	if ui.activateChk == nil {
+		return true
+	}
+	return ui.activateChk.Checked()
 }
 
 func (ui *viewerUI) buildLeftPane() error {

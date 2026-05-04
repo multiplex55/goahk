@@ -23,10 +23,10 @@ func NewViewerEventAdapter(controller *Controller, view ViewUpdater, ui UIThread
 	return &ViewerEventAdapter{controller: controller, view: view, ui: ui}
 }
 
-func (a *ViewerEventAdapter) OnWindowSelected(hwnd string) {
+func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 	a.view.SetBusy(true)
 	go func() {
-		err := a.controller.SelectWindow(hwnd)
+		err := a.controller.SelectWindow(hwnd, activate)
 		if err != nil {
 			a.ui.Queue(func() {
 				a.view.SetBusy(false)

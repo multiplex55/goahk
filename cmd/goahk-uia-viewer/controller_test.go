@@ -153,7 +153,7 @@ func TestController_Refresh_ForwardsFilters(t *testing.T) {
 func TestController_LoadTreeRoot_UsesSelectedWindow(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
 	c := NewController(context.Background(), svc)
-	if err := c.SelectWindow("0x1"); err != nil {
+	if err := c.SelectWindow("0x1", false); err != nil {
 		t.Fatal(err)
 	}
 	resp, err := c.LoadTreeRoot()
@@ -193,8 +193,7 @@ func TestController_InvokePattern_ForSelection(t *testing.T) {
 func TestController_SelectWindow_Pipeline(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
 	c := NewController(context.Background(), svc)
-	c.activateOnSelect = true
-	if err := c.SelectWindow("0x1"); err != nil {
+	if err := c.SelectWindow("0x1", true); err != nil {
 		t.Fatal(err)
 	}
 	if svc.clearCalls == 0 {
@@ -239,9 +238,12 @@ func TestController_SetValuePromptAndInvoke(t *testing.T) {
 	svc := &fakeInspectService{}
 	c := NewController(context.Background(), svc).WithDialogs(&fakeDialogs{value: "abc", ok: true})
 	c.selectedNodeID = "node-1"
-	_, err := c.InvokeSetValue()
+	_, accepted, err := c.InvokeSetValue()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !accepted {
+		t.Fatal("expected accepted set value")
 	}
 	if len(svc.invokeReqs) != 1 || svc.invokeReqs[0].Action != "setValue" {
 		t.Fatal("missing invoke")
@@ -338,7 +340,7 @@ func TestController_OnStatusInteractionUpdate_CopiesPathWhenEnabled(t *testing.T
 }
 func TestController_InvokeSetValue_RequiresDialog(t *testing.T) {
 	c := NewController(context.Background(), &fakeInspectService{})
-	if _, err := c.InvokeSetValue(); err == nil {
+	if _, _, err := c.InvokeSetValue(); err == nil {
 		t.Fatal("expected dialog unavailable error")
 	}
 }
