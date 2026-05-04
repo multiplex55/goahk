@@ -20,6 +20,7 @@ type fakeInspectService struct {
 	nodeChildrenReqs  []inspect.GetNodeChildrenRequest
 	childrenByNode    map[string][]inspect.TreeNodeDTO
 	clearCalls        int
+	callOrder         []string
 	nodeDetailsResp   inspect.GetNodeDetailsResponse
 	invokeReqs        []inspect.InvokePatternRequest
 }
@@ -66,11 +67,15 @@ func (f *fakeInspectService) GetElementUnderCursor(context.Context, inspect.GetE
 	return inspect.GetElementUnderCursorResponse{Element: f.underCursorValues[idx]}, nil
 }
 func (f *fakeInspectService) HighlightNode(context.Context, inspect.HighlightNodeRequest) (inspect.HighlightNodeResponse, error) {
+	f.mu.Lock()
+	f.callOrder = append(f.callOrder, "highlight")
+	f.mu.Unlock()
 	return inspect.HighlightNodeResponse{}, nil
 }
 func (f *fakeInspectService) ClearHighlight(context.Context, inspect.ClearHighlightRequest) (inspect.ClearHighlightResponse, error) {
 	f.mu.Lock()
 	f.clearCalls++
+	f.callOrder = append(f.callOrder, "clear")
 	f.mu.Unlock()
 	return inspect.ClearHighlightResponse{}, nil
 }
@@ -220,6 +225,9 @@ func TestController_Shutdown_CleansUp(t *testing.T) {
 	if svc.clearCalls == 0 {
 		t.Fatal("expected clear")
 	}
+	if c.followEnabled || c.followPaused || c.followLocked || c.followCancel != nil {
+		t.Fatal("expected safe terminal follow state")
+	}
 }
 func TestController_SetValuePromptAndInvoke(t *testing.T) {
 	svc := &fakeInspectService{}
@@ -237,10 +245,37 @@ func TestController_StatusInteraction_CopyPath(t *testing.T) {
 	svc := &fakeInspectService{}
 	cb := &fakeClipboard{}
 	c := NewController(context.Background(), svc).WithClipboard(cb)
+	c.ToggleAccPathCapture()
 	c.lastACCPath = "a/b"
 	got := c.OnStatusInteraction()
 	if got != "ACC path copied" || len(cb.copied) != 1 {
 		t.Fatalf("got=%q copied=%v", got, cb.copied)
+	}
+}
+func TestController_StatusInteraction_TogglesCaptureWithoutPath(t *testing.T) {
+	c := NewController(context.Background(), &fakeInspectService{})
+	upd := c.OnStatusInteractionUpdate()
+	if !upd.CaptureEnabled || upd.Text != "ACC path capture enabled" {
+		t.Fatalf("unexpected update: %+v", upd)
+	}
+}
+
+func TestController_StatusInteraction_DoesNotCopyWhenCaptureDisabled(t *testing.T) {
+	cb := &fakeClipboard{}
+	c := NewController(context.Background(), &fakeInspectService{}).WithClipboard(cb)
+	c.lastACCPath = "a/b"
+	upd := c.OnStatusInteractionUpdate()
+	if len(cb.copied) != 0 || !upd.CaptureEnabled {
+		t.Fatalf("expected toggle, no copy: copied=%v update=%+v", cb.copied, upd)
+	}
+}
+
+func TestController_Refresh_ClearsHighlightFirst(t *testing.T) {
+	svc := &fakeInspectService{}
+	c := NewController(context.Background(), svc)
+	_, _ = c.RefreshWindows("", true, true)
+	if len(svc.callOrder) == 0 || svc.callOrder[0] != "clear" {
+		t.Fatalf("expected first call clear, got %v", svc.callOrder)
 	}
 }
 func TestController_FollowCursor_EmitsOnNodeChange_RespectsPauseLock(t *testing.T) {

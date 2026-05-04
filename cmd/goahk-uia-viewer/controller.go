@@ -51,6 +51,13 @@ type Controller struct {
 	onFollowError         []func(error)
 }
 
+type StatusUpdate struct {
+	Text              string
+	CaptureEnabled    bool
+	HasLastACCPath    bool
+	LastACCPathCopied bool
+}
+
 func NewController(ctx context.Context, svc inspect.Service) *Controller {
 	c := &Controller{ctx: ctx, service: svc, followInterval: 120 * time.Millisecond, nodesByID: map[string]inspect.TreeNodeDTO{}, nodeChildren: map[string][]string{}, nodeExpanded: map[string]bool{}, nodeLoadFailed: map[string]error{}, statusText: "Click status to enable ACC path capture"}
 	c.followTicker = func() <-chan time.Time {
@@ -229,14 +236,19 @@ func (c *Controller) ToggleAccPathCapture() bool {
 	return c.accPathCaptureEnabled
 }
 func (c *Controller) OnStatusInteraction() string {
+	return c.OnStatusInteractionUpdate().Text
+}
+
+func (c *Controller) OnStatusInteractionUpdate() StatusUpdate {
 	c.mu.Lock()
 	path := strings.TrimSpace(c.lastACCPath)
+	enabled := c.accPathCaptureEnabled
 	c.mu.Unlock()
-	if path == "" {
-		c.ToggleAccPathCapture()
+	if !enabled || path == "" {
+		enabled = c.ToggleAccPathCapture()
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		return c.statusText
+		return StatusUpdate{Text: c.statusText, CaptureEnabled: enabled, HasLastACCPath: strings.TrimSpace(c.lastACCPath) != ""}
 	}
 	if c.clipboard != nil {
 		_ = c.clipboard.CopyText(path)
@@ -244,7 +256,7 @@ func (c *Controller) OnStatusInteraction() string {
 	c.mu.Lock()
 	c.statusText = "ACC path copied"
 	c.mu.Unlock()
-	return "ACC path copied"
+	return StatusUpdate{Text: "ACC path copied", CaptureEnabled: true, HasLastACCPath: true, LastACCPathCopied: true}
 }
 func (c *Controller) PauseFollowCursor() {
 	c.mu.Lock()
@@ -363,6 +375,15 @@ func (c *Controller) emitFollowErr(err error) {
 func (c *Controller) Shutdown() {
 	_ = c.ToggleFollowCursor(false)
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
+	c.mu.Lock()
+	c.followCancel = nil
+	c.followDone = nil
+	c.followEnabled = false
+	c.followPaused = false
+	c.followLocked = false
+	c.lastFollowNode = ""
+	c.selectedNodeID = ""
+	c.mu.Unlock()
 }
 func normalizeInspectError(err error) string {
 	switch {
