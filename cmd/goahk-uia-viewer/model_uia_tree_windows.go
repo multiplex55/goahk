@@ -80,7 +80,7 @@ func (m *uiaTreeModel) SetRoot(root inspect.TreeNodeDTO) {
 	m.nodes = map[NodeID]*uiaTreeNode{n.id: n}
 	m.loadedChildren = map[NodeID]bool{}
 	m.expanded = map[NodeID]bool{}
-	m.PublishReset()
+	m.PublishItemsReset(nil)
 }
 func (m *uiaTreeModel) RootID() string {
 	if m.root == nil {
@@ -94,7 +94,7 @@ func (m *uiaTreeModel) Reset() {
 	m.nodes = map[NodeID]*uiaTreeNode{}
 	m.loadedChildren = map[NodeID]bool{}
 	m.expanded = map[NodeID]bool{}
-	m.PublishReset()
+	m.PublishItemsReset(nil)
 }
 
 func (m *uiaTreeModel) SetChildren(nodeID string, children []inspect.TreeNodeDTO) {

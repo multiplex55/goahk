@@ -88,7 +88,7 @@ func (ui *viewerUI) buildLeftPane(parent walk.Container) error {
 		return fmt.Errorf("create left toolbar: %w", err)
 	}
 	toolLayout := walk.NewHBoxLayout()
-	toolLayout.SetMargins(walk.Margins{Left: 0, Top: 0, Right: 0, Bottom: 0})
+	toolLayout.SetMargins(walk.Margins{0, 0, 0, 0})
 	toolLayout.SetSpacing(6)
 	if err := toolbar.SetLayout(toolLayout); err != nil {
 		return fmt.Errorf("set left toolbar layout: %w", err)
@@ -117,8 +117,7 @@ func (ui *viewerUI) buildLeftPane(parent walk.Container) error {
 		return err
 	}
 	ui.windowTable.SetColumnsOrderable(true)
-	ui.windowTable.SetFullRowSelect(true)
-	ui.windowTable.SetGridLines(true)
+	ui.windowTable.SetGridlines(true)
 	ui.windowTable.SetAlternatingRowBG(true)
 	ui.windowTable.SetMultiSelection(false)
 	ui.windowTable.SetHeaderHidden(false)
@@ -166,8 +165,7 @@ func (ui *viewerUI) buildMiddlePane(parent walk.Container) error {
 		return err
 	}
 	ui.propertiesTV.SetColumnsOrderable(true)
-	ui.propertiesTV.SetFullRowSelect(true)
-	ui.propertiesTV.SetGridLines(true)
+	ui.propertiesTV.SetGridlines(true)
 	ui.propertiesTV.SetAlternatingRowBG(true)
 	ui.propertiesTV.SetHeaderHidden(false)
 	if err := ui.propertiesTV.Columns().Add(walk.NewTableViewColumn()); err != nil {

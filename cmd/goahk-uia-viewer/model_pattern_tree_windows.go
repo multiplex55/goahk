@@ -61,7 +61,7 @@ func (m *patternTreeModel) SetRoots(roots []patternTreeNode) {
 		r := m.cloneAndIndex(nil, &roots[i])
 		m.roots = append(m.roots, r)
 	}
-	m.PublishReset()
+	m.PublishItemsReset(nil)
 }
 
 func (m *patternTreeModel) cloneAndIndex(parent *patternTreeNode, src *patternTreeNode) *patternTreeNode {
