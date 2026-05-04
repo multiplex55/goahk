@@ -39,3 +39,26 @@ func TestUIATreeLoadedAndExpandedState(t *testing.T) {
 		t.Fatalf("expected loaded true expanded false")
 	}
 }
+
+func TestUIATreeRootAndChildrenLifecycle(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	if got := m.RootID(); got != "root" {
+		t.Fatalf("root mismatch: %q", got)
+	}
+	if !m.ShouldShowLazyPlaceholder("root") {
+		t.Fatal("expected lazy placeholder before load")
+	}
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "c1"}, {NodeID: "c2"}})
+	if m.ShouldShowLazyPlaceholder("root") {
+		t.Fatal("should not show placeholder once children loaded")
+	}
+	ids := m.ChildrenOf("root")
+	if len(ids) != 2 || ids[0] != "c1" || ids[1] != "c2" {
+		t.Fatalf("unexpected children: %#v", ids)
+	}
+	m.Reset()
+	if m.RootID() != "" {
+		t.Fatal("expected cleared root")
+	}
+}

@@ -21,3 +21,14 @@ func TestMapPropertyTableRowsFixedOrderingAndFallback(t *testing.T) {
 		t.Fatalf("unexpected fallback row: %#v", rows[1])
 	}
 }
+
+func TestMapPropertyTableRows_UnknownPropertiesAppendedDeterministically(t *testing.T) {
+	v1, v2 := "1", "2"
+	rows := mapPropertyTableRows([]inspect.PropertyDTO{{Name: "ZZZ", Value: &v1, Status: "ok"}, {Name: "AAA", Value: &v2, Status: "ok"}})
+	if got := rows[len(rows)-2].Name; got != "AAA" {
+		t.Fatalf("expected AAA first unknown, got %q", got)
+	}
+	if got := rows[len(rows)-1].Name; got != "ZZZ" {
+		t.Fatalf("expected ZZZ second unknown, got %q", got)
+	}
+}

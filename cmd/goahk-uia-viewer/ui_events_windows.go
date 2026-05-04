@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/lxn/walk"
 	"goahk/internal/inspect"
@@ -20,6 +21,23 @@ func (m walkUIThread) Queue(fn func()) {
 
 func (ui *viewerUI) attachEvents() {
 	ui.dispatcher = walkUIThread{mw: ui.mw}
+	ui.windowModel = newWindowTableModel()
+	if ui.windowTable != nil {
+		ui.windowTable.SetModel(ui.windowModel)
+		ui.windowTable.CurrentIndexChanged().Attach(func() {
+			idx := ui.windowTable.CurrentIndex()
+			row, ok := ui.windowModel.WindowAt(idx)
+			if !ok {
+				return
+			}
+			if ui.events != nil {
+				ui.events.OnWindowSelected(row.ID)
+			}
+		})
+	}
+	if ui.activateChk != nil {
+		ui.activateChk.SetChecked(true)
+	}
 	ui.refreshBtn.Clicked().Attach(func() { ui.initialRefresh() })
 }
 
@@ -35,6 +53,9 @@ func (ui *viewerUI) initialRefresh() {
 				return
 			}
 			rows := mapWindowTableRows(resp.Windows, true)
+			if ui.windowModel != nil {
+				ui.windowModel.SetRows(rows)
+			}
 			ui.setStatus(fmt.Sprintf("loaded %d windows", len(rows)))
 		})
 	}()
@@ -54,9 +75,55 @@ func (ui *viewerUI) setLoading(loading bool) {
 	})
 }
 
-func (ui *viewerUI) SetBusy(b bool) { ui.setLoading(b) }
+func (ui *viewerUI) SetBusy(b bool)     { ui.setLoading(b) }
 func (ui *viewerUI) SetStatus(s string) { ui.setStatus(s) }
-func (ui *viewerUI) UpdateWindowDetails(inspect.GetNodeDetailsResponse) {}
-func (ui *viewerUI) UpdateNodeDetails(inspect.GetNodeDetailsResponse)   {}
-func (ui *viewerUI) UpdateTreeRoot(inspect.TreeNodeDTO)                 {}
-func (ui *viewerUI) UpdateNodeChildren(string, []inspect.TreeNodeDTO)   {}
+func (ui *viewerUI) UpdateWindowDetails(details inspect.GetNodeDetailsResponse) {
+	if ui.infoView != nil {
+		ui.infoView.SetText(formatSelectedInfo(&details))
+	}
+}
+func (ui *viewerUI) UpdateNodeDetails(details inspect.GetNodeDetailsResponse) {
+	if ui.infoView != nil {
+		ui.infoView.SetText(formatSelectedInfo(&details))
+	}
+}
+func (ui *viewerUI) UpdateTreeRoot(inspect.TreeNodeDTO)               {}
+func (ui *viewerUI) UpdateNodeChildren(string, []inspect.TreeNodeDTO) {}
+
+func formatSelectedInfo(details *inspect.GetNodeDetailsResponse) string {
+	if details == nil {
+		return "No selection"
+	}
+	lines := []string{
+		"Window:",
+		"  Title: " + fallback(details.WindowInfo.Title),
+		"  Process: " + fallback(details.WindowInfo.Process),
+		"  PID: " + intOrNA(details.WindowInfo.PID),
+		"  HWND: " + fallback(details.WindowInfo.HWND),
+		"  Class: " + fallback(details.WindowInfo.Class),
+		"",
+		"Element:",
+		"  NodeID: " + fallback(details.Element.NodeID),
+		"  Name: " + fallback(details.Element.Name),
+		"  ControlType: " + fallback(details.Element.ControlType),
+		"  LocalizedControlType: " + fallback(details.Element.LocalizedControlType),
+	}
+	if strings.TrimSpace(details.ACCPath) != "" {
+		lines = append(lines, "", "ACC Path: "+details.ACCPath)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func fallback(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "N/A"
+	}
+	return v
+}
+
+func intOrNA(v int) string {
+	if v <= 0 {
+		return "N/A"
+	}
+	return fmt.Sprintf("%d", v)
+}
