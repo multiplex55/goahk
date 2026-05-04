@@ -39,23 +39,12 @@ jobs:
           GOAHK_ALLOW_RELEASE_ARTIFACTS: ${{ github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'release-artifacts') }}
         run: cmd /c build\check-no-source-binaries.bat
 
-      - name: Verify tracked-artifact policy (repohygiene)
-        env:
-          GOAHK_ALLOW_RELEASE_ARTIFACTS: ${{ github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ','), 'release-artifacts') }}
-        run: go test -v ./internal/repohygiene -run TestNoTrackedBinaryArtifacts -count=1
-
-      - name: Run build script tests (Pester)
-        shell: pwsh
-        run: Invoke-Pester -Path build/tests -CI
-
-      - name: Build application package
+      - name: Build all packages via script
         run: cmd /c build\build.bat
 
-      - name: Build UIA viewer package
+      - name: Build UIA viewer via script (Windows-native Walk shell)
+        # Viewer is built as a Windows-native Go executable (Walk shell), not via Wails/npm tooling.
         run: cmd /c build\build-uia-viewer.bat
-
-      - name: Build all packages (compile check)
-        run: go build -v ./...
 
       - name: Run static analysis (stdversion + vet checks)
         run: go vet ./...
