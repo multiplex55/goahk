@@ -9,10 +9,11 @@ import (
 )
 
 type viewerUI struct {
-	controller *Controller
-	events     *ViewerEventAdapter
-	dispatcher walkUIThread
-	mw         *walk.MainWindow
+	controller   *Controller
+	events       *ViewerEventAdapter
+	dispatcher   UIThreadMarshaller
+	walkUIThread *walk.MainWindow
+	mw           *walk.MainWindow
 
 	windowTable *walk.TableView
 	windowModel *windowTableModel

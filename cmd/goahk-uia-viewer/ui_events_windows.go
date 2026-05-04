@@ -37,17 +37,20 @@ func (ui *viewerUI) executePatternAction(action string) {
 	}()
 }
 
+// walkUIThread enforces the UI threading rule for the viewer:
+// service/controller work runs off-thread, while all widget mutation runs on the Walk thread.
 type walkUIThread struct{ mw *walk.MainWindow }
 
-func (m walkUIThread) Queue(fn func()) {
-	if m.mw == nil {
+func (m *walkUIThread) Queue(fn func()) {
+	if m == nil || m.mw == nil || fn == nil {
 		return
 	}
 	m.mw.Synchronize(fn)
 }
 
 func (ui *viewerUI) attachEvents() {
-	ui.dispatcher = walkUIThread{mw: ui.mw}
+	ui.walkUIThread = ui.mw
+	ui.dispatcher = &walkUIThread{mw: ui.walkUIThread}
 	ui.windowModel = newWindowTableModel()
 	ui.propertiesModel = newPropertyTableModel()
 	ui.treeModel = newUIATreeModel()
