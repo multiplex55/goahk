@@ -95,3 +95,37 @@ func TestViewerEventAdapter_TreeSelectPipeline(t *testing.T) {
 		t.Fatalf("select pipeline incomplete: %+v", svc)
 	}
 }
+
+func TestViewerEventAdapter_WindowSelectionStatusSet(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 4)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnWindowSelected("0x2")
+	fn := <-mq.ch
+	view.enterQueue()
+	fn()
+	view.exitQueue()
+	if len(view.status) == 0 || view.status[len(view.status)-1] != "window loaded" {
+		t.Fatalf("expected success status, got %v", view.status)
+	}
+}
+
+func TestViewerEventAdapter_TreeExpandStatusSet(t *testing.T) {
+	svc := &fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{"n1": {{NodeID: "c1"}}}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnTreeExpanded("n1", false)
+	fn := <-mq.ch
+	view.enterQueue()
+	fn()
+	view.exitQueue()
+	if len(view.status) == 0 || view.status[len(view.status)-1] != "node expanded" {
+		t.Fatalf("expected expand status, got %v", view.status)
+	}
+}
