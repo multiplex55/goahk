@@ -24,7 +24,6 @@ type viewerUI struct {
 	propertiesTV    *walk.TableView
 	propertiesModel *propertyTableModel
 	patternsTV      *walk.TableView
-	patternsModel   *patternTreeModel
 	treeView        *walk.TreeView
 	treeModel       *uiaTreeModel
 
@@ -51,6 +50,6 @@ func NewViewerWindow(controller *Controller) (viewerWindow, error) {
 }
 
 func (ui *viewerUI) Run() error {
-	_, err := ui.mw.Run()
-	return err
+	ui.mw.Run()
+	return nil
 }

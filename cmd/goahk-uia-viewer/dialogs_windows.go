@@ -43,10 +43,7 @@ func (walkDialogs) PromptSetValue(defaultValue string) (string, bool, error) {
 	okBtn.Clicked().Attach(func() { dlg.Accept() })
 	cancelBtn.Clicked().Attach(func() { dlg.Cancel() })
 
-	result, err := dlg.Run()
-	if err != nil {
-		return "", false, fmt.Errorf("run set value dialog: %w", err)
-	}
+	result := dlg.Run()
 	if result != walk.DlgCmdOK {
 		return "", false, nil
 	}
