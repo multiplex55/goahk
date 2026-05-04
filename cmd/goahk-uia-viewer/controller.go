@@ -50,6 +50,11 @@ type Controller struct {
 	onFollowError         []func(error)
 }
 
+type WindowSelectionResult struct {
+	Root    inspect.GetTreeRootResponse
+	Details inspect.GetNodeDetailsResponse
+}
+
 type StatusUpdate struct {
 	Text              string
 	CaptureEnabled    bool
@@ -106,7 +111,7 @@ func (c *Controller) RefreshWindows(filter string, visibleOnly, titleOnly bool) 
 	c.mu.Unlock()
 	return c.service.RefreshWindows(c.runtimeContext(), inspect.RefreshWindowsRequest{Filter: filter, VisibleOnly: visibleOnly, TitleOnly: titleOnly})
 }
-func (c *Controller) SelectWindow(hwnd string, activate bool) error {
+func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionResult, error) {
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 	c.mu.Lock()
 	mode := c.mode
@@ -114,22 +119,36 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) error {
 	c.mu.Unlock()
 	if activate {
 		if _, err := c.service.ActivateWindow(c.runtimeContext(), inspect.ActivateWindowRequest{HWND: hwnd}); err != nil {
-			return err
+			return WindowSelectionResult{}, fmt.Errorf("activate window hwnd=%s: %w", hwnd, err)
 		}
 	}
 	if _, err := c.service.InspectWindow(c.runtimeContext(), inspect.InspectWindowRequest{HWND: hwnd, Mode: mode}); err != nil {
-		return err
+		return WindowSelectionResult{}, fmt.Errorf("inspect window hwnd=%s: %w", hwnd, err)
 	}
 	root, err := c.service.GetTreeRoot(c.runtimeContext(), inspect.GetTreeRootRequest{HWND: hwnd, Refresh: true, Mode: mode})
 	if err != nil {
-		return err
+		return WindowSelectionResult{}, fmt.Errorf("get tree root hwnd=%s: %w", hwnd, err)
 	}
+	rootNodeID := root.Root.NodeID
 	c.mu.Lock()
-	c.nodesByID[root.Root.NodeID] = root.Root
+	c.selectedNodeID = rootNodeID
+	c.nodesByID[rootNodeID] = root.Root
 	c.diagnostics = root.Diagnostics
 	c.mu.Unlock()
-	_, err = c.service.GetNodeDetails(c.runtimeContext(), inspect.GetNodeDetailsRequest{NodeID: root.Root.NodeID})
-	return err
+	details, err := c.service.GetNodeDetails(c.runtimeContext(), inspect.GetNodeDetailsRequest{NodeID: rootNodeID})
+	if err != nil {
+		return WindowSelectionResult{}, fmt.Errorf("get node details node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
+	}
+	c.mu.Lock()
+	if c.accPathCaptureEnabled && strings.TrimSpace(details.ACCPath) != "" {
+		c.lastACCPath = details.ACCPath
+		c.statusText = "Path: " + details.ACCPath
+	}
+	c.mu.Unlock()
+	if err := c.SelectNode(rootNodeID); err != nil {
+		return WindowSelectionResult{}, fmt.Errorf("select root node node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
+	}
+	return WindowSelectionResult{Root: root, Details: details}, nil
 }
 func (c *Controller) LoadTreeRoot() (inspect.GetTreeRootResponse, error) {
 	c.mu.Lock()

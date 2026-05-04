@@ -26,7 +26,7 @@ func NewViewerEventAdapter(controller *Controller, view ViewUpdater, ui UIThread
 func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 	a.view.SetBusy(true)
 	go func() {
-		err := a.controller.SelectWindow(hwnd, activate)
+		result, err := a.controller.SelectWindow(hwnd, activate)
 		if err != nil {
 			a.ui.Queue(func() {
 				a.view.SetBusy(false)
@@ -34,23 +34,11 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			})
 			return
 		}
-		root, err := a.controller.LoadTreeRoot()
-		if err != nil {
-			a.ui.Queue(func() {
-				a.view.SetBusy(false)
-				a.view.SetStatus("load tree root failed: " + err.Error())
-			})
-			return
-		}
-		details, err := a.controller.RefreshSelectedNodeDetails()
 		a.ui.Queue(func() {
 			a.view.SetBusy(false)
-			a.view.UpdateTreeRoot(root.Root)
-			if err != nil {
-				a.view.SetStatus("load root details failed: " + err.Error())
-				return
-			}
-			a.view.UpdateWindowDetails(details)
+			a.view.UpdateTreeRoot(result.Root.Root)
+			a.view.UpdateWindowDetails(result.Details)
+			a.view.UpdateNodeDetails(result.Details)
 			a.view.SetStatus("window loaded")
 		})
 	}()
