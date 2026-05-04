@@ -11,6 +11,8 @@ type ViewUpdater interface {
 	UpdateNodeDetails(inspect.GetNodeDetailsResponse)
 	UpdateTreeRoot(inspect.TreeNodeDTO)
 	UpdateNodeChildren(string, []inspect.TreeNodeDTO)
+	ExpandTreeNode(string)
+	SelectTreeNode(string)
 }
 
 type ViewerEventAdapter struct {
@@ -37,6 +39,9 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 		a.ui.Queue(func() {
 			a.view.SetBusy(false)
 			a.view.UpdateTreeRoot(result.Root.Root)
+			a.view.UpdateNodeChildren(result.Root.Root.NodeID, result.Children)
+			a.view.ExpandTreeNode(result.Root.Root.NodeID)
+			a.view.SelectTreeNode(result.Root.Root.NodeID)
 			a.view.UpdateWindowDetails(result.Details)
 			a.view.UpdateNodeDetails(result.Details)
 			a.view.SetStatus("window loaded")

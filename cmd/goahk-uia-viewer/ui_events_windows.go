@@ -182,6 +182,12 @@ func (ui *viewerUI) UpdateNodeChildren(nodeID string, children []inspect.TreeNod
 		ui.treeModel.SetChildren(nodeID, children)
 	}
 }
+func (ui *viewerUI) ExpandTreeNode(nodeID string) {
+	if ui.treeModel != nil {
+		ui.treeModel.SetExpanded(nodeID, true)
+	}
+}
+func (ui *viewerUI) SelectTreeNode(string) {}
 
 func formatSelectedInfo(details *inspect.GetNodeDetailsResponse) string {
 	if details == nil {

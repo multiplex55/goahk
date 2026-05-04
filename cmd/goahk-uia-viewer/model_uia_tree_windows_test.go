@@ -67,3 +67,44 @@ func TestUIATreeDuplicateLabelSafety_UsesNodeID(t *testing.T) {
 		t.Fatalf("expected duplicate labels with distinct node IDs")
 	}
 }
+
+func TestUIATreeRootIsVisibleAfterSetRoot(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	if m.RootCount() != 1 || m.RootAt(0) == nil {
+		t.Fatal("expected root to be visible")
+	}
+}
+
+func TestUIATreeRootCanHaveLazyPlaceholder(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	root := m.RootAt(0).(*uiaTreeNode)
+	if root.ChildCount() == 0 {
+		t.Fatal("expected lazy placeholder child")
+	}
+}
+
+func TestUIATreeSetChildrenRemovesPlaceholder(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "a"}})
+	root := m.RootAt(0).(*uiaTreeNode)
+	if root.ChildCount() != 1 {
+		t.Fatalf("expected 1 real child, got %d", root.ChildCount())
+	}
+	if child := root.ChildAt(0).(*uiaTreeNode); child.placeholder {
+		t.Fatal("placeholder should be removed")
+	}
+}
+
+func TestUIATreeIdentityUsesNodeIDNotLabel(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "a", DisplayLabel: "Button"}, {NodeID: "b", DisplayLabel: "Button"}})
+	a, _ := m.ItemByID("a")
+	b, _ := m.ItemByID("b")
+	if a == b {
+		t.Fatal("distinct IDs must map to distinct nodes")
+	}
+}

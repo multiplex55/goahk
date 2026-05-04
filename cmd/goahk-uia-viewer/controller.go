@@ -51,8 +51,9 @@ type Controller struct {
 }
 
 type WindowSelectionResult struct {
-	Root    inspect.GetTreeRootResponse
-	Details inspect.GetNodeDetailsResponse
+	Root     inspect.GetTreeRootResponse
+	Children []inspect.TreeNodeDTO
+	Details  inspect.GetNodeDetailsResponse
 }
 
 type StatusUpdate struct {
@@ -130,6 +131,10 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 		return WindowSelectionResult{}, fmt.Errorf("get tree root hwnd=%s: %w", hwnd, err)
 	}
 	rootNodeID := root.Root.NodeID
+	childrenResp, err := c.ExpandNode(rootNodeID)
+	if err != nil {
+		return WindowSelectionResult{}, fmt.Errorf("load root children node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
+	}
 	c.mu.Lock()
 	c.selectedNodeID = rootNodeID
 	c.nodesByID[rootNodeID] = root.Root
@@ -148,7 +153,7 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	if err := c.SelectNode(rootNodeID); err != nil {
 		return WindowSelectionResult{}, fmt.Errorf("select root node node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
 	}
-	return WindowSelectionResult{Root: root, Details: details}, nil
+	return WindowSelectionResult{Root: root, Children: childrenResp.Children, Details: details}, nil
 }
 func (c *Controller) LoadTreeRoot() (inspect.GetTreeRootResponse, error) {
 	c.mu.Lock()
