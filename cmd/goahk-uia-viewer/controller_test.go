@@ -10,6 +10,117 @@ import (
 	"goahk/internal/inspect"
 )
 
+type fakeInspectService struct {
+	mu                sync.Mutex
+	underCursorCalls  int
+	underCursorValues []inspect.TreeNodeDTO
+	inspectWindowReqs []inspect.InspectWindowRequest
+	inspectWindowResp inspect.InspectWindowResponse
+	refreshReqs       []inspect.RefreshWindowsRequest
+	nodeChildrenReqs  []inspect.GetNodeChildrenRequest
+	childrenByNode    map[string][]inspect.TreeNodeDTO
+	clearCalls        int
+	nodeDetailsResp   inspect.GetNodeDetailsResponse
+	invokeReqs        []inspect.InvokePatternRequest
+}
+
+func (f *fakeInspectService) ListWindows(context.Context, inspect.ListWindowsRequest) (inspect.ListWindowsResponse, error) {
+	return inspect.ListWindowsResponse{}, nil
+}
+func (f *fakeInspectService) InspectWindow(_ context.Context, req inspect.InspectWindowRequest) (inspect.InspectWindowResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.inspectWindowReqs = append(f.inspectWindowReqs, req)
+	return f.inspectWindowResp, nil
+}
+func (f *fakeInspectService) GetTreeRoot(context.Context, inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {
+	return inspect.GetTreeRootResponse{}, nil
+}
+func (f *fakeInspectService) GetNodeChildren(_ context.Context, req inspect.GetNodeChildrenRequest) (inspect.GetNodeChildrenResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nodeChildrenReqs = append(f.nodeChildrenReqs, req)
+	children := f.childrenByNode[req.NodeID]
+	return inspect.GetNodeChildrenResponse{Children: children}, nil
+}
+func (f *fakeInspectService) SelectNode(context.Context, inspect.SelectNodeRequest) (inspect.SelectNodeResponse, error) {
+	return inspect.SelectNodeResponse{}, nil
+}
+func (f *fakeInspectService) GetNodeDetails(context.Context, inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
+	return f.nodeDetailsResp, nil
+}
+func (f *fakeInspectService) GetFocusedElement(context.Context, inspect.GetFocusedElementRequest) (inspect.GetFocusedElementResponse, error) {
+	return inspect.GetFocusedElementResponse{}, nil
+}
+func (f *fakeInspectService) GetElementUnderCursor(context.Context, inspect.GetElementUnderCursorRequest) (inspect.GetElementUnderCursorResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.underCursorValues) == 0 {
+		return inspect.GetElementUnderCursorResponse{}, errors.New("no data")
+	}
+	idx := f.underCursorCalls
+	if idx >= len(f.underCursorValues) {
+		idx = len(f.underCursorValues) - 1
+	}
+	f.underCursorCalls++
+	return inspect.GetElementUnderCursorResponse{Element: f.underCursorValues[idx]}, nil
+}
+func (f *fakeInspectService) HighlightNode(context.Context, inspect.HighlightNodeRequest) (inspect.HighlightNodeResponse, error) {
+	return inspect.HighlightNodeResponse{}, nil
+}
+func (f *fakeInspectService) ClearHighlight(context.Context, inspect.ClearHighlightRequest) (inspect.ClearHighlightResponse, error) {
+	f.mu.Lock()
+	f.clearCalls++
+	f.mu.Unlock()
+	return inspect.ClearHighlightResponse{}, nil
+}
+func (f *fakeInspectService) CopyBestSelector(context.Context, inspect.CopyBestSelectorRequest) (inspect.CopyBestSelectorResponse, error) {
+	return inspect.CopyBestSelectorResponse{}, nil
+}
+func (f *fakeInspectService) GetPatternActions(context.Context, inspect.GetPatternActionsRequest) (inspect.GetPatternActionsResponse, error) {
+	return inspect.GetPatternActionsResponse{}, nil
+}
+func (f *fakeInspectService) InvokePattern(_ context.Context, req inspect.InvokePatternRequest) (inspect.InvokePatternResponse, error) {
+	f.invokeReqs = append(f.invokeReqs, req)
+	return inspect.InvokePatternResponse{}, nil
+}
+func (f *fakeInspectService) ActivateWindow(context.Context, inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
+	return inspect.ActivateWindowResponse{}, nil
+}
+func (f *fakeInspectService) ToggleFollowCursor(context.Context, inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
+	return inspect.ToggleFollowCursorResponse{}, nil
+}
+func (f *fakeInspectService) PauseFollowCursor(context.Context, inspect.PauseFollowCursorRequest) (inspect.PauseFollowCursorResponse, error) {
+	return inspect.PauseFollowCursorResponse{Paused: true}, nil
+}
+func (f *fakeInspectService) ResumeFollowCursor(context.Context, inspect.ResumeFollowCursorRequest) (inspect.ResumeFollowCursorResponse, error) {
+	return inspect.ResumeFollowCursorResponse{Paused: false}, nil
+}
+func (f *fakeInspectService) LockFollowCursor(_ context.Context, req inspect.LockFollowCursorRequest) (inspect.LockFollowCursorResponse, error) {
+	return inspect.LockFollowCursorResponse{Locked: true, NodeID: req.NodeID}, nil
+}
+func (f *fakeInspectService) UnlockFollowCursor(context.Context, inspect.UnlockFollowCursorRequest) (inspect.UnlockFollowCursorResponse, error) {
+	return inspect.UnlockFollowCursorResponse{Locked: false}, nil
+}
+func (f *fakeInspectService) RefreshWindows(_ context.Context, req inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
+	f.mu.Lock()
+	f.refreshReqs = append(f.refreshReqs, req)
+	f.mu.Unlock()
+	return inspect.RefreshWindowsResponse{}, nil
+}
+func (f *fakeInspectService) RefreshTreeRoot(context.Context, inspect.RefreshTreeRootRequest) (inspect.RefreshTreeRootResponse, error) {
+	return inspect.RefreshTreeRootResponse{}, nil
+}
+func (f *fakeInspectService) RefreshNodeChildren(context.Context, inspect.RefreshNodeChildrenRequest) (inspect.RefreshNodeChildrenResponse, error) {
+	return inspect.RefreshNodeChildrenResponse{}, nil
+}
+func (f *fakeInspectService) RefreshNodeDetails(context.Context, inspect.RefreshNodeDetailsRequest) (inspect.RefreshNodeDetailsResponse, error) {
+	return inspect.RefreshNodeDetailsResponse{}, nil
+}
+func (f *fakeInspectService) GetDiagnostics(context.Context, inspect.GetDiagnosticsRequest) (inspect.GetDiagnosticsResponse, error) {
+	return inspect.GetDiagnosticsResponse{}, nil
+}
+
 type fakeClipboard struct{ copied []string }
 
 func (f *fakeClipboard) CopyText(v string) error { f.copied = append(f.copied, v); return nil }
