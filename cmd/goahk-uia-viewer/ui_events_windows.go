@@ -49,6 +49,8 @@ func (m walkUIThread) Queue(fn func()) {
 func (ui *viewerUI) attachEvents() {
 	ui.dispatcher = walkUIThread{mw: ui.mw}
 	ui.windowModel = newWindowTableModel()
+	ui.propertiesModel = newPropertyTableModel()
+	ui.treeModel = newUIATreeModel()
 	if ui.windowTable != nil {
 		ui.windowTable.SetModel(ui.windowModel)
 		ui.windowTable.CurrentIndexChanged().Attach(func() {
@@ -62,13 +64,54 @@ func (ui *viewerUI) attachEvents() {
 			}
 		})
 	}
+	if ui.propertiesTV != nil {
+		ui.propertiesTV.SetModel(ui.propertiesModel)
+		ui.propertiesTV.ItemActivated().Attach(func() {
+			idx := ui.propertiesTV.CurrentIndex()
+			row, ok := ui.propertiesModel.RowAt(idx)
+			if !ok {
+				return
+			}
+			ui.controller.CopyProperty(row.Value)
+			ui.setStatus("copied property: " + row.Name)
+		})
+	}
 	if ui.activateChk != nil {
 		ui.activateChk.SetChecked(true)
+	}
+	if ui.patternsTree != nil {
+		ui.patternsTree.ItemActivated().Attach(func() {
+			if item := ui.patternsTree.CurrentItem(); item != nil {
+				action, _ := item.Data().(string)
+				if strings.TrimSpace(action) != "" {
+					ui.executePatternAction(action)
+				}
+			}
+		})
+	}
+	if ui.treeView != nil {
+		ui.treeView.ExpandedChanged().Attach(func() {
+			if item := ui.treeView.CurrentItem(); item != nil {
+				nodeID, _ := item.Data().(string)
+				if nodeID != "" {
+					ui.events.OnTreeExpanded(nodeID, ui.treeModel.AreChildrenLoaded(nodeID))
+				}
+			}
+		})
+		ui.treeView.CurrentItemChanged().Attach(func() {
+			if item := ui.treeView.CurrentItem(); item != nil {
+				nodeID, _ := item.Data().(string)
+				if nodeID != "" {
+					ui.events.OnTreeSelected(nodeID)
+				}
+			}
+		})
 	}
 	ui.refreshBtn.Clicked().Attach(func() { ui.initialRefresh() })
 	if ui.statusBar != nil {
 		ui.statusBar.MouseDown().Attach(func(_, _ int, _ walk.MouseButton) {
-			ui.setStatus(ui.controller.OnStatusInteraction())
+			update := ui.controller.OnStatusInteractionUpdate()
+			ui.setStatus(update.Text)
 		})
 	}
 }
@@ -110,17 +153,43 @@ func (ui *viewerUI) setLoading(loading bool) {
 func (ui *viewerUI) SetBusy(b bool)     { ui.setLoading(b) }
 func (ui *viewerUI) SetStatus(s string) { ui.setStatus(s) }
 func (ui *viewerUI) UpdateWindowDetails(details inspect.GetNodeDetailsResponse) {
-	if ui.infoView != nil {
-		ui.infoView.SetText(formatSelectedInfo(&details))
-	}
+	ui.UpdateNodeDetails(details)
 }
 func (ui *viewerUI) UpdateNodeDetails(details inspect.GetNodeDetailsResponse) {
 	if ui.infoView != nil {
 		ui.infoView.SetText(formatSelectedInfo(&details))
 	}
+	if ui.propertiesModel != nil {
+		ui.propertiesModel.SetRows(mapPropertyTableRows(details.Properties))
+	}
+	if ui.patternsTree != nil {
+		model := mapPatternTree(details.Patterns)
+		root := ui.patternsTree.Items()
+		root.Clear()
+		for _, group := range model {
+			parent := root.Add(group.Label)
+			for _, child := range group.Children {
+				it := parent.Children().Add(child.Label)
+				it.SetData(child.ActionID)
+			}
+		}
+	}
 }
-func (ui *viewerUI) UpdateTreeRoot(inspect.TreeNodeDTO)               {}
-func (ui *viewerUI) UpdateNodeChildren(string, []inspect.TreeNodeDTO) {}
+func (ui *viewerUI) UpdateTreeRoot(root inspect.TreeNodeDTO) {
+	if ui.treeModel != nil {
+		ui.treeModel.SetRoot(root)
+	}
+	if ui.treeView != nil {
+		ui.treeView.Items().Clear()
+		it := ui.treeView.Items().Add(ui.treeModel.Label(root))
+		it.SetData(root.NodeID)
+	}
+}
+func (ui *viewerUI) UpdateNodeChildren(nodeID string, children []inspect.TreeNodeDTO) {
+	if ui.treeModel != nil {
+		ui.treeModel.SetChildren(nodeID, children)
+	}
+}
 
 func formatSelectedInfo(details *inspect.GetNodeDetailsResponse) string {
 	if details == nil {
