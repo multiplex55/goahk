@@ -14,20 +14,18 @@ func TestMapPatternTreeGroupsAndLabels(t *testing.T) {
 	if len(nodes) != 4 {
 		t.Fatalf("unexpected group count: %d", len(nodes))
 	}
-	if nodes[0].Label != "InvokePattern" {
-		t.Fatalf("unexpected deterministic group order: %q", nodes[0].Label)
+	if nodes[0].label != "InvokePattern" {
+		t.Fatalf("unexpected deterministic group order: %q", nodes[0].label)
 	}
 }
 
-func TestMapPatternTree_SupportsCanonicalAndLegacyAliases(t *testing.T) {
-	nodes := mapPatternTree([]inspect.PatternActionDTO{{Pattern: "InvokePattern", Name: "invoke"}, {Pattern: "InvokePattern", Name: "doDefaultAction"}, {Pattern: "ValuePattern", Name: "set_value"}, {Pattern: "ExpandCollapsePattern", Name: "expand"}, {Pattern: "ExpandCollapsePattern", Name: "collapse"}, {Pattern: "TogglePattern", Name: "toggle"}})
+func TestPatternTreeModel_ActionDispatchUsesActionID(t *testing.T) {
+	nodes := mapPatternTree([]inspect.PatternActionDTO{{Pattern: "ValuePattern", Name: "set_value"}})
 	m := newPatternTreeModel()
 	m.SetRoots(nodes)
-	if got, ok := m.ActionForNode("InvokePattern/doDefaultAction"); !ok || got != "doDefaultAction" {
-		t.Fatalf("action mismatch got=%q ok=%v", got, ok)
-	}
-	if got := callableActionLabel("set_value"); got != "SetValue()" {
-		t.Fatalf("label=%q", got)
+	n, ok := m.NodeByID("ValuePattern/setValue")
+	if !ok || n.ActionID() != ActionID("setValue") {
+		t.Fatalf("action mismatch got=%v ok=%v", n, ok)
 	}
 }
 

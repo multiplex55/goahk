@@ -6,49 +6,77 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lxn/walk"
 	"goahk/internal/inspect"
 )
 
+type ActionID string
+
 type patternTreeNode struct {
-	NodeID   string
-	Label    string
-	ActionID string
-	Children []patternTreeNode
+	id       string
+	label    string
+	actionID ActionID
+	parent   *patternTreeNode
+	children []patternTreeNode
 }
 
+func (n *patternTreeNode) Text() string { return n.label }
+func (n *patternTreeNode) Parent() walk.TreeItem {
+	if n == nil || n.parent == nil {
+		return nil
+	}
+	return n.parent
+}
+func (n *patternTreeNode) ChildCount() int { return len(n.children) }
+func (n *patternTreeNode) ChildAt(index int) walk.TreeItem {
+	if index < 0 || index >= len(n.children) {
+		return nil
+	}
+	return &n.children[index]
+}
+func (n *patternTreeNode) ActionID() ActionID { return n.actionID }
+
 type patternTreeModel struct {
-	nodes map[string]patternTreeNode
+	walk.TreeModelBase
+	roots []*patternTreeNode
+	nodes map[string]*patternTreeNode
 }
 
 func newPatternTreeModel() *patternTreeModel {
-	return &patternTreeModel{nodes: map[string]patternTreeNode{}}
+	return &patternTreeModel{nodes: map[string]*patternTreeNode{}}
+}
+func (m *patternTreeModel) LazyPopulation() bool { return false }
+func (m *patternTreeModel) RootCount() int       { return len(m.roots) }
+func (m *patternTreeModel) RootAt(index int) walk.TreeItem {
+	if index < 0 || index >= len(m.roots) {
+		return nil
+	}
+	return m.roots[index]
 }
 
 func (m *patternTreeModel) SetRoots(roots []patternTreeNode) {
-	m.nodes = map[string]patternTreeNode{}
-	for _, root := range roots {
-		m.indexNode(root)
+	m.nodes = map[string]*patternTreeNode{}
+	m.roots = m.roots[:0]
+	for i := range roots {
+		r := m.cloneAndIndex(nil, &roots[i])
+		m.roots = append(m.roots, r)
 	}
+	m.PublishReset()
 }
 
-func (m *patternTreeModel) indexNode(n patternTreeNode) {
-	m.nodes[n.NodeID] = n
-	for _, child := range n.Children {
-		m.indexNode(child)
+func (m *patternTreeModel) cloneAndIndex(parent *patternTreeNode, src *patternTreeNode) *patternTreeNode {
+	n := &patternTreeNode{id: src.id, label: src.label, actionID: src.actionID, parent: parent}
+	m.nodes[n.id] = n
+	for i := range src.children {
+		child := m.cloneAndIndex(n, &src.children[i])
+		n.children = append(n.children, *child)
 	}
+	return n
 }
 
-func (m *patternTreeModel) NodeByID(nodeID string) (patternTreeNode, bool) {
+func (m *patternTreeModel) NodeByID(nodeID string) (*patternTreeNode, bool) {
 	n, ok := m.nodes[nodeID]
 	return n, ok
-}
-
-func (m *patternTreeModel) ActionForNode(nodeID string) (string, bool) {
-	n, ok := m.NodeByID(nodeID)
-	if !ok || n.ActionID == "" {
-		return "", false
-	}
-	return n.ActionID, true
 }
 
 func mapPatternTree(actions []inspect.PatternActionDTO) []patternTreeNode {
@@ -64,16 +92,19 @@ func mapPatternTree(actions []inspect.PatternActionDTO) []patternTreeNode {
 			order = append(order, pat)
 		}
 		childID := pat + "/" + action
-		groups[pat] = append(groups[pat], patternTreeNode{NodeID: childID, Label: callableActionLabel(action), ActionID: action})
+		groups[pat] = append(groups[pat], patternTreeNode{id: childID, label: callableActionLabel(action), actionID: ActionID(action)})
 	}
 	sort.Strings(order)
 	out := make([]patternTreeNode, 0, len(order))
 	for _, pat := range order {
 		children := groups[pat]
-		sort.SliceStable(children, func(i, j int) bool {
-			return children[i].ActionID < children[j].ActionID
-		})
-		out = append(out, patternTreeNode{NodeID: pat, Label: pat, Children: children})
+		sort.SliceStable(children, func(i, j int) bool { return children[i].actionID < children[j].actionID })
+		group := patternTreeNode{id: pat, label: pat}
+		for i := range children {
+			child := children[i]
+			group.children = append(group.children, child)
+		}
+		out = append(out, group)
 	}
 	return out
 }
@@ -89,7 +120,6 @@ func normalizePatternActionName(name string) string {
 		return normalized
 	}
 }
-
 func callableActionLabel(name string) string {
 	switch normalizePatternActionName(name) {
 	case "invoke":

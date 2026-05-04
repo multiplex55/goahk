@@ -27,10 +27,9 @@ type viewerUI struct {
 	propertiesTV    *walk.TableView
 	propertiesModel *propertyTableModel
 	patternsTree    *walk.TreeView
+	patternModel    *patternTreeModel
 	treeView        *walk.TreeView
 	treeModel       *uiaTreeModel
-	patternByLabel  map[string]string
-	nodeByLabel     map[string]string
 
 	statusBar  *walk.StatusBar
 	statusText *walk.StatusBarItem
