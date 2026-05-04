@@ -21,6 +21,11 @@ func (ui *viewerUI) buildWindow() error {
 	ui.mw = mw
 	ui.mw.SetTitle("goahk UIA Viewer")
 	ui.mw.SetSize(walk.Size{Width: 1400, Height: 900})
+	root, err := walk.NewComposite(ui.mw)
+	if err != nil {
+		return fmt.Errorf("create root composite: %w", err)
+	}
+	ui.root = root
 
 	if err := ui.buildLeftPane(); err != nil {
 		return err
@@ -59,46 +64,58 @@ func (ui *viewerUI) activateOnSelect() bool {
 
 func (ui *viewerUI) buildLeftPane() error {
 	var err error
-	if ui.refreshBtn, err = walk.NewPushButton(ui.mw); err != nil {
+	parent := walk.Container(ui.root)
+	if parent == nil {
+		parent = ui.mw
+	}
+	if ui.refreshBtn, err = walk.NewPushButton(parent); err != nil {
 		return err
 	}
 	ui.refreshBtn.SetText("Refresh")
-	if ui.visibleChk, err = walk.NewCheckBox(ui.mw); err != nil {
+	if ui.visibleChk, err = walk.NewCheckBox(parent); err != nil {
 		return err
 	}
 	ui.visibleChk.SetText("Visible")
 	ui.visibleChk.SetChecked(true)
-	if ui.titleChk, err = walk.NewCheckBox(ui.mw); err != nil {
+	if ui.titleChk, err = walk.NewCheckBox(parent); err != nil {
 		return err
 	}
 	ui.titleChk.SetText("Title")
 	ui.titleChk.SetChecked(true)
-	if ui.activateChk, err = walk.NewCheckBox(ui.mw); err != nil {
+	if ui.activateChk, err = walk.NewCheckBox(parent); err != nil {
 		return err
 	}
 	ui.activateChk.SetText("Activate")
-	if ui.windowTable, err = walk.NewTableView(ui.mw); err != nil {
+	if ui.windowTable, err = walk.NewTableView(parent); err != nil {
 		return err
 	}
 	return nil
 }
 func (ui *viewerUI) buildMiddlePane() error {
 	var err error
-	if ui.infoView, err = walk.NewTextEdit(ui.mw); err != nil {
+	parent := walk.Container(ui.root)
+	if parent == nil {
+		parent = ui.mw
+	}
+	if ui.infoView, err = walk.NewTextEdit(parent); err != nil {
 		return err
 	}
 	ui.infoView.SetReadOnly(true)
-	if ui.propertiesTV, err = walk.NewTableView(ui.mw); err != nil {
+	if ui.propertiesTV, err = walk.NewTableView(parent); err != nil {
 		return err
 	}
-	if ui.patternsTree, err = walk.NewTreeView(ui.mw); err != nil {
+	if ui.patternsTree, err = walk.NewTreeView(parent); err != nil {
 		return err
 	}
 	return nil
 }
 func (ui *viewerUI) buildRightPane() error {
 	var err error
-	if ui.treeView, err = walk.NewTreeView(ui.mw); err != nil {
+	parent := walk.Container(ui.root)
+	if parent == nil {
+		parent = ui.mw
+	}
+	if ui.treeView, err = walk.NewTreeView(parent); err != nil {
 		return err
 	}
 	return nil

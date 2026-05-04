@@ -14,6 +14,7 @@ type viewerUI struct {
 	dispatcher   UIThreadMarshaller
 	walkUIThread *walk.MainWindow
 	mw           *walk.MainWindow
+	root         *walk.Composite
 
 	windowTable *walk.TableView
 	windowModel *windowTableModel
