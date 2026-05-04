@@ -159,13 +159,7 @@ Canonical build path from the repository root:
 cmd /c build\build-uia-viewer.bat
 ```
 
-Equivalent direct Go build command:
-
-```powershell
-go build -trimpath -v -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer
-```
-
-Use the batch script as the primary/repeatable build path. Use the direct `go build` command when you need an explicit one-liner.
+Use the batch script as the canonical builder for `cmd/goahk-uia-viewer`. It embeds `cmd/goahk-uia-viewer/goahk-uia-viewer.manifest` into a temporary `.syso` file so Walk/common-controls activation is present in the built executable. A direct `go build ... ./cmd/goahk-uia-viewer` may compile, but it is not equivalent and is not the recommended packaging path.
 
 ## Toolchain expectations
 

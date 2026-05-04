@@ -166,11 +166,9 @@ Canonical script path:
 cmd /c build\build-uia-viewer.bat
 ```
 
-Direct equivalent:
+This script is the canonical builder for `cmd/goahk-uia-viewer`. It generates a temporary `.syso` resource using `cmd/goahk-uia-viewer/goahk-uia-viewer.manifest`, builds the executable, and then removes the temporary resource file. This manifest embedding is required for Walk/common-controls behavior; direct `go build` is not equivalent for viewer packaging.
 
-```powershell
-go build -trimpath -v -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer
-```
+For release packaging only, set `GOAHK_UIA_VIEWER_RELEASE=1` before invoking the script to add `-ldflags "-H=windowsgui"`. By default, development builds keep the console subsystem.
 
 ### Output artifact locations
 
