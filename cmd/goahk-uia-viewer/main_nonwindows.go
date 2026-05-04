@@ -3,21 +3,20 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"io"
 	"os"
 )
 
-const windowsOnlyMessage = "goahk-uia-viewer is only supported on Windows"
+var errUnsupportedPlatform = errors.New("goahk-uia-viewer is only supported on Windows")
 
-func runNonWindows(out io.Writer) error {
-	_, err := fmt.Fprintln(out, windowsOnlyMessage)
-	return err
+func runNonWindows() error {
+	return errUnsupportedPlatform
 }
 
 func main() {
-	if err := runNonWindows(os.Stdout); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to write message: %v\n", err)
+	if err := runNonWindows(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }

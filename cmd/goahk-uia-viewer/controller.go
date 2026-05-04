@@ -74,6 +74,8 @@ func NewController(ctx context.Context, svc inspect.Service) *Controller {
 }
 func (c *Controller) WithClipboard(cb Clipboard) *Controller { c.clipboard = cb; return c }
 func (c *Controller) WithDialogs(d Dialogs) *Controller      { c.dialogs = d; return c }
+func (c *Controller) SetClipboard(cb Clipboard)              { c.clipboard = cb }
+func (c *Controller) SetDialogs(d Dialogs)                   { c.dialogs = d }
 func (c *Controller) runtimeContext() context.Context {
 	if c.ctx != nil {
 		return c.ctx

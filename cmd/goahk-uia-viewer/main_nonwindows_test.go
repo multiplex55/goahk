@@ -3,18 +3,13 @@
 package main
 
 import (
-	"bytes"
+	"errors"
 	"testing"
 )
 
-func TestRunNonWindows_PrintsWindowsOnlyMessage(t *testing.T) {
-	var out bytes.Buffer
-	if err := runNonWindows(&out); err != nil {
-		t.Fatalf("runNonWindows returned error: %v", err)
-	}
-
-	want := windowsOnlyMessage + "\n"
-	if out.String() != want {
-		t.Fatalf("unexpected output: got %q want %q", out.String(), want)
+func TestRunNonWindows_ReturnsUnsupportedPlatformError(t *testing.T) {
+	err := runNonWindows()
+	if !errors.Is(err, errUnsupportedPlatform) {
+		t.Fatalf("runNonWindows error = %v, want %v", err, errUnsupportedPlatform)
 	}
 }
