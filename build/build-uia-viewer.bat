@@ -3,26 +3,41 @@ setlocal EnableExtensions
 
 set "ROOT=%~dp0.."
 for %%I in ("%ROOT%") do set "ROOT=%%~fI"
-set "DIST_DIR=%ROOT%\dist\goahk-uia-viewer"
-set "UIA_DIR=%ROOT%\cmd\goahk-uia-viewer"
-set "MANIFEST=%UIA_DIR%\goahk-uia-viewer.manifest"
-set "MANIFEST_SYSO=%UIA_DIR%\zz_windows_manifest.syso"
 
-if exist "%DIST_DIR%" rmdir /s /q "%DIST_DIR%"
-mkdir "%DIST_DIR%"
+set "OUTDIR=dist\goahk-uia-viewer"
+set "OUTEXE=%OUTDIR%\goahk-uia-viewer.exe"
+set "MANIFEST=cmd\goahk-uia-viewer\goahk-uia-viewer.manifest"
+set "RSRC=cmd\goahk-uia-viewer\goahk-uia-viewer_windows.syso"
 
 pushd "%ROOT%" || exit /b 1
-if exist "%MANIFEST%" (
-  go run github.com/akavel/rsrc@v0.10.2 -manifest "%MANIFEST%" -o "%MANIFEST_SYSO%"
-  if errorlevel 1 (
-    set "EXIT_CODE=%ERRORLEVEL%"
-    popd
-    exit /b %EXIT_CODE%
-  )
-)
-go build -trimpath -v -o "%DIST_DIR%\goahk-uia-viewer.exe" ./cmd/goahk-uia-viewer
-set "EXIT_CODE=%ERRORLEVEL%"
-if exist "%MANIFEST_SYSO%" del /f /q "%MANIFEST_SYSO%" >nul 2>nul
-popd
 
+if not exist "%OUTDIR%" mkdir "%OUTDIR%"
+if errorlevel 1 goto :fail
+
+if exist "%RSRC%" del /f /q "%RSRC%"
+if errorlevel 1 goto :fail
+
+go run github.com/akavel/rsrc@latest -manifest "%MANIFEST%" -o "%RSRC%"
+if errorlevel 1 goto :fail
+
+set "LDFLAGS="
+if "%GOAHK_UIA_VIEWER_RELEASE%"=="1" set "LDFLAGS=-H=windowsgui"
+
+if defined LDFLAGS (
+  go build -trimpath -v -ldflags "%LDFLAGS%" -o "%OUTEXE%" ./cmd/goahk-uia-viewer
+) else (
+  go build -trimpath -v -o "%OUTEXE%" ./cmd/goahk-uia-viewer
+)
+if errorlevel 1 goto :fail
+
+echo Built %OUTEXE%
+set "EXIT_CODE=0"
+goto :cleanup
+
+:fail
+set "EXIT_CODE=%ERRORLEVEL%"
+
+:cleanup
+if exist "%RSRC%" del /f /q "%RSRC%" >nul 2>nul
+popd
 exit /b %EXIT_CODE%

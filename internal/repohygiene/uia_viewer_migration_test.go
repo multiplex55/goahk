@@ -109,3 +109,43 @@ func containsAny(path string, patterns []string) bool {
 	}
 	return false
 }
+
+func TestUIAViewerCanonicalBuildScriptAndManifestExist(t *testing.T) {
+	t.Parallel()
+
+	root := repoRoot(t)
+	for _, rel := range []string{
+		"build/build-uia-viewer.bat",
+		"cmd/goahk-uia-viewer/goahk-uia-viewer.manifest",
+	} {
+		rel := rel
+		t.Run(rel, func(t *testing.T) {
+			t.Parallel()
+			if _, err := os.Stat(filepath.Join(root, rel)); err != nil {
+				t.Fatalf("expected %q to exist: %v", rel, err)
+			}
+		})
+	}
+}
+
+func TestUIAViewerDocsDoNotPresentDirectGoBuildAsEquivalent(t *testing.T) {
+	t.Parallel()
+
+	root := repoRoot(t)
+	for _, rel := range []string{"README.md", "docs/BUILD.md"} {
+		rel := rel
+		t.Run(rel, func(t *testing.T) {
+			t.Parallel()
+			body, err := os.ReadFile(filepath.Join(root, rel))
+			if err != nil {
+				t.Fatalf("ReadFile(%q): %v", rel, err)
+			}
+			text := strings.ToLower(string(body))
+			if strings.Contains(text, "equivalent direct go build") ||
+				strings.Contains(text, "direct equivalent") ||
+				strings.Contains(text, "go build -trimpath -v -o dist/goahk-uia-viewer/goahk-uia-viewer.exe ./cmd/goahk-uia-viewer") {
+				t.Fatalf("%s presents direct go build as equivalent for UIA viewer; use canonical script instructions", rel)
+			}
+		})
+	}
+}
