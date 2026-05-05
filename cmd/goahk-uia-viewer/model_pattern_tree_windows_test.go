@@ -76,3 +76,38 @@ func TestController_InvokeSetValue_DialogFlow(t *testing.T) {
 		t.Fatalf("unexpected invoke req: %+v", svc.invokeReqs)
 	}
 }
+
+func TestPatternTreePrimaryPathShowsGroupedPatterns(t *testing.T) {
+	m := newPatternTreeModel()
+	m.SetRoots(mapPatternTree([]inspect.PatternActionDTO{{Pattern: "InvokePattern", Name: "invoke"}}))
+	if m.RootCount() != 1 {
+		t.Fatalf("expected one grouped root, got %d", m.RootCount())
+	}
+	root := m.RootAt(0)
+	node, ok := root.(*patternTreeNode)
+	if !ok || node.label != "InvokePattern" {
+		t.Fatalf("expected InvokePattern root, got %#v", root)
+	}
+	if node.ChildCount() != 1 {
+		t.Fatalf("expected one action child, got %d", node.ChildCount())
+	}
+}
+
+func TestPatternTreeShowsNoSupportedPatternsPlaceholder(t *testing.T) {
+	m := newPatternTreeModel()
+	m.SetRoots(nil)
+	if m.RootCount() != 1 {
+		t.Fatalf("expected placeholder root count 1, got %d", m.RootCount())
+	}
+	root := m.RootAt(0)
+	node, ok := root.(*patternTreeNode)
+	if !ok {
+		t.Fatalf("expected *patternTreeNode root, got %T", root)
+	}
+	if node.id != emptyPatternNodeID || node.label != "No supported patterns" {
+		t.Fatalf("unexpected placeholder node: %#v", node)
+	}
+	if node.IsActionableLeaf() {
+		t.Fatalf("placeholder node should not be actionable")
+	}
+}
