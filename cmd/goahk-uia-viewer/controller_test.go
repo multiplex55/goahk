@@ -199,7 +199,7 @@ func TestController_SelectWindow_Pipeline(t *testing.T) {
 	if svc.clearCalls == 0 {
 		t.Fatal("expected highlight clear on switch")
 	}
-	if svc.activateCalls != 1 || svc.inspectCalls != 1 || svc.treeRootCalls != 1 || svc.nodeDetailsCalls != 1 {
+	if svc.activateCalls != 1 || svc.treeRootCalls != 1 || svc.nodeDetailsCalls != 1 {
 		t.Fatalf("unexpected pipeline calls: %+v", svc)
 	}
 }
@@ -210,6 +210,22 @@ func TestSelectWindowReturnsRootAndDetails(t *testing.T) {
 	result, err := c.SelectWindow("0x1", false)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if result.Root.Root.NodeID != "root" || result.Details.ACCPath != "root" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+func TestSelectWindowDoesNotRequireInspectWindow(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root"}},
+		root:               inspect.TreeNodeDTO{NodeID: "root"},
+		inspectErr:         errors.New("inspect failed"),
+	}
+	c := NewController(context.Background(), svc)
+	result, err := c.SelectWindow("0x1", false)
+	if err != nil {
+		t.Fatalf("expected select to succeed without InspectWindow, got: %v", err)
 	}
 	if result.Root.Root.NodeID != "root" || result.Details.ACCPath != "root" {
 		t.Fatalf("unexpected result: %+v", result)
@@ -434,6 +450,7 @@ type fakeControllerService struct {
 	root                                                                                      inspect.TreeNodeDTO
 	activateCalls, inspectCalls, treeRootCalls, nodeDetailsCalls, selectCalls, highlightCalls int
 	inspectErr                                                                                error
+	treeRootErr                                                                               error
 	nodeDetailsErr                                                                            error
 	nodeChildrenErr                                                                           error
 	selectErr                                                                                 error
@@ -453,6 +470,9 @@ func (f *fakeControllerService) InspectWindow(context.Context, inspect.InspectWi
 }
 func (f *fakeControllerService) GetTreeRoot(context.Context, inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {
 	f.treeRootCalls++
+	if f.treeRootErr != nil {
+		return inspect.GetTreeRootResponse{}, f.treeRootErr
+	}
 	return inspect.GetTreeRootResponse{Root: f.root}, nil
 }
 func (f *fakeControllerService) GetNodeDetails(context.Context, inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
@@ -562,7 +582,7 @@ func TestSelectWindowAbortsWhenGetNodeDetailsFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected fatal error")
 	}
-	if result.Root.Root.NodeID != "" || result.Details.ACCPath != "" || result.ChildLoadErr != nil || result.SelectErr != nil || result.HighlightErr != nil {
+	if result.Root.Root.NodeID != "" || result.Details.ACCPath != "" || result.ChildLoadErr != nil || result.SelectErr != nil || result.HighlightErr != nil || len(result.RetryWarnings) != 0 {
 		t.Fatalf("expected empty result on fatal failure: %+v", result)
 	}
 }

@@ -52,7 +52,7 @@ func TestViewerEventAdapter_WindowSelectionPipeline(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for queued callback")
 	}
-	if svc.inspectCalls != 1 || svc.treeRootCalls < 1 || svc.nodeDetailsCalls < 1 {
+	if svc.treeRootCalls < 1 || svc.nodeDetailsCalls < 1 {
 		t.Fatalf("pipeline incomplete: %+v", svc)
 	}
 	if len(view.busy) != 2 || !view.busy[0] || view.busy[1] {
@@ -143,7 +143,7 @@ func TestViewerEventAdapter_WindowSelectionStatusSet(t *testing.T) {
 	view.enterQueue()
 	fn()
 	view.exitQueue()
-	if len(view.status) == 0 || view.status[len(view.status)-1] != "window loaded InspectWindow [0x2]: properties=0 patterns=0 children=1" {
+	if len(view.status) == 0 || view.status[len(view.status)-1] != "window loaded GetTreeRoot [0x2]: properties=0 patterns=0 children=1" {
 		t.Fatalf("expected success status with counts, got %v", view.status)
 	}
 }
@@ -165,8 +165,8 @@ func TestViewerEventAdapter_WindowSelection_RespectsActivateFlag(t *testing.T) {
 	}
 }
 
-func TestOnWindowSelectedShowsErrorWhenInspectFails(t *testing.T) {
-	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, inspectErr: context.DeadlineExceeded}
+func TestOnWindowSelectedShowsErrorWhenGetTreeRootFails(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, treeRootErr: context.DeadlineExceeded}
 	c := NewController(context.Background(), svc)
 	mq := &queueMarshaller{ch: make(chan func(), 2)}
 	view := &guardedView{}
@@ -176,6 +176,30 @@ func TestOnWindowSelectedShowsErrorWhenInspectFails(t *testing.T) {
 	fn()
 	if len(view.status) == 0 || len(view.fatal) == 0 {
 		t.Fatal("expected error status")
+	}
+}
+
+func TestOnWindowSelectedStillShowsDetailsWhenChildrenFail(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root"}},
+		root:               inspect.TreeNodeDTO{NodeID: "root"},
+		nodeChildrenErr:    context.DeadlineExceeded,
+	}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if view.updates < 3 {
+		t.Fatalf("expected root/details updates despite child error, got updates=%d", view.updates)
+	}
+	if len(view.expanded) != 0 {
+		t.Fatalf("did not expect expansion when children failed, got %v", view.expanded)
+	}
+	if len(view.fatal) != 0 {
+		t.Fatalf("child load error should be non-fatal, got %v", view.fatal)
 	}
 }
 
