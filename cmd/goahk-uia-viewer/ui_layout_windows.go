@@ -88,36 +88,6 @@ func (ui *viewerUI) buildLeftPane(parent walk.Container) error {
 		return err
 	}
 	leftPane.Children().At(0).(*walk.Label).SetText("Windows and Controls")
-	toolbar, err := walk.NewComposite(leftPane)
-	if err != nil {
-		return fmt.Errorf("create left toolbar: %w", err)
-	}
-	toolLayout := walk.NewHBoxLayout()
-	toolLayout.SetMargins(walk.Margins{0, 0, 0, 0})
-	toolLayout.SetSpacing(6)
-	if err := toolbar.SetLayout(toolLayout); err != nil {
-		return fmt.Errorf("set left toolbar layout: %w", err)
-	}
-
-	if ui.refreshBtn, err = walk.NewPushButton(toolbar); err != nil {
-		return err
-	}
-	ui.refreshBtn.SetText("Refresh")
-	if ui.visibleChk, err = walk.NewCheckBox(toolbar); err != nil {
-		return err
-	}
-	ui.visibleChk.SetText("Visible")
-	ui.visibleChk.SetChecked(true)
-	if ui.titleChk, err = walk.NewCheckBox(toolbar); err != nil {
-		return err
-	}
-	ui.titleChk.SetText("Title")
-	ui.titleChk.SetChecked(true)
-	if ui.activateChk, err = walk.NewCheckBox(toolbar); err != nil {
-		return err
-	}
-	ui.activateChk.SetText("Activate")
-
 	if ui.windowTable, err = walk.NewTableView(leftPane); err != nil {
 		return err
 	}
@@ -147,6 +117,37 @@ func (ui *viewerUI) buildLeftPane(parent walk.Container) error {
 	col.SetName("ID")
 	col.SetTitle("ID")
 	col.SetWidth(120)
+
+	toolbar, err := walk.NewComposite(leftPane)
+	if err != nil {
+		return fmt.Errorf("create left toolbar: %w", err)
+	}
+	toolLayout := walk.NewHBoxLayout()
+	toolLayout.SetMargins(walk.Margins{0, 0, 0, 0})
+	toolLayout.SetSpacing(6)
+	if err := toolbar.SetLayout(toolLayout); err != nil {
+		return fmt.Errorf("set left toolbar layout: %w", err)
+	}
+
+	if ui.refreshBtn, err = walk.NewPushButton(toolbar); err != nil {
+		return err
+	}
+	ui.refreshBtn.SetText("Refresh list")
+	if ui.visibleChk, err = walk.NewCheckBox(toolbar); err != nil {
+		return err
+	}
+	ui.visibleChk.SetText("Visible")
+	ui.visibleChk.SetChecked(true)
+	if ui.titleChk, err = walk.NewCheckBox(toolbar); err != nil {
+		return err
+	}
+	ui.titleChk.SetText("Title")
+	ui.titleChk.SetChecked(true)
+	if ui.activateChk, err = walk.NewCheckBox(toolbar); err != nil {
+		return err
+	}
+	ui.activateChk.SetText("Activate")
+
 	return nil
 }
 
@@ -254,6 +255,29 @@ func (ui *viewerUI) buildRightPane(parent walk.Container) error {
 		return err
 	}
 	rightLayout.SetStretchFactor(ui.treeView, 1)
+
+	filterRow, err := walk.NewComposite(rightPane)
+	if err != nil {
+		return fmt.Errorf("create right filter row: %w", err)
+	}
+	filterLayout := walk.NewHBoxLayout()
+	filterLayout.SetMargins(walk.Margins{0, 0, 0, 0})
+	filterLayout.SetSpacing(6)
+	if err := filterRow.SetLayout(filterLayout); err != nil {
+		return fmt.Errorf("set right filter row layout: %w", err)
+	}
+	if ui.filterLbl, err = walk.NewLabel(filterRow); err != nil {
+		return err
+	}
+	ui.filterLbl.SetText("Filter:")
+	if ui.filterEdit, err = walk.NewLineEdit(filterRow); err != nil {
+		return err
+	}
+	if ui.macroSidebarBtn, err = walk.NewPushButton(filterRow); err != nil {
+		return err
+	}
+	ui.macroSidebarBtn.SetText("Show macro sidebar =>")
+	ui.macroSidebarBtn.SetEnabled(false)
 	return nil
 }
 

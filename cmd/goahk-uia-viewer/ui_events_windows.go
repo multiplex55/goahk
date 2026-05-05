@@ -58,6 +58,17 @@ func (m *walkUIThread) Queue(fn func()) {
 	m.mw.Synchronize(fn)
 }
 
+func (ui *viewerUI) queueRefreshWindowListFromCurrentFilters() {
+	if ui == nil {
+		return
+	}
+	ui.initialRefresh()
+}
+
+func (ui *viewerUI) filterNotImplementedStatus() string {
+	return "Tree filtering not implemented yet"
+}
+
 func (ui *viewerUI) attachEvents() {
 	ui.walkUIThread = ui.mw
 	ui.dispatcher = &walkUIThread{mw: ui.walkUIThread}
@@ -122,7 +133,25 @@ func (ui *viewerUI) attachEvents() {
 			}
 		})
 	}
-	ui.refreshBtn.Clicked().Attach(func() { ui.initialRefresh() })
+	if ui.refreshBtn != nil {
+		ui.refreshBtn.Clicked().Attach(func() { ui.queueRefreshWindowListFromCurrentFilters() })
+	}
+	if ui.visibleChk != nil {
+		ui.visibleChk.CheckedChanged().Attach(func() { ui.queueRefreshWindowListFromCurrentFilters() })
+	}
+	if ui.titleChk != nil {
+		ui.titleChk.CheckedChanged().Attach(func() { ui.queueRefreshWindowListFromCurrentFilters() })
+	}
+	if ui.filterEdit != nil {
+		ui.filterEdit.TextChanged().Attach(func() {
+			ui.setStatus(ui.filterNotImplementedStatus())
+		})
+	}
+	if ui.macroSidebarBtn != nil {
+		ui.macroSidebarBtn.Clicked().Attach(func() {
+			ui.setStatus("Macro sidebar is not implemented yet")
+		})
+	}
 	if ui.statusBar != nil {
 		ui.statusBar.MouseDown().Attach(func(_, _ int, _ walk.MouseButton) {
 			update := ui.controller.OnStatusInteractionUpdate()

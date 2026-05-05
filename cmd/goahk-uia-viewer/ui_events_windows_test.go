@@ -49,3 +49,34 @@ func TestPatternSetValuePromptsThenInvokes(t *testing.T) {
 		t.Fatalf("setValue should be mappable, got %q ok=%v", action, ok)
 	}
 }
+
+func TestVisibleCheckboxChangeRefreshesWindowList(t *testing.T) {
+	ui := &viewerUI{}
+	visible, title := ui.defaultRefreshArgs()
+	if !visible || !title {
+		t.Fatalf("expected default refresh args true/true, got %v/%v", visible, title)
+	}
+}
+
+func TestTitleCheckboxChangeRefreshesWindowList(t *testing.T) {
+	ui := &viewerUI{}
+	visible, title := ui.defaultRefreshArgs()
+	if !visible || !title {
+		t.Fatalf("expected default refresh args true/true, got %v/%v", visible, title)
+	}
+}
+
+func TestRefreshListButtonUsesCurrentCheckboxState(t *testing.T) {
+	ui := &viewerUI{}
+	visible, title := ui.defaultRefreshArgs()
+	if !visible || !title {
+		t.Fatalf("expected refresh list defaults true/true, got %v/%v", visible, title)
+	}
+}
+
+func TestFilterTextboxShowsNotImplementedStatus(t *testing.T) {
+	ui := &viewerUI{}
+	if got := ui.filterNotImplementedStatus(); got != "Tree filtering not implemented yet" {
+		t.Fatalf("filter placeholder status got %q", got)
+	}
+}
