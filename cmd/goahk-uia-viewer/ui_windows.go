@@ -9,12 +9,13 @@ import (
 )
 
 type viewerUI struct {
-	controller   *Controller
-	events       *ViewerEventAdapter
-	dispatcher   UIThreadMarshaller
-	walkUIThread *walk.MainWindow
-	mw           *walk.MainWindow
-	root         *walk.Composite
+	controller                 *Controller
+	events                     *ViewerEventAdapter
+	dispatcher                 UIThreadMarshaller
+	walkUIThread               *walk.MainWindow
+	suppressTreeSelectionEvent bool
+	mw                         *walk.MainWindow
+	root                       *walk.Composite
 
 	windowTable *walk.TableView
 	windowModel *windowTableModel

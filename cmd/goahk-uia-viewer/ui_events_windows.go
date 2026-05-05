@@ -128,6 +128,9 @@ func (ui *viewerUI) attachEvents() {
 			}
 		})
 		ui.treeView.CurrentItemChanged().Attach(func() {
+			if ui.suppressTreeSelectionEvent {
+				return
+			}
 			if node, ok := ui.treeView.CurrentItem().(*uiaTreeNode); ok && ui.events != nil {
 				ui.events.OnTreeSelected(node.NodeID)
 			}
@@ -349,6 +352,8 @@ func (ui *viewerUI) UpdateTreeRoot(root inspect.TreeNodeDTO) {
 
 	ui.treeView.SetModel(ui.treeModel)
 	if item, ok := ui.treeModel.ItemByID(root.NodeID); ok {
+		ui.suppressTreeSelectionEvent = true
+		defer func() { ui.suppressTreeSelectionEvent = false }()
 		ui.treeView.SetCurrentItem(item)
 	}
 	ui.treeView.Invalidate()
@@ -371,5 +376,7 @@ func (ui *viewerUI) SelectTreeNode(nodeID string) {
 	if !ok {
 		return
 	}
+	ui.suppressTreeSelectionEvent = true
+	defer func() { ui.suppressTreeSelectionEvent = false }()
 	ui.treeView.SetCurrentItem(item)
 }
