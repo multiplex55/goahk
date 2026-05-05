@@ -32,3 +32,17 @@ func TestMapPropertyTableRows_UnknownPropertiesAppendedDeterministically(t *test
 		t.Fatalf("expected ZZZ second unknown, got %q", got)
 	}
 }
+
+func TestPropertyTableModelSetRowsNonEmpty(t *testing.T) {
+	value := "ok"
+	model := newPropertyTableModel()
+	rows := mapPropertyTableRows([]inspect.PropertyDTO{{Name: "Name", Value: &value, Status: "ok"}})
+	model.SetRows(rows)
+	if model.RowCount() == 0 {
+		t.Fatal("expected non-empty rows after refresh mapping")
+	}
+	row, found := model.RowAt(2)
+	if !found || row.Name != "Name" || row.Value != "ok" {
+		t.Fatalf("unexpected mapped row at Name index: found=%v row=%#v", found, row)
+	}
+}

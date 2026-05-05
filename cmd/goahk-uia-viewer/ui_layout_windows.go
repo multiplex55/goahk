@@ -47,6 +47,7 @@ func (ui *viewerUI) buildWindow() error {
 	if err := ui.buildRightPane(splitter); err != nil {
 		return err
 	}
+	splitter.SetFixed(splitter.ContainerBase.Children().At(1), false)
 
 	if err := ui.buildStatusBar(); err != nil {
 		return err
@@ -83,6 +84,10 @@ func (ui *viewerUI) buildLeftPane(parent walk.Container) error {
 		return fmt.Errorf("set left pane layout: %w", err)
 	}
 
+	if _, err = walk.NewLabel(leftPane); err != nil {
+		return err
+	}
+	leftPane.Children().At(0).(*walk.Label).SetText("Windows and Controls")
 	toolbar, err := walk.NewComposite(leftPane)
 	if err != nil {
 		return fmt.Errorf("create left toolbar: %w", err)
@@ -151,16 +156,42 @@ func (ui *viewerUI) buildMiddlePane(parent walk.Container) error {
 	if err != nil {
 		return fmt.Errorf("create middle pane: %w", err)
 	}
-	if err := middlePane.SetLayout(walk.NewVBoxLayout()); err != nil {
+	midLayout := walk.NewVBoxLayout()
+	midLayout.SetSpacing(4)
+	if err := middlePane.SetLayout(midLayout); err != nil {
 		return fmt.Errorf("set middle pane layout: %w", err)
 	}
 
-	if ui.infoView, err = walk.NewTextEdit(middlePane); err != nil {
+	if _, err = walk.NewLabel(middlePane); err != nil {
 		return err
 	}
-	ui.infoView.SetReadOnly(true)
-	ui.infoView.SetText("Select a window from the left pane.")
+	middlePane.Children().At(0).(*walk.Label).SetText("Window Info")
+	if ui.infoTable, err = walk.NewTableView(middlePane); err != nil {
+		return err
+	}
+	ui.infoTable.SetColumnsOrderable(true)
+	ui.infoTable.SetGridlines(true)
+	ui.infoTable.SetAlternatingRowBG(true)
+	if err := ui.infoTable.Columns().Add(walk.NewTableViewColumn()); err != nil {
+		return err
+	}
+	infoCol := ui.infoTable.Columns().At(0)
+	infoCol.SetName("Property")
+	infoCol.SetTitle("Property")
+	infoCol.SetWidth(150)
+	if err := ui.infoTable.Columns().Add(walk.NewTableViewColumn()); err != nil {
+		return err
+	}
+	infoCol = ui.infoTable.Columns().At(1)
+	infoCol.SetName("Value")
+	infoCol.SetTitle("Value")
+	infoCol.SetWidth(260)
+	ui.infoTable.SetMinMaxSize(walk.Size{Width: 0, Height: 140}, walk.Size{})
 
+	if _, err = walk.NewLabel(middlePane); err != nil {
+		return err
+	}
+	middlePane.Children().At(2).(*walk.Label).SetText("Properties")
 	if ui.propertiesTV, err = walk.NewTableView(middlePane); err != nil {
 		return err
 	}
@@ -190,9 +221,18 @@ func (ui *viewerUI) buildMiddlePane(parent walk.Container) error {
 	propCol.SetTitle("Status")
 	propCol.SetWidth(100)
 
+	if _, err = walk.NewLabel(middlePane); err != nil {
+		return err
+	}
+	middlePane.Children().At(4).(*walk.Label).SetText("Patterns")
 	if ui.patternsTree, err = walk.NewTreeView(middlePane); err != nil {
 		return err
 	}
+	ui.patternsTree.SetMinMaxSize(walk.Size{Width: 0, Height: 120}, walk.Size{})
+
+	midLayout.SetStretchFactor(ui.infoTable, 0)
+	midLayout.SetStretchFactor(ui.propertiesTV, 1)
+	midLayout.SetStretchFactor(ui.patternsTree, 0)
 	return nil
 }
 
@@ -202,12 +242,18 @@ func (ui *viewerUI) buildRightPane(parent walk.Container) error {
 	if err != nil {
 		return fmt.Errorf("create right pane: %w", err)
 	}
-	if err := rightPane.SetLayout(walk.NewVBoxLayout()); err != nil {
+	rightLayout := walk.NewVBoxLayout()
+	if err := rightPane.SetLayout(rightLayout); err != nil {
 		return fmt.Errorf("set right pane layout: %w", err)
 	}
+	if _, err = walk.NewLabel(rightPane); err != nil {
+		return err
+	}
+	rightPane.Children().At(0).(*walk.Label).SetText("UIA Tree")
 	if ui.treeView, err = walk.NewTreeView(rightPane); err != nil {
 		return err
 	}
+	rightLayout.SetStretchFactor(ui.treeView, 1)
 	return nil
 }
 

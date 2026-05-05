@@ -23,7 +23,8 @@ type viewerUI struct {
 	titleChk    *walk.CheckBox
 	activateChk *walk.CheckBox
 
-	infoView        *walk.TextEdit
+	infoTable       *walk.TableView
+	infoModel       *infoTableModel
 	propertiesTV    *walk.TableView
 	propertiesModel *propertyTableModel
 	patternsTree    *walk.TreeView
