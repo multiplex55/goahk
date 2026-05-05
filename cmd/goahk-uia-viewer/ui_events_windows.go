@@ -100,9 +100,12 @@ func (ui *viewerUI) attachEvents() {
 	}
 	if ui.patternsTree != nil {
 		ui.patternsTree.SetModel(ui.patternModel)
+		ui.attachPatternContextMenu()
 		ui.patternsTree.ItemActivated().Attach(func() {
-			if node, ok := ui.patternsTree.CurrentItem().(*patternTreeNode); ok && strings.TrimSpace(string(node.ActionID())) != "" {
-				ui.executePatternAction(string(node.ActionID()))
+			if node, ok := ui.patternsTree.CurrentItem().(*patternTreeNode); ok {
+				if action, ok := patternActionForNode(node); ok {
+					ui.executePatternAction(action)
+				}
 			}
 		})
 	}
@@ -126,6 +129,73 @@ func (ui *viewerUI) attachEvents() {
 			ui.setStatus(update.Text)
 		})
 	}
+}
+
+func patternActionForNode(node *patternTreeNode) (string, bool) {
+	if node == nil || !node.IsActionableLeaf() {
+		return "", false
+	}
+	action := strings.TrimSpace(string(node.ActionID()))
+	if action == "" {
+		return "", false
+	}
+	return action, true
+}
+
+func patternNodeCopyText(node *patternTreeNode) string {
+	if node == nil {
+		return ""
+	}
+	return strings.TrimSpace(node.Text())
+}
+
+func (ui *viewerUI) attachPatternContextMenu() {
+	if ui.patternsTree == nil {
+		return
+	}
+	menu, _ := walk.NewMenu()
+	copyAction := walk.NewAction()
+	copyAction.SetText("Copy Pattern/Action Text")
+	copyAction.Triggered().Attach(func() {
+		node, ok := ui.patternsTree.CurrentItem().(*patternTreeNode)
+		if !ok {
+			return
+		}
+		text := patternNodeCopyText(node)
+		if text == "" {
+			return
+		}
+		ui.controller.CopyProperty(text)
+		ui.setStatus("copied pattern/action text: " + text)
+	})
+	invokeAction := walk.NewAction()
+	invokeAction.SetText("Invoke Action")
+	invokeAction.Triggered().Attach(func() {
+		node, ok := ui.patternsTree.CurrentItem().(*patternTreeNode)
+		if !ok {
+			return
+		}
+		action, ok := patternActionForNode(node)
+		if !ok {
+			return
+		}
+		ui.executePatternAction(action)
+	})
+	_ = menu.Actions().Add(copyAction)
+	_ = menu.Actions().Add(invokeAction)
+	ui.patternsTree.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
+		if button != walk.RightButton {
+			return
+		}
+		item := ui.patternsTree.ItemAt(x, y)
+		node, _ := item.(*patternTreeNode)
+		if node != nil {
+			ui.patternsTree.SetCurrentItem(node)
+		}
+		_, canInvoke := patternActionForNode(node)
+		invokeAction.SetEnabled(canInvoke)
+		_ = menu.PopupAt(x, y, ui.patternsTree)
+	})
 }
 
 func (ui *viewerUI) attachPropertyContextMenu() {

@@ -35,6 +35,12 @@ func (n *patternTreeNode) ChildAt(index int) walk.TreeItem {
 	return &n.children[index]
 }
 func (n *patternTreeNode) ActionID() ActionID { return n.actionID }
+func (n *patternTreeNode) IsActionableLeaf() bool {
+	if n == nil {
+		return false
+	}
+	return len(n.children) == 0 && isSupportedPatternAction(string(n.actionID))
+}
 
 type patternTreeModel struct {
 	walk.TreeModelBase
@@ -92,7 +98,11 @@ func mapPatternTree(actions []inspect.PatternActionDTO) []patternTreeNode {
 			order = append(order, pat)
 		}
 		childID := pat + "/" + action
-		groups[pat] = append(groups[pat], patternTreeNode{id: childID, label: callableActionLabel(action), actionID: ActionID(action)})
+		label := strings.TrimSpace(a.DisplayName)
+		if label == "" {
+			label = callableActionLabel(action)
+		}
+		groups[pat] = append(groups[pat], patternTreeNode{id: childID, label: label, actionID: ActionID(action)})
 	}
 	sort.Strings(order)
 	out := make([]patternTreeNode, 0, len(order))
@@ -138,5 +148,14 @@ func callableActionLabel(name string) string {
 		return "Collapse()"
 	default:
 		return name + "()"
+	}
+}
+
+func isSupportedPatternAction(name string) bool {
+	switch normalizePatternActionName(name) {
+	case "invoke", "doDefaultAction", "select", "setValue", "toggle", "expand", "collapse":
+		return true
+	default:
+		return false
 	}
 }
