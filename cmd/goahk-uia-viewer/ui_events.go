@@ -1,6 +1,11 @@
 package main
 
-import "goahk/internal/inspect"
+import (
+	"fmt"
+	"strings"
+
+	"goahk/internal/inspect"
+)
 
 type UIThreadMarshaller interface{ Queue(func()) }
 
@@ -32,19 +37,36 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 		if err != nil {
 			a.ui.Queue(func() {
 				a.view.SetBusy(false)
-				a.view.SetStatus("select window failed: " + err.Error())
+				a.view.SetStatus("select window failed: select window: " + err.Error())
 			})
 			return
 		}
 		a.ui.Queue(func() {
 			a.view.SetBusy(false)
+
+			rootID := result.Root.Root.NodeID
 			a.view.UpdateTreeRoot(result.Root.Root)
-			a.view.UpdateNodeChildren(result.Root.Root.NodeID, result.Children)
-			a.view.ExpandTreeNode(result.Root.Root.NodeID)
-			a.view.SelectTreeNode(result.Root.Root.NodeID)
+			a.view.SelectTreeNode(rootID)
 			a.view.UpdateWindowDetails(result.Details)
 			a.view.UpdateNodeDetails(result.Details)
-			a.view.SetStatus("window loaded")
+
+			if len(result.Children) > 0 {
+				a.view.UpdateNodeChildren(rootID, result.Children)
+				a.view.ExpandTreeNode(rootID)
+			}
+
+			status := fmt.Sprintf("window loaded: properties=%d patterns=%d children=%d", len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
+			warnings := make([]string, 0, 2)
+			if result.ChildLoadErr != nil {
+				warnings = append(warnings, "children: "+result.ChildLoadErr.Error())
+			}
+			if result.HighlightErr != nil {
+				warnings = append(warnings, "highlight: "+result.HighlightErr.Error())
+			}
+			if len(warnings) > 0 {
+				status += " (warning: " + strings.Join(warnings, "; ") + ")"
+			}
+			a.view.SetStatus(status)
 		})
 	}()
 }
