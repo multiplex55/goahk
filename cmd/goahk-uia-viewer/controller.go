@@ -64,7 +64,7 @@ type StatusUpdate struct {
 }
 
 func NewController(ctx context.Context, svc inspect.Service) *Controller {
-	c := &Controller{ctx: ctx, service: svc, followInterval: 120 * time.Millisecond, nodesByID: map[string]inspect.TreeNodeDTO{}, nodeChildren: map[string][]string{}, nodeExpanded: map[string]bool{}, nodeLoadFailed: map[string]error{}, statusText: "Click status to enable ACC path capture"}
+	c := &Controller{ctx: ctx, service: svc, followInterval: 120 * time.Millisecond, nodesByID: map[string]inspect.TreeNodeDTO{}, nodeChildren: map[string][]string{}, nodeExpanded: map[string]bool{}, nodeLoadFailed: map[string]error{}, statusText: "Click here to enable Acc path capturing (can't be used with UIA!)"}
 	c.followTicker = func() <-chan time.Time {
 		t := time.NewTicker(c.followInterval)
 		out := make(chan time.Time)
@@ -252,9 +252,9 @@ func (c *Controller) ToggleAccPathCapture() bool {
 	defer c.mu.Unlock()
 	c.accPathCaptureEnabled = !c.accPathCaptureEnabled
 	if c.accPathCaptureEnabled {
-		c.statusText = "ACC path capture enabled"
+		c.statusText = "Click on path to copy to Clipboard"
 	} else {
-		c.statusText = "ACC path capture paused"
+		c.statusText = "Click here to enable Acc path capturing (can't be used with UIA!)"
 	}
 	return c.accPathCaptureEnabled
 }
@@ -266,20 +266,26 @@ func (c *Controller) OnStatusInteractionUpdate() StatusUpdate {
 	c.mu.Lock()
 	path := strings.TrimSpace(c.lastACCPath)
 	enabled := c.accPathCaptureEnabled
+	if enabled && path != "" {
+		if c.clipboard != nil {
+			_ = c.clipboard.CopyText(path)
+		}
+		c.statusText = "Path: " + path
+		c.mu.Unlock()
+		return StatusUpdate{Text: "Path: " + path, CaptureEnabled: true, HasLastACCPath: true, LastACCPathCopied: true}
+	}
 	c.mu.Unlock()
-	if !enabled || path == "" {
-		enabled = c.ToggleAccPathCapture()
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		return StatusUpdate{Text: c.statusText, CaptureEnabled: enabled, HasLastACCPath: strings.TrimSpace(c.lastACCPath) != ""}
-	}
-	if c.clipboard != nil {
-		_ = c.clipboard.CopyText(path)
-	}
+	enabled = c.ToggleAccPathCapture()
 	c.mu.Lock()
-	c.statusText = "ACC path copied"
-	c.mu.Unlock()
-	return StatusUpdate{Text: "ACC path copied", CaptureEnabled: true, HasLastACCPath: true, LastACCPathCopied: true}
+	defer c.mu.Unlock()
+	path = strings.TrimSpace(c.lastACCPath)
+	hasPath := path != ""
+	text := c.statusText
+	if enabled && hasPath {
+		text = "Path: " + path
+		c.statusText = text
+	}
+	return StatusUpdate{Text: text, CaptureEnabled: enabled, HasLastACCPath: hasPath}
 }
 func (c *Controller) PauseFollowCursor() {
 	c.mu.Lock()

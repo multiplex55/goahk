@@ -332,14 +332,14 @@ func TestController_StatusInteraction_CopyPath(t *testing.T) {
 	c.ToggleAccPathCapture()
 	c.lastACCPath = "a/b"
 	got := c.OnStatusInteraction()
-	if got != "ACC path copied" || len(cb.copied) != 1 {
+	if got != "Path: a/b" || len(cb.copied) != 1 {
 		t.Fatalf("got=%q copied=%v", got, cb.copied)
 	}
 }
 func TestController_StatusInteraction_TogglesCaptureWithoutPath(t *testing.T) {
 	c := NewController(context.Background(), &fakeInspectService{})
 	upd := c.OnStatusInteractionUpdate()
-	if !upd.CaptureEnabled || upd.Text != "ACC path capture enabled" {
+	if !upd.CaptureEnabled || upd.Text != "Click on path to copy to Clipboard" {
 		t.Fatalf("unexpected update: %+v", upd)
 	}
 }
@@ -410,7 +410,7 @@ func TestController_OnStatusInteractionUpdate_CopiesPathWhenEnabled(t *testing.T
 	c.ToggleAccPathCapture()
 	c.lastACCPath = "desktop/window/button"
 	upd := c.OnStatusInteractionUpdate()
-	if !upd.LastACCPathCopied || upd.Text != "ACC path copied" || len(cb.copied) != 1 {
+	if !upd.LastACCPathCopied || upd.Text != "Path: desktop/window/button" || len(cb.copied) != 1 {
 		t.Fatalf("unexpected update: %+v copied=%v", upd, cb.copied)
 	}
 }
@@ -462,4 +462,15 @@ func (f *fakeControllerService) SelectNode(context.Context, inspect.SelectNodeRe
 func (f *fakeControllerService) HighlightNode(context.Context, inspect.HighlightNodeRequest) (inspect.HighlightNodeResponse, error) {
 	f.highlightCalls++
 	return inspect.HighlightNodeResponse{}, nil
+}
+
+func TestSelectWindowSelectsAndHighlightsRoot(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root-id"}}
+	c := NewController(context.Background(), svc)
+	if _, err := c.SelectWindow("0x1", false); err != nil {
+		t.Fatal(err)
+	}
+	if svc.selectCalls != 1 || svc.highlightCalls != 1 {
+		t.Fatalf("expected select/highlight once for root, got select=%d highlight=%d", svc.selectCalls, svc.highlightCalls)
+	}
 }
