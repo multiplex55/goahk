@@ -100,6 +100,61 @@ func mapPropertyTableRows(props []inspect.PropertyDTO) []propertyTableRow {
 	return rows
 }
 
+func mapPropertyRowsFromDetails(details inspect.GetNodeDetailsResponse) []propertyTableRow {
+	if len(details.Properties) > 0 {
+		return mapPropertyTableRows(details.Properties)
+	}
+
+	e := details.Element
+	bounds := ""
+	if e.Bounds != nil {
+		bounds = fmt.Sprintf("%d %d %d %d", e.Bounds.Left, e.Bounds.Top, e.Bounds.Width, e.Bounds.Height)
+	}
+	processID := ""
+	if details.WindowInfo.PID > 0 {
+		processID = strconv.Itoa(details.WindowInfo.PID)
+	}
+
+	props := []inspect.PropertyDTO{
+		{Name: "ControlType", Value: stringPtrOrNil(e.ControlType), Status: statusFromValue(e.ControlType)},
+		{Name: "LocalizedControlType", Value: stringPtrOrNil(e.LocalizedControlType), Status: statusFromValue(e.LocalizedControlType)},
+		{Name: "Name", Value: stringPtrOrNil(e.Name), Status: statusFromValue(e.Name)},
+		{Name: "Value", Value: stringPtrOrNil(e.Value), Status: statusFromValue(e.Value)},
+		{Name: "AutomationId", Value: stringPtrOrNil(e.AutomationID), Status: statusFromValue(e.AutomationID)},
+		{Name: "BoundingRectangle", Value: stringPtrOrNil(bounds), Status: statusFromValue(bounds)},
+		{Name: "ClassName", Value: stringPtrOrNil(details.WindowInfo.Class), Status: statusFromValue(details.WindowInfo.Class)},
+		{Name: "HelpText", Value: stringPtrOrNil(e.HelpText), Status: statusFromValue(e.HelpText)},
+		{Name: "AccessKey", Value: stringPtrOrNil(e.AccessKey), Status: statusFromValue(e.AccessKey)},
+		{Name: "AcceleratorKey", Value: stringPtrOrNil(e.AcceleratorKey), Status: statusFromValue(e.AcceleratorKey)},
+		{Name: "HasKeyboardFocus", Value: stringPtrOrNil(strconv.FormatBool(e.HasKeyboardFocus)), Status: "ok"},
+		{Name: "IsKeyboardFocusable", Value: stringPtrOrNil(strconv.FormatBool(e.IsKeyboardFocusable)), Status: "ok"},
+		{Name: "ItemType", Value: stringPtrOrNil(e.ItemType), Status: statusFromValue(e.ItemType)},
+		{Name: "ProcessId", Value: stringPtrOrNil(processID), Status: statusFromValue(processID)},
+		{Name: "IsEnabled", Value: stringPtrOrNil(strconv.FormatBool(e.IsEnabled)), Status: "ok"},
+		{Name: "IsPassword", Value: stringPtrOrNil(strconv.FormatBool(e.IsPassword)), Status: "ok"},
+		{Name: "IsOffscreen", Value: stringPtrOrNil(strconv.FormatBool(e.IsOffscreen)), Status: "ok"},
+		{Name: "FrameworkId", Value: stringPtrOrNil(e.FrameworkID), Status: statusFromValue(e.FrameworkID)},
+		{Name: "IsRequiredForForm", Value: stringPtrOrNil(strconv.FormatBool(e.IsRequiredForForm)), Status: "ok"},
+		{Name: "ItemStatus", Value: stringPtrOrNil(e.ItemStatus), Status: statusFromValue(e.ItemStatus)},
+	}
+
+	return mapPropertyTableRows(props)
+}
+
+func stringPtrOrNil(v string) *string {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	return &v
+}
+
+func statusFromValue(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "unsupported"
+	}
+	return "ok"
+}
+
 func formatPropertyValue(name, value string, byName map[string]inspect.PropertyDTO) string {
 	switch name {
 	case "BoundingRectangle":
