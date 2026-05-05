@@ -25,3 +25,27 @@ func TestPropertyContextMenuCopyRow(t *testing.T) {
 		t.Fatalf("copy row got %q", got)
 	}
 }
+
+func TestPatternRightClickCopyUsesVisibleLabel(t *testing.T) {
+	node := &patternTreeNode{label: "Set Value"}
+	if got := patternNodeCopyText(node); got != "Set Value" {
+		t.Fatalf("copy text got %q", got)
+	}
+}
+
+func TestPatternDoubleClickInvokesOnlyActionNodes(t *testing.T) {
+	parent := &patternTreeNode{label: "ValuePattern", children: []patternTreeNode{{label: "Set Value", actionID: ActionID("setValue")}}}
+	if action, ok := patternActionForNode(parent); ok || action != "" {
+		t.Fatalf("parent should not produce action, got %q", action)
+	}
+	leaf := &parent.children[0]
+	if action, ok := patternActionForNode(leaf); !ok || action != "setValue" {
+		t.Fatalf("leaf should produce action setValue, got %q ok=%v", action, ok)
+	}
+}
+
+func TestPatternSetValuePromptsThenInvokes(t *testing.T) {
+	if action, ok := patternActionForNode(&patternTreeNode{actionID: ActionID("setValue")}); !ok || action != "setValue" {
+		t.Fatalf("setValue should be mappable, got %q ok=%v", action, ok)
+	}
+}

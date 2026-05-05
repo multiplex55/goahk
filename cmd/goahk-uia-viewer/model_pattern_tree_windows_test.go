@@ -29,6 +29,28 @@ func TestPatternTreeModel_ActionDispatchUsesActionID(t *testing.T) {
 	}
 }
 
+func TestPatternTreeUsesDisplayNameWhenAvailable(t *testing.T) {
+	nodes := mapPatternTree([]inspect.PatternActionDTO{{Pattern: "InvokePattern", Name: "invoke", DisplayName: "Click"}, {Pattern: "InvokePattern", Name: "toggle"}})
+	if got := nodes[0].children[0].label; got != "Click" {
+		t.Fatalf("expected display name, got %q", got)
+	}
+	if got := nodes[0].children[1].label; got != "Toggle()" {
+		t.Fatalf("expected callable fallback, got %q", got)
+	}
+}
+
+func TestPatternParentNodesAreNonActionable(t *testing.T) {
+	nodes := mapPatternTree([]inspect.PatternActionDTO{{Pattern: "InvokePattern", Name: "invoke"}})
+	parent := nodes[0]
+	if parent.IsActionableLeaf() {
+		t.Fatalf("pattern parent node should be non-actionable")
+	}
+	child := parent.children[0]
+	if !child.IsActionableLeaf() {
+		t.Fatalf("action child node should be actionable")
+	}
+}
+
 func TestController_InvokeSetValue_DialogFlow(t *testing.T) {
 	svc := &fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{Element: inspect.ElementPropertiesDTO{NodeID: "node-1"}}}
 	c := NewController(context.Background(), svc)
