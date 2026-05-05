@@ -124,7 +124,9 @@ func (m *uiaTreeModel) SetChildren(nodeID string, children []inspect.TreeNodeDTO
 		parent.children = append(parent.children, child)
 	}
 	m.MarkChildrenLoaded(nodeID)
-	m.PublishItemChanged(parent)
+	// A parent-local reset ensures Walk re-queries the updated child list
+	// immediately after lazy expansion without resetting the entire tree.
+	m.PublishItemsReset(parent)
 }
 
 func (m *uiaTreeModel) attachPlaceholder(parent *uiaTreeNode) {
