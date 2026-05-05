@@ -172,14 +172,6 @@ func formatPropertyValue(name, value string, byName map[string]inspect.PropertyD
 	return value
 }
 
-func propertyValueFromMap(byName map[string]inspect.PropertyDTO, name string) string {
-	p, ok := byName[name]
-	if !ok || p.Value == nil {
-		return ""
-	}
-	return strings.TrimSpace(*p.Value)
-}
-
 func formatBoundingRectangle(value string) (string, bool) {
 	fields := strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == ';' || r == ' ' || r == '\t' })
 	if len(fields) != 4 {
