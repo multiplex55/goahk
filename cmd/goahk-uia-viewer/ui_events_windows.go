@@ -84,6 +84,7 @@ func (ui *viewerUI) attachEvents() {
 	}
 	if ui.propertiesTV != nil {
 		ui.propertiesTV.SetModel(ui.propertiesModel)
+		ui.attachPropertyContextMenu()
 		ui.propertiesTV.ItemActivated().Attach(func() {
 			idx := ui.propertiesTV.CurrentIndex()
 			row, ok := ui.propertiesModel.RowAt(idx)
@@ -125,6 +126,68 @@ func (ui *viewerUI) attachEvents() {
 			ui.setStatus(update.Text)
 		})
 	}
+}
+
+func (ui *viewerUI) attachPropertyContextMenu() {
+	if ui.propertiesTV == nil {
+		return
+	}
+	menu, _ := walk.NewMenu()
+	addCopy := func(title string, action func(row propertyTableRow) (copied, status string, ok bool)) {
+		a := walk.NewAction()
+		a.SetText(title)
+		a.Triggered().Attach(func() {
+			row, ok := ui.currentPropertyRow()
+			if !ok {
+				return
+			}
+			copied, status, ok := action(row)
+			if !ok {
+				return
+			}
+			ui.controller.CopyProperty(copied)
+			ui.setStatus(status)
+		})
+		_ = menu.Actions().Add(a)
+	}
+	addCopy("Copy Value", func(row propertyTableRow) (string, string, bool) {
+		return propertyContextCopyValue(row, true), "copied value: " + row.Name, true
+	})
+	addCopy("Copy Property Name", func(row propertyTableRow) (string, string, bool) {
+		return row.Name, "copied property name: " + row.Name, true
+	})
+	addCopy("Copy Row", func(row propertyTableRow) (string, string, bool) {
+		return row.Name + ": " + propertyContextCopyValue(row, true), "copied row: " + row.Name, true
+	})
+	ui.propertiesTV.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
+		if button != walk.RightButton {
+			return
+		}
+		idx := ui.propertiesTV.IndexAt(x, y)
+		if idx >= 0 {
+			ui.propertiesTV.SetCurrentIndex(idx)
+		}
+		_ = menu.PopupAt(x, y, ui.propertiesTV)
+	})
+}
+
+func (ui *viewerUI) currentPropertyRow() (propertyTableRow, bool) {
+	if ui.propertiesModel == nil || ui.propertiesTV == nil {
+		return propertyTableRow{}, false
+	}
+	return ui.propertiesModel.RowAt(ui.propertiesTV.CurrentIndex())
+}
+
+func propertyContextCopyValue(row propertyTableRow, preferAHKControlType bool) string {
+	if preferAHKControlType && row.Name == "ControlType" {
+		if i := strings.Index(row.Value, "("); i >= 0 && strings.HasSuffix(strings.TrimSpace(row.Value), ")") {
+			inside := strings.TrimSpace(strings.TrimSuffix(row.Value[i+1:], ")"))
+			if inside != "" {
+				return inside
+			}
+		}
+	}
+	return row.Value
 }
 
 func (ui *viewerUI) initialRefresh() {
