@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -116,6 +117,7 @@ func (c *Controller) RefreshWindows(filter string, visibleOnly, titleOnly bool) 
 	return c.service.RefreshWindows(c.runtimeContext(), inspect.RefreshWindowsRequest{Filter: filter, VisibleOnly: visibleOnly, TitleOnly: titleOnly})
 }
 func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionResult, error) {
+	log.Printf("uia.viewer window_select_start hwnd=%s activate=%t", hwnd, activate)
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 	c.mu.Lock()
 	mode := c.mode
@@ -136,6 +138,7 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	}
 	result.Root = root
 	rootNodeID := root.Root.NodeID
+	log.Printf("uia.viewer inspect_root_ok hwnd=%s root_node=%s", hwnd, rootNodeID)
 	c.mu.Lock()
 	c.selectedNodeID = rootNodeID
 	c.nodesByID[rootNodeID] = root.Root
@@ -146,6 +149,7 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 		return WindowSelectionResult{}, fmt.Errorf("get node details node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
 	}
 	result.Details = details
+	log.Printf("uia.viewer inspect_details_ok hwnd=%s node=%s properties=%d patterns=%d", hwnd, rootNodeID, len(details.Properties), len(details.Patterns))
 	c.mu.Lock()
 	if c.accPathCaptureEnabled && strings.TrimSpace(details.ACCPath) != "" {
 		c.lastACCPath = details.ACCPath
@@ -156,16 +160,23 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	childrenResp, childErr := c.ExpandNode(rootNodeID)
 	if childErr != nil {
 		result.ChildLoadErr = fmt.Errorf("load root children node=%s hwnd=%s: %w", rootNodeID, hwnd, childErr)
+		log.Printf("uia.viewer inspect_children_err hwnd=%s node=%s err=%v", hwnd, rootNodeID, childErr)
 	} else {
 		result.Children = childrenResp.Children
+		log.Printf("uia.viewer inspect_children_ok hwnd=%s node=%s children=%d", hwnd, rootNodeID, len(result.Children))
 	}
 
 	if _, err := c.service.SelectNode(c.runtimeContext(), inspect.SelectNodeRequest{NodeID: rootNodeID}); err != nil {
 		result.SelectErr = fmt.Errorf("select root node node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
+		log.Printf("uia.viewer inspect_select_err hwnd=%s node=%s err=%v", hwnd, rootNodeID, err)
+	} else {
+		log.Printf("uia.viewer inspect_select_ok hwnd=%s node=%s", hwnd, rootNodeID)
 	}
 	if _, err := c.service.HighlightNode(c.runtimeContext(), inspect.HighlightNodeRequest{NodeID: rootNodeID}); err != nil {
 		result.HighlightErr = fmt.Errorf("highlight root node node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
+		log.Printf("uia.viewer inspect_highlight_err hwnd=%s node=%s err=%v", hwnd, rootNodeID, err)
 	} else {
+		log.Printf("uia.viewer inspect_highlight_ok hwnd=%s node=%s", hwnd, rootNodeID)
 		c.mu.Lock()
 		c.selectedNodeID = rootNodeID
 		c.mu.Unlock()

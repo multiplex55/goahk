@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"goahk/internal/inspect"
@@ -66,7 +67,9 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			if len(warnings) > 0 {
 				status += " (warning: " + strings.Join(warnings, "; ") + ")"
 			}
+
 			a.view.SetStatus(status)
+			log.Printf("uia.viewer ui_update_done hwnd=%s root_node=%s properties=%d patterns=%d children=%d", hwnd, rootID, len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
 		})
 	}()
 }
