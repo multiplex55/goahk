@@ -46,3 +46,39 @@ func TestPropertyTableModelSetRowsNonEmpty(t *testing.T) {
 		t.Fatalf("unexpected mapped row at Name index: found=%v row=%#v", found, row)
 	}
 }
+
+func TestPropertyRowsPopulateAHKOrderWithValues(t *testing.T) {
+	name := "Calculator"
+	rows := mapPropertyTableRows([]inspect.PropertyDTO{{Name: "Name", Value: &name, Status: "ok"}})
+	if len(rows) < 3 {
+		t.Fatalf("unexpected row count: %d", len(rows))
+	}
+	if rows[2].Name != "Name" || rows[2].Value != "Calculator" {
+		t.Fatalf("expected Name row populated at AHK order index, got %#v", rows[2])
+	}
+}
+
+func TestPropertyBoundingRectangleFormatting(t *testing.T) {
+	v := "10,20,30,40"
+	rows := mapPropertyTableRows([]inspect.PropertyDTO{{Name: "BoundingRectangle", Value: &v, Status: "ok"}})
+	var got string
+	for _, row := range rows {
+		if row.Name == "BoundingRectangle" {
+			got = row.Value
+			break
+		}
+	}
+	want := "x:10 y:20 w:30 h:40 | l:10 t:20 r:40 b:60"
+	if got != want {
+		t.Fatalf("BoundingRectangle=%q want=%q", got, want)
+	}
+}
+
+func TestPropertyControlTypeFormatting(t *testing.T) {
+	ct := "50004"
+	localized := "edit"
+	rows := mapPropertyTableRows([]inspect.PropertyDTO{{Name: "ControlType", Value: &ct, Status: "ok"}, {Name: "LocalizedControlType", Value: &localized, Status: "ok"}})
+	if rows[0].Value != "50004 (edit)" {
+		t.Fatalf("ControlType=%q", rows[0].Value)
+	}
+}

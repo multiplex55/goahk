@@ -3,7 +3,10 @@
 package main
 
 import (
+	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/lxn/walk"
 	"goahk/internal/inspect"
@@ -68,7 +71,7 @@ func mapPropertyTableRows(props []inspect.PropertyDTO) []propertyTableRow {
 		row := propertyTableRow{Name: name, Status: "unsupported"}
 		if p, ok := byName[name]; ok {
 			if p.Value != nil {
-				row.Value = *p.Value
+				row.Value = formatPropertyValue(name, *p.Value, byName)
 			}
 			if p.Status != "" {
 				row.Status = p.Status
@@ -87,7 +90,7 @@ func mapPropertyTableRows(props []inspect.PropertyDTO) []propertyTableRow {
 	for _, p := range unknown {
 		row := propertyTableRow{Name: p.Name, Status: "unsupported"}
 		if p.Value != nil {
-			row.Value = *p.Value
+			row.Value = formatPropertyValue(p.Name, *p.Value, byName)
 		}
 		if p.Status != "" {
 			row.Status = p.Status
@@ -95,4 +98,45 @@ func mapPropertyTableRows(props []inspect.PropertyDTO) []propertyTableRow {
 		rows = append(rows, row)
 	}
 	return rows
+}
+
+func formatPropertyValue(name, value string, byName map[string]inspect.PropertyDTO) string {
+	switch name {
+	case "BoundingRectangle":
+		if formatted, ok := formatBoundingRectangle(value); ok {
+			return formatted
+		}
+	case "ControlType":
+		if localized := propertyValue(byName, "LocalizedControlType"); localized != "" {
+			if strings.Contains(value, "(") {
+				return value
+			}
+			return fmt.Sprintf("%s (%s)", value, localized)
+		}
+	}
+	return value
+}
+
+func propertyValue(byName map[string]inspect.PropertyDTO, name string) string {
+	p, ok := byName[name]
+	if !ok || p.Value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*p.Value)
+}
+
+func formatBoundingRectangle(value string) (string, bool) {
+	fields := strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == ';' || r == ' ' || r == '\t' })
+	if len(fields) != 4 {
+		return "", false
+	}
+	nums := make([]int, 0, 4)
+	for _, f := range fields {
+		n, err := strconv.Atoi(strings.TrimSpace(f))
+		if err != nil {
+			return "", false
+		}
+		nums = append(nums, n)
+	}
+	return fmt.Sprintf("x:%d y:%d w:%d h:%d | l:%d t:%d r:%d b:%d", nums[0], nums[1], nums[2], nums[3], nums[0], nums[1], nums[0]+nums[2], nums[1]+nums[3]), true
 }
