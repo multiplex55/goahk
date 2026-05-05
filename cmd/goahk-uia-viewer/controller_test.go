@@ -451,6 +451,7 @@ type fakeControllerService struct {
 	activateCalls, inspectCalls, treeRootCalls, nodeDetailsCalls, selectCalls, highlightCalls int
 	inspectErr                                                                                error
 	treeRootErr                                                                               error
+	treeRootErrs                                                                              []error
 	nodeDetailsErr                                                                            error
 	nodeChildrenErr                                                                           error
 	selectErr                                                                                 error
@@ -470,10 +471,55 @@ func (f *fakeControllerService) InspectWindow(context.Context, inspect.InspectWi
 }
 func (f *fakeControllerService) GetTreeRoot(context.Context, inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {
 	f.treeRootCalls++
+	if len(f.treeRootErrs) > 0 {
+		err := f.treeRootErrs[0]
+		f.treeRootErrs = f.treeRootErrs[1:]
+		if err != nil {
+			return inspect.GetTreeRootResponse{}, err
+		}
+	}
 	if f.treeRootErr != nil {
 		return inspect.GetTreeRootResponse{}, f.treeRootErr
 	}
 	return inspect.GetTreeRootResponse{Root: f.root}, nil
+}
+
+func TestGetTreeRootWithRetry_RetriesTransient(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{},
+		root:               inspect.TreeNodeDTO{NodeID: "root-id"},
+		treeRootErrs:       []error{inspect.ErrTransientFailure, inspect.ErrStaleCache, nil},
+	}
+	c := NewController(context.Background(), svc)
+	root, warnings, err := c.getTreeRootWithRetry("0x1", inspect.InspectModeUIATree)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if root.Root.NodeID != "root-id" || svc.treeRootCalls != 3 {
+		t.Fatalf("unexpected root/calls: root=%+v calls=%d", root.Root, svc.treeRootCalls)
+	}
+	if len(warnings) != 2 {
+		t.Fatalf("expected warnings for retries, got %d", len(warnings))
+	}
+}
+
+func TestGetTreeRootWithRetry_DoesNotRetryNonTransient(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{},
+		root:               inspect.TreeNodeDTO{NodeID: "root-id"},
+		treeRootErrs:       []error{errors.New("boom")},
+	}
+	c := NewController(context.Background(), svc)
+	_, warnings, err := c.getTreeRootWithRetry("0x1", inspect.InspectModeUIATree)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if svc.treeRootCalls != 1 {
+		t.Fatalf("expected single attempt, got %d", svc.treeRootCalls)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("expected no warnings, got %d", len(warnings))
+	}
 }
 func (f *fakeControllerService) GetNodeDetails(context.Context, inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
 	f.nodeDetailsCalls++
@@ -571,6 +617,22 @@ func TestSelectWindowReturnsDetailsWhenSelectNodeFails(t *testing.T) {
 	}
 }
 
+func TestSelectWindowCollectsRootRetryWarnings(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root"}},
+		root:               inspect.TreeNodeDTO{NodeID: "root-id"},
+		treeRootErrs:       []error{inspect.ErrTransientFailure, nil},
+	}
+	c := NewController(context.Background(), svc)
+	result, err := c.SelectWindow("0x1", false)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if len(result.RootRetryWarnings) != 1 {
+		t.Fatalf("expected one retry warning, got %d", len(result.RootRetryWarnings))
+	}
+}
+
 func TestSelectWindowAbortsWhenGetNodeDetailsFails(t *testing.T) {
 	svc := &fakeControllerService{
 		fakeInspectService: fakeInspectService{},
@@ -582,7 +644,7 @@ func TestSelectWindowAbortsWhenGetNodeDetailsFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected fatal error")
 	}
-	if result.Root.Root.NodeID != "" || result.Details.ACCPath != "" || result.ChildLoadErr != nil || result.SelectErr != nil || result.HighlightErr != nil || len(result.RetryWarnings) != 0 {
+	if result.Root.Root.NodeID != "" || result.Details.ACCPath != "" || result.ChildLoadErr != nil || result.SelectErr != nil || result.HighlightErr != nil || len(result.RootRetryWarnings) != 0 {
 		t.Fatalf("expected empty result on fatal failure: %+v", result)
 	}
 }

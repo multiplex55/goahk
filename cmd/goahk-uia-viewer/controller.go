@@ -52,13 +52,13 @@ type Controller struct {
 }
 
 type WindowSelectionResult struct {
-	Root          inspect.GetTreeRootResponse
-	Children      []inspect.TreeNodeDTO
-	Details       inspect.GetNodeDetailsResponse
-	ChildLoadErr  error
-	SelectErr     error
-	HighlightErr  error
-	RetryWarnings []string
+	Root              inspect.GetTreeRootResponse
+	Children          []inspect.TreeNodeDTO
+	Details           inspect.GetNodeDetailsResponse
+	ChildLoadErr      error
+	SelectErr         error
+	HighlightErr      error
+	RootRetryWarnings []error
 }
 
 type StatusUpdate struct {
@@ -135,7 +135,7 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 		return WindowSelectionResult{}, fmt.Errorf("get tree root hwnd=%s: %w", hwnd, err)
 	}
 	result.Root = root
-	result.RetryWarnings = append(result.RetryWarnings, retryWarnings...)
+	result.RootRetryWarnings = append(result.RootRetryWarnings, retryWarnings...)
 	rootNodeID := root.Root.NodeID
 	log.Printf("uia.viewer inspect_root_ok hwnd=%s root_node=%s", hwnd, rootNodeID)
 	c.mu.Lock()
@@ -183,10 +183,42 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	return result, nil
 }
 
-func (c *Controller) getTreeRootWithRetry(hwnd string, mode inspect.InspectMode) (inspect.GetTreeRootResponse, []string, error) {
-	// Stub retry-aware path: single attempt now, while preserving warning plumbing for UI status.
-	root, err := c.service.GetTreeRoot(c.runtimeContext(), inspect.GetTreeRootRequest{HWND: hwnd, Refresh: true, Mode: mode})
-	return root, nil, err
+func (c *Controller) getTreeRootWithRetry(hwnd string, mode inspect.InspectMode) (inspect.GetTreeRootResponse, []error, error) {
+	delays := []time.Duration{0, 50 * time.Millisecond, 150 * time.Millisecond}
+	warnings := make([]error, 0, len(delays)-1)
+	var lastErr error
+	for i, delay := range delays {
+		if i > 0 {
+			time.Sleep(delay)
+		}
+		root, err := c.service.GetTreeRoot(c.runtimeContext(), inspect.GetTreeRootRequest{HWND: hwnd, Refresh: true, Mode: mode})
+		if err == nil {
+			return root, warnings, nil
+		}
+		lastErr = err
+		if !isTransientInspectError(err) || i == len(delays)-1 {
+			return inspect.GetTreeRootResponse{}, warnings, err
+		}
+		warnings = append(warnings, fmt.Errorf("attempt %d failed (%v): retrying transient root resolution", i+1, err))
+	}
+	return inspect.GetTreeRootResponse{}, warnings, lastErr
+}
+
+func isTransientInspectError(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch {
+	case errors.Is(err, inspect.ErrTransientFailure),
+		errors.Is(err, inspect.ErrProviderTransientFailure),
+		errors.Is(err, inspect.ErrStaleCache):
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "transient") ||
+		strings.Contains(msg, "stale") ||
+		strings.Contains(msg, "element not available") ||
+		strings.Contains(msg, "nil element")
 }
 func (c *Controller) LoadTreeRoot() (inspect.GetTreeRootResponse, error) {
 	c.mu.Lock()

@@ -179,6 +179,37 @@ func TestOnWindowSelectedShowsErrorWhenGetTreeRootFails(t *testing.T) {
 	}
 }
 
+func TestOnWindowSelectedTransientFailureDoesNotShowFatalModal(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, treeRootErr: inspect.ErrTransientFailure}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if len(view.status) == 0 {
+		t.Fatal("expected status update")
+	}
+	if len(view.fatal) != 0 {
+		t.Fatalf("transient error should not show fatal modal: %v", view.fatal)
+	}
+}
+
+func TestOnWindowSelectedHardFailureShowsFatalModal(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, treeRootErr: context.DeadlineExceeded}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if len(view.fatal) == 0 {
+		t.Fatal("expected fatal modal for hard failure")
+	}
+}
+
 func TestOnWindowSelectedStillShowsDetailsWhenChildrenFail(t *testing.T) {
 	svc := &fakeControllerService{
 		fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root"}},
