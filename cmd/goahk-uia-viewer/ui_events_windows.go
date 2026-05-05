@@ -58,6 +58,17 @@ func (m *walkUIThread) Queue(fn func()) {
 	m.mw.Synchronize(fn)
 }
 
+func (ui *viewerUI) queueRefreshWindowListFromCurrentFilters() {
+	if ui == nil {
+		return
+	}
+	ui.initialRefresh()
+}
+
+func (ui *viewerUI) filterNotImplementedStatus() string {
+	return "Tree filtering not implemented yet"
+}
+
 func (ui *viewerUI) attachEvents() {
 	ui.walkUIThread = ui.mw
 	ui.dispatcher = &walkUIThread{mw: ui.walkUIThread}
@@ -122,7 +133,25 @@ func (ui *viewerUI) attachEvents() {
 			}
 		})
 	}
-	ui.refreshBtn.Clicked().Attach(func() { ui.initialRefresh() })
+	if ui.refreshBtn != nil {
+		ui.refreshBtn.Clicked().Attach(func() { ui.queueRefreshWindowListFromCurrentFilters() })
+	}
+	if ui.visibleChk != nil {
+		ui.visibleChk.CheckedChanged().Attach(func() { ui.queueRefreshWindowListFromCurrentFilters() })
+	}
+	if ui.titleChk != nil {
+		ui.titleChk.CheckedChanged().Attach(func() { ui.queueRefreshWindowListFromCurrentFilters() })
+	}
+	if ui.filterEdit != nil {
+		ui.filterEdit.TextChanged().Attach(func() {
+			ui.setStatus(ui.filterNotImplementedStatus())
+		})
+	}
+	if ui.macroSidebarBtn != nil {
+		ui.macroSidebarBtn.Clicked().Attach(func() {
+			ui.setStatus("Macro sidebar is not implemented yet")
+		})
+	}
 	if ui.statusBar != nil {
 		ui.statusBar.MouseDown().Attach(func(_, _ int, _ walk.MouseButton) {
 			update := ui.controller.OnStatusInteractionUpdate()
@@ -183,6 +212,7 @@ func (ui *viewerUI) attachPatternContextMenu() {
 	})
 	_ = menu.Actions().Add(copyAction)
 	_ = menu.Actions().Add(invokeAction)
+	ui.patternsTree.SetContextMenu(menu)
 	ui.patternsTree.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
 		if button != walk.RightButton {
 			return
@@ -194,7 +224,6 @@ func (ui *viewerUI) attachPatternContextMenu() {
 		}
 		_, canInvoke := patternActionForNode(node)
 		invokeAction.SetEnabled(canInvoke)
-		_ = menu.PopupAt(x, y, ui.patternsTree)
 	})
 }
 
@@ -229,6 +258,7 @@ func (ui *viewerUI) attachPropertyContextMenu() {
 	addCopy("Copy Row", func(row propertyTableRow) (string, string, bool) {
 		return row.Name + ": " + propertyContextCopyValue(row, true), "copied row: " + row.Name, true
 	})
+	ui.propertiesTV.SetContextMenu(menu)
 	ui.propertiesTV.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
 		if button != walk.RightButton {
 			return
@@ -237,7 +267,6 @@ func (ui *viewerUI) attachPropertyContextMenu() {
 		if idx >= 0 {
 			ui.propertiesTV.SetCurrentIndex(idx)
 		}
-		_ = menu.PopupAt(x, y, ui.propertiesTV)
 	})
 }
 
