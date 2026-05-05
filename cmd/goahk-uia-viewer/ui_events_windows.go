@@ -212,6 +212,7 @@ func (ui *viewerUI) attachPatternContextMenu() {
 	})
 	_ = menu.Actions().Add(copyAction)
 	_ = menu.Actions().Add(invokeAction)
+	ui.patternsTree.SetContextMenu(menu)
 	ui.patternsTree.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
 		if button != walk.RightButton {
 			return
@@ -223,7 +224,6 @@ func (ui *viewerUI) attachPatternContextMenu() {
 		}
 		_, canInvoke := patternActionForNode(node)
 		invokeAction.SetEnabled(canInvoke)
-		_ = menu.PopupAt(x, y, ui.patternsTree)
 	})
 }
 
@@ -258,6 +258,7 @@ func (ui *viewerUI) attachPropertyContextMenu() {
 	addCopy("Copy Row", func(row propertyTableRow) (string, string, bool) {
 		return row.Name + ": " + propertyContextCopyValue(row, true), "copied row: " + row.Name, true
 	})
+	ui.propertiesTV.SetContextMenu(menu)
 	ui.propertiesTV.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
 		if button != walk.RightButton {
 			return
@@ -266,7 +267,6 @@ func (ui *viewerUI) attachPropertyContextMenu() {
 		if idx >= 0 {
 			ui.propertiesTV.SetCurrentIndex(idx)
 		}
-		_ = menu.PopupAt(x, y, ui.propertiesTV)
 	})
 }
 
