@@ -13,12 +13,25 @@ type UIThreadMarshaller interface{ Queue(func()) }
 type ViewUpdater interface {
 	SetBusy(bool)
 	SetStatus(string)
+	ShowFatal(string)
 	UpdateWindowDetails(inspect.GetNodeDetailsResponse)
 	UpdateNodeDetails(inspect.GetNodeDetailsResponse)
 	UpdateTreeRoot(inspect.TreeNodeDTO)
 	UpdateNodeChildren(string, []inspect.TreeNodeDTO)
 	ExpandTreeNode(string)
 	SelectTreeNode(string)
+}
+
+func formatStageTarget(stage, target string) string {
+	return fmt.Sprintf("%s [%s]", stage, target)
+}
+
+func formatFatal(stage, target string, err error) string {
+	return fmt.Sprintf("ERROR %s: %s", formatStageTarget(stage, target), err.Error())
+}
+
+func formatWarning(stage, target string, warning string) string {
+	return fmt.Sprintf("WARNING %s: %s", formatStageTarget(stage, target), warning)
 }
 
 type ViewerEventAdapter struct {
@@ -38,7 +51,9 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 		if err != nil {
 			a.ui.Queue(func() {
 				a.view.SetBusy(false)
-				a.view.SetStatus("select window failed: select window: " + err.Error())
+				msg := formatFatal("InspectWindow", hwnd, err)
+				a.view.SetStatus(msg)
+				a.view.ShowFatal(msg)
 			})
 			return
 		}
@@ -56,16 +71,16 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 				a.view.ExpandTreeNode(rootID)
 			}
 
-			status := fmt.Sprintf("window loaded: properties=%d patterns=%d children=%d", len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
+			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("InspectWindow", hwnd), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
 			warnings := make([]string, 0, 2)
 			if result.ChildLoadErr != nil {
-				warnings = append(warnings, "children: "+result.ChildLoadErr.Error())
+				warnings = append(warnings, formatWarning("GetTreeRoot", hwnd, result.ChildLoadErr.Error()))
 			}
 			if result.HighlightErr != nil {
-				warnings = append(warnings, "highlight: "+result.HighlightErr.Error())
+				warnings = append(warnings, formatWarning("GetNodeDetails", rootID, result.HighlightErr.Error()))
 			}
 			if len(warnings) > 0 {
-				status += " (warning: " + strings.Join(warnings, "; ") + ")"
+				status = strings.Join(warnings, "; ")
 			}
 
 			a.view.SetStatus(status)
@@ -84,12 +99,14 @@ func (a *ViewerEventAdapter) OnTreeExpanded(nodeID string, loaded bool) {
 		a.ui.Queue(func() {
 			a.view.SetBusy(false)
 			if err != nil {
-				a.view.SetStatus("expand node failed: " + err.Error())
+				msg := formatFatal("GetTreeRoot", nodeID, err)
+				a.view.SetStatus(msg)
+				a.view.ShowFatal(msg)
 				return
 			}
 			a.view.UpdateNodeChildren(nodeID, resp.Children)
 			a.view.SelectTreeNode(nodeID)
-			a.view.SetStatus("node expanded")
+			a.view.SetStatus("node expanded " + formatStageTarget("GetTreeRoot", nodeID))
 		})
 	}()
 }
@@ -102,15 +119,19 @@ func (a *ViewerEventAdapter) OnTreeSelected(nodeID string) {
 		a.ui.Queue(func() {
 			a.view.SetBusy(false)
 			if err != nil {
-				a.view.SetStatus("select node failed: " + err.Error())
+				msg := formatFatal("InspectWindow", nodeID, err)
+				a.view.SetStatus(msg)
+				a.view.ShowFatal(msg)
 				return
 			}
 			if detailsErr != nil {
-				a.view.SetStatus("node details failed: " + detailsErr.Error())
+				msg := formatFatal("GetNodeDetails", nodeID, detailsErr)
+				a.view.SetStatus(msg)
+				a.view.ShowFatal(msg)
 				return
 			}
 			a.view.UpdateNodeDetails(details)
-			a.view.SetStatus("node selected")
+			a.view.SetStatus("node selected " + formatStageTarget("GetNodeDetails", nodeID))
 		})
 	}()
 }
