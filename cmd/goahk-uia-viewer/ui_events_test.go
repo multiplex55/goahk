@@ -141,8 +141,8 @@ func TestViewerEventAdapter_WindowSelectionStatusSet(t *testing.T) {
 	view.enterQueue()
 	fn()
 	view.exitQueue()
-	if len(view.status) == 0 || view.status[len(view.status)-1] != "window loaded" {
-		t.Fatalf("expected success status, got %v", view.status)
+	if len(view.status) == 0 || view.status[len(view.status)-1] != "window loaded: properties=0 patterns=0 children=1" {
+		t.Fatalf("expected success status with counts, got %v", view.status)
 	}
 }
 
