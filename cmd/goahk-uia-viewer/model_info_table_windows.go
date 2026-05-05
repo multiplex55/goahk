@@ -55,9 +55,9 @@ func mapWindowInfoRows(details *inspect.GetNodeDetailsResponse) []infoTableRow {
 	if rect == nil {
 		rect = element.Bounds
 	}
-	classNN := coalesce(window.Class, propertyValue(details.Properties, "ClassName"))
-	pid := coalescePID(window.PID, propertyInt(details.Properties, "ProcessId"))
-	process := coalesce(window.Process, propertyValue(details.Properties, "ProcessName"))
+	classNN := coalesce(window.Class, propertyValueFromList(details.Properties, "ClassName"))
+	pid := coalescePID(window.PID, propertyIntFromList(details.Properties, "ProcessId"))
+	process := coalesce(window.Process, propertyValueFromList(details.Properties, "ProcessName"))
 	if strings.TrimSpace(process) == "" && pid > 0 {
 		process = fmt.Sprintf("pid:%d", pid)
 	}
@@ -82,7 +82,7 @@ func coalesce(values ...string) string {
 	return ""
 }
 
-func propertyValue(properties []inspect.PropertyDTO, name string) string {
+func propertyValueFromList(properties []inspect.PropertyDTO, name string) string {
 	for _, prop := range properties {
 		if !strings.EqualFold(strings.TrimSpace(prop.Name), name) || prop.Value == nil {
 			continue
@@ -94,7 +94,7 @@ func propertyValue(properties []inspect.PropertyDTO, name string) string {
 	return ""
 }
 
-func propertyInt(properties []inspect.PropertyDTO, name string) int {
+func propertyIntFromList(properties []inspect.PropertyDTO, name string) int {
 	for _, prop := range properties {
 		if !strings.EqualFold(strings.TrimSpace(prop.Name), name) || prop.Value == nil {
 			continue
