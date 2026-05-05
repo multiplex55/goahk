@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -46,6 +47,7 @@ func NewViewerEventAdapter(controller *Controller, view ViewUpdater, ui UIThread
 
 func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 	a.view.SetBusy(true)
+	a.view.SetStatus("retrying transient root resolution...")
 	go func() {
 		result, err := a.controller.SelectWindow(hwnd, activate)
 		if err != nil {
@@ -53,7 +55,9 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 				a.view.SetBusy(false)
 				msg := formatFatal("InspectWindow", hwnd, err)
 				a.view.SetStatus(msg)
-				a.view.ShowFatal(msg)
+				if shouldShowSelectionErrorModal(err) {
+					a.view.ShowFatal(msg)
+				}
 			})
 			return
 		}
@@ -73,8 +77,8 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 
 			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("GetTreeRoot", hwnd), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
 			warnings := make([]string, 0, 6)
-			for _, warning := range result.RetryWarnings {
-				warnings = append(warnings, formatWarning("GetTreeRoot", hwnd, warning))
+			for _, warning := range result.RootRetryWarnings {
+				warnings = append(warnings, formatWarning("GetTreeRoot", hwnd, warning.Error()))
 			}
 			if result.ChildLoadErr != nil {
 				warnings = append(warnings, formatWarning("GetNodeChildren", rootID, result.ChildLoadErr.Error()))
@@ -86,13 +90,20 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 				warnings = append(warnings, formatWarning("HighlightNode", rootID, result.HighlightErr.Error()))
 			}
 			if len(warnings) > 0 {
-				status = strings.Join(warnings, "; ")
+				status = "loaded with warning: " + strings.Join(warnings, "; ")
 			}
 
 			a.view.SetStatus(status)
 			log.Printf("uia.viewer ui_update_done hwnd=%s root_node=%s properties=%d patterns=%d children=%d", hwnd, rootID, len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
 		})
 	}()
+}
+
+func shouldShowSelectionErrorModal(err error) bool {
+	if err == nil {
+		return false
+	}
+	return !errors.Is(err, inspect.ErrTransientFailure) && !isTransientInspectError(err)
 }
 
 func (a *ViewerEventAdapter) OnTreeExpanded(nodeID string, loaded bool) {
