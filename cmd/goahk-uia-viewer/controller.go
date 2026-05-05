@@ -51,9 +51,12 @@ type Controller struct {
 }
 
 type WindowSelectionResult struct {
-	Root     inspect.GetTreeRootResponse
-	Children []inspect.TreeNodeDTO
-	Details  inspect.GetNodeDetailsResponse
+	Root         inspect.GetTreeRootResponse
+	Children     []inspect.TreeNodeDTO
+	Details      inspect.GetNodeDetailsResponse
+	ChildLoadErr error
+	SelectErr    error
+	HighlightErr error
 }
 
 type StatusUpdate struct {
@@ -118,6 +121,7 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	mode := c.mode
 	c.selectedWindowID = hwnd
 	c.mu.Unlock()
+	result := WindowSelectionResult{}
 	if activate {
 		if _, err := c.service.ActivateWindow(c.runtimeContext(), inspect.ActivateWindowRequest{HWND: hwnd}); err != nil {
 			return WindowSelectionResult{}, fmt.Errorf("activate window hwnd=%s: %w", hwnd, err)
@@ -130,11 +134,8 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	if err != nil {
 		return WindowSelectionResult{}, fmt.Errorf("get tree root hwnd=%s: %w", hwnd, err)
 	}
+	result.Root = root
 	rootNodeID := root.Root.NodeID
-	childrenResp, err := c.ExpandNode(rootNodeID)
-	if err != nil {
-		return WindowSelectionResult{}, fmt.Errorf("load root children node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
-	}
 	c.mu.Lock()
 	c.selectedNodeID = rootNodeID
 	c.nodesByID[rootNodeID] = root.Root
@@ -144,16 +145,32 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	if err != nil {
 		return WindowSelectionResult{}, fmt.Errorf("get node details node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
 	}
+	result.Details = details
 	c.mu.Lock()
 	if c.accPathCaptureEnabled && strings.TrimSpace(details.ACCPath) != "" {
 		c.lastACCPath = details.ACCPath
 		c.statusText = "Path: " + details.ACCPath
 	}
 	c.mu.Unlock()
-	if err := c.SelectNode(rootNodeID); err != nil {
-		return WindowSelectionResult{}, fmt.Errorf("select root node node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
+
+	childrenResp, childErr := c.ExpandNode(rootNodeID)
+	if childErr != nil {
+		result.ChildLoadErr = fmt.Errorf("load root children node=%s hwnd=%s: %w", rootNodeID, hwnd, childErr)
+	} else {
+		result.Children = childrenResp.Children
 	}
-	return WindowSelectionResult{Root: root, Children: childrenResp.Children, Details: details}, nil
+
+	if _, err := c.service.SelectNode(c.runtimeContext(), inspect.SelectNodeRequest{NodeID: rootNodeID}); err != nil {
+		result.SelectErr = fmt.Errorf("select root node node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
+	}
+	if _, err := c.service.HighlightNode(c.runtimeContext(), inspect.HighlightNodeRequest{NodeID: rootNodeID}); err != nil {
+		result.HighlightErr = fmt.Errorf("highlight root node node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
+	} else {
+		c.mu.Lock()
+		c.selectedNodeID = rootNodeID
+		c.mu.Unlock()
+	}
+	return result, nil
 }
 func (c *Controller) LoadTreeRoot() (inspect.GetTreeRootResponse, error) {
 	c.mu.Lock()
