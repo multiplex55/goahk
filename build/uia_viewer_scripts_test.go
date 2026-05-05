@@ -11,8 +11,10 @@ func TestUIAViewerScriptsExist(t *testing.T) {
 	t.Parallel()
 
 	for _, rel := range []string{
+		"build.bat",
 		"dev-uia-viewer.bat",
 		"build-uia-viewer.bat",
+		"check-no-source-binaries.bat",
 		"dev-uia-viewer.sh",
 		"build-uia-viewer.sh",
 	} {
@@ -23,6 +25,54 @@ func TestUIAViewerScriptsExist(t *testing.T) {
 				t.Fatalf("expected script %q to exist: %v", rel, err)
 			}
 		})
+	}
+}
+
+func TestViewerDirectoryHasNoFrontendArtifacts(t *testing.T) {
+	t.Parallel()
+
+	viewerDir := filepath.Join("..", "cmd", "goahk-uia-viewer")
+
+	blockedExactPaths := []string{
+		"frontend",
+		"wails.json",
+		"package.json",
+		"package-lock.json",
+		"pnpm-lock.yaml",
+		"yarn.lock",
+		"vite.config.js",
+		"vite.config.ts",
+	}
+
+	for _, rel := range blockedExactPaths {
+		blocked := filepath.Join(viewerDir, rel)
+		if _, err := os.Stat(blocked); err == nil {
+			t.Fatalf("unexpected stale UI frontend artifact found: %s", blocked)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat %s: %v", blocked, err)
+		}
+	}
+
+	blockedDirs := map[string]struct{}{
+		"node_modules": {},
+		"dist":         {},
+		".vite":        {},
+	}
+
+	err := filepath.WalkDir(viewerDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if _, found := blockedDirs[d.Name()]; found {
+			t.Fatalf("unexpected stale UI frontend directory found under viewer: %s", path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk viewer directory: %v", err)
 	}
 }
 

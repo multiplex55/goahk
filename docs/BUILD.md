@@ -82,6 +82,12 @@ If network access is unavailable and cache is incomplete, module resolution will
 go test -v ./...
 ```
 
+`build\check-no-source-binaries.bat` runs deterministic hygiene checks, including:
+
+- tracked binary artifact guard (`TestNoTrackedBinaryArtifacts`)
+- stale UI viewer frontend artifact guard (`TestViewerDirectoryHasNoFrontendArtifacts`)
+
+
 Focused deterministic hotkey unit suite (registration/dispatch/unregistration paths without OS hooks):
 
 ```powershell
