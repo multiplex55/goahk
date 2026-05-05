@@ -71,13 +71,19 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 				a.view.ExpandTreeNode(rootID)
 			}
 
-			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("InspectWindow", hwnd), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
-			warnings := make([]string, 0, 2)
+			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("GetTreeRoot", hwnd), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
+			warnings := make([]string, 0, 6)
+			for _, warning := range result.RetryWarnings {
+				warnings = append(warnings, formatWarning("GetTreeRoot", hwnd, warning))
+			}
 			if result.ChildLoadErr != nil {
-				warnings = append(warnings, formatWarning("GetTreeRoot", hwnd, result.ChildLoadErr.Error()))
+				warnings = append(warnings, formatWarning("GetNodeChildren", rootID, result.ChildLoadErr.Error()))
+			}
+			if result.SelectErr != nil {
+				warnings = append(warnings, formatWarning("SelectNode", rootID, result.SelectErr.Error()))
 			}
 			if result.HighlightErr != nil {
-				warnings = append(warnings, formatWarning("GetNodeDetails", rootID, result.HighlightErr.Error()))
+				warnings = append(warnings, formatWarning("HighlightNode", rootID, result.HighlightErr.Error()))
 			}
 			if len(warnings) > 0 {
 				status = strings.Join(warnings, "; ")

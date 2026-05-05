@@ -52,12 +52,13 @@ type Controller struct {
 }
 
 type WindowSelectionResult struct {
-	Root         inspect.GetTreeRootResponse
-	Children     []inspect.TreeNodeDTO
-	Details      inspect.GetNodeDetailsResponse
-	ChildLoadErr error
-	SelectErr    error
-	HighlightErr error
+	Root          inspect.GetTreeRootResponse
+	Children      []inspect.TreeNodeDTO
+	Details       inspect.GetNodeDetailsResponse
+	ChildLoadErr  error
+	SelectErr     error
+	HighlightErr  error
+	RetryWarnings []string
 }
 
 type StatusUpdate struct {
@@ -129,14 +130,12 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 			return WindowSelectionResult{}, fmt.Errorf("activate window hwnd=%s: %w", hwnd, err)
 		}
 	}
-	if _, err := c.service.InspectWindow(c.runtimeContext(), inspect.InspectWindowRequest{HWND: hwnd, Mode: mode}); err != nil {
-		return WindowSelectionResult{}, fmt.Errorf("inspect window hwnd=%s: %w", hwnd, err)
-	}
-	root, err := c.service.GetTreeRoot(c.runtimeContext(), inspect.GetTreeRootRequest{HWND: hwnd, Refresh: true, Mode: mode})
+	root, retryWarnings, err := c.getTreeRootWithRetry(hwnd, mode)
 	if err != nil {
 		return WindowSelectionResult{}, fmt.Errorf("get tree root hwnd=%s: %w", hwnd, err)
 	}
 	result.Root = root
+	result.RetryWarnings = append(result.RetryWarnings, retryWarnings...)
 	rootNodeID := root.Root.NodeID
 	log.Printf("uia.viewer inspect_root_ok hwnd=%s root_node=%s", hwnd, rootNodeID)
 	c.mu.Lock()
@@ -182,6 +181,12 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 		c.mu.Unlock()
 	}
 	return result, nil
+}
+
+func (c *Controller) getTreeRootWithRetry(hwnd string, mode inspect.InspectMode) (inspect.GetTreeRootResponse, []string, error) {
+	// Stub retry-aware path: single attempt now, while preserving warning plumbing for UI status.
+	root, err := c.service.GetTreeRoot(c.runtimeContext(), inspect.GetTreeRootRequest{HWND: hwnd, Refresh: true, Mode: mode})
+	return root, nil, err
 }
 func (c *Controller) LoadTreeRoot() (inspect.GetTreeRootResponse, error) {
 	c.mu.Lock()
