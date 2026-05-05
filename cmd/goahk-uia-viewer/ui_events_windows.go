@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/lxn/walk"
@@ -330,6 +331,7 @@ func (ui *viewerUI) UpdateWindowDetails(details inspect.GetNodeDetailsResponse) 
 	ui.UpdateNodeDetails(details)
 }
 func (ui *viewerUI) UpdateNodeDetails(details inspect.GetNodeDetailsResponse) {
+	log.Printf("uia.viewer render_node_details properties=%d patterns=%d", len(details.Properties), len(details.Patterns))
 	if ui.infoModel != nil {
 		ui.infoModel.SetRows(mapWindowInfoRows(&details))
 	}
@@ -341,6 +343,7 @@ func (ui *viewerUI) UpdateNodeDetails(details inspect.GetNodeDetailsResponse) {
 	}
 }
 func (ui *viewerUI) UpdateTreeRoot(root inspect.TreeNodeDTO) {
+	log.Printf("uia.viewer render_tree_root node=%s", root.NodeID)
 	if ui == nil || ui.treeModel == nil {
 		return
 	}
@@ -359,6 +362,7 @@ func (ui *viewerUI) UpdateTreeRoot(root inspect.TreeNodeDTO) {
 	ui.treeView.Invalidate()
 }
 func (ui *viewerUI) UpdateNodeChildren(nodeID string, children []inspect.TreeNodeDTO) {
+	log.Printf("uia.viewer render_node_children node=%s children=%d", nodeID, len(children))
 	if ui.treeModel != nil {
 		ui.treeModel.SetChildren(nodeID, children)
 	}

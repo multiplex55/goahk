@@ -42,6 +42,7 @@ type viewerUI struct {
 }
 
 func NewViewerWindow(controller *Controller) (viewerWindow, error) {
+	logStartup("ui_window_new begin")
 	if controller == nil {
 		return nil, fmt.Errorf("controller is required")
 	}
@@ -52,6 +53,7 @@ func NewViewerWindow(controller *Controller) (viewerWindow, error) {
 	}
 	ui.attachEvents()
 	ui.events = NewViewerEventAdapter(controller, ui, ui.dispatcher)
+	logStartup("ui_window_new ready")
 	return ui, nil
 }
 
