@@ -83,6 +83,48 @@ func TestPropertyControlTypeFormatting(t *testing.T) {
 	}
 }
 
+func TestPropertyValueFromMap_ExistingKeyWithValue(t *testing.T) {
+	v := "value"
+	byName := map[string]inspect.PropertyDTO{"Name": {Name: "Name", Value: &v}}
+	if got := propertyValueFromMap(byName, "Name"); got != "value" {
+		t.Fatalf("propertyValueFromMap existing=%q want=%q", got, "value")
+	}
+}
+
+func TestPropertyValueFromMap_MissingOrNilReturnsEmpty(t *testing.T) {
+	v := "value"
+	var nilPtr *string
+	byName := map[string]inspect.PropertyDTO{
+		"Name":  {Name: "Name", Value: &v},
+		"Value": {Name: "Value", Value: nilPtr},
+	}
+	if got := propertyValueFromMap(byName, "Missing"); got != "" {
+		t.Fatalf("propertyValueFromMap missing=%q want empty", got)
+	}
+	if got := propertyValueFromMap(byName, "Value"); got != "" {
+		t.Fatalf("propertyValueFromMap nil=%q want empty", got)
+	}
+}
+
+func TestPropertyValueFromMap_TrimsWhitespace(t *testing.T) {
+	v := "  padded value\t"
+	byName := map[string]inspect.PropertyDTO{"Name": {Name: "Name", Value: &v}}
+	if got := propertyValueFromMap(byName, "Name"); got != "padded value" {
+		t.Fatalf("propertyValueFromMap trimmed=%q want=%q", got, "padded value")
+	}
+}
+
+func TestFormatPropertyValue_ControlTypeUsesLocalizedLookup(t *testing.T) {
+	localized := "button"
+	byName := map[string]inspect.PropertyDTO{
+		"LocalizedControlType": {Name: "LocalizedControlType", Value: &localized},
+	}
+	got := formatPropertyValue("ControlType", "50000", byName)
+	if got != "50000 (button)" {
+		t.Fatalf("formatPropertyValue ControlType=%q want=%q", got, "50000 (button)")
+	}
+}
+
 func TestPropertyRowsPrimaryPathUsesDetailsProperties(t *testing.T) {
 	name := "From Properties"
 	rows := mapPropertyRowsFromDetails(inspect.GetNodeDetailsResponse{Properties: []inspect.PropertyDTO{{Name: "Name", Value: &name, Status: "ok"}}})
