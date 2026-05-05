@@ -67,6 +67,66 @@ func TestInfoRowsFallbackToElementWhenWindowInfoEmpty(t *testing.T) {
 	assertInfoRowValue(t, rows, "PID", "99")
 }
 
+func TestPropertyValueFromList_ExactNameHit(t *testing.T) {
+	v := "found"
+	got := propertyValueFromList([]inspect.PropertyDTO{{Name: "ClassName", Value: &v}}, "ClassName")
+	if got != "found" {
+		t.Fatalf("propertyValueFromList exact hit=%q want=%q", got, "found")
+	}
+}
+
+func TestPropertyValueFromList_TrimsWhitespace(t *testing.T) {
+	v := "  padded  "
+	got := propertyValueFromList([]inspect.PropertyDTO{{Name: "  ProcessName  ", Value: &v}}, "ProcessName")
+	if got != "padded" {
+		t.Fatalf("propertyValueFromList trim=%q want=%q", got, "padded")
+	}
+}
+
+func TestPropertyValueFromList_MissingOrNilReturnsEmpty(t *testing.T) {
+	v := "present"
+	var nilPtr *string
+	gotMissing := propertyValueFromList([]inspect.PropertyDTO{{Name: "Other", Value: &v}}, "ClassName")
+	if gotMissing != "" {
+		t.Fatalf("propertyValueFromList missing=%q want empty", gotMissing)
+	}
+	gotNil := propertyValueFromList([]inspect.PropertyDTO{{Name: "ClassName", Value: nilPtr}}, "ClassName")
+	if gotNil != "" {
+		t.Fatalf("propertyValueFromList nil=%q want empty", gotNil)
+	}
+}
+
+func TestPropertyIntFromList_ExactNameHitAndTrim(t *testing.T) {
+	v := "  42  "
+	got := propertyIntFromList([]inspect.PropertyDTO{{Name: "  ProcessId", Value: &v}}, "ProcessId")
+	if got != 42 {
+		t.Fatalf("propertyIntFromList trimmed hit=%d want=%d", got, 42)
+	}
+}
+
+func TestPropertyIntFromList_MissingNilInvalidOrNonPositiveReturnZero(t *testing.T) {
+	v := "10"
+	var nilPtr *string
+	if got := propertyIntFromList([]inspect.PropertyDTO{{Name: "Other", Value: &v}}, "ProcessId"); got != 0 {
+		t.Fatalf("propertyIntFromList missing=%d want=0", got)
+	}
+	if got := propertyIntFromList([]inspect.PropertyDTO{{Name: "ProcessId", Value: nilPtr}}, "ProcessId"); got != 0 {
+		t.Fatalf("propertyIntFromList nil=%d want=0", got)
+	}
+	invalid := "abc"
+	if got := propertyIntFromList([]inspect.PropertyDTO{{Name: "ProcessId", Value: &invalid}}, "ProcessId"); got != 0 {
+		t.Fatalf("propertyIntFromList invalid=%d want=0", got)
+	}
+	zero := "0"
+	if got := propertyIntFromList([]inspect.PropertyDTO{{Name: "ProcessId", Value: &zero}}, "ProcessId"); got != 0 {
+		t.Fatalf("propertyIntFromList zero=%d want=0", got)
+	}
+	neg := "-7"
+	if got := propertyIntFromList([]inspect.PropertyDTO{{Name: "ProcessId", Value: &neg}}, "ProcessId"); got != 0 {
+		t.Fatalf("propertyIntFromList negative=%d want=0", got)
+	}
+}
+
 func assertInfoRowValue(t *testing.T, rows []infoTableRow, property, want string) {
 	t.Helper()
 	for _, row := range rows {
