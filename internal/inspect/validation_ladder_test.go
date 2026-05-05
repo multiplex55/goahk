@@ -78,7 +78,7 @@ func TestValidationLadder_A_to_F(t *testing.T) {
 	t.Run("F ACC mode alternate-tree behavior", func(t *testing.T) {
 		uia := &fakeAdapter{root: nil}
 		acc := &fakeAdapter{root: &uiaElement{Ref: "acc-root", RuntimeID: "10", Name: "ACC Root"}}
-		provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(acc), &fakeWindowAdapter{}).(*windowsProvider)
+		provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(acc), newUIAAdapter(acc), &fakeWindowAdapter{}).(*windowsProvider)
 		resp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeWindowTree})
 		if err != nil || resp.State.ActiveMode != InspectModeWindowTree || resp.Root.Name != "ACC Root" {
 			t.Fatalf("ACC mode behavior failed: root=%+v state=%+v err=%v", resp.Root, resp.State, err)

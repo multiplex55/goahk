@@ -62,7 +62,7 @@ func (f *fakeACCBridge) CursorPosition() (int, int, error) { return 11, 22, nil 
 func TestWindowsProvider_ModeSwitchUsesDistinctBackends(t *testing.T) {
 	uia := &fakeAdapter{root: &uiaElement{Ref: "uia-root", RuntimeID: "1", Name: "UIA Root"}}
 	acc := &fakeAdapter{root: &uiaElement{Ref: makeACCNodeRef("s", "1"), RuntimeID: "1", Name: "ACC Root"}}
-	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(acc), &fakeWindowAdapter{}).(*windowsProvider)
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(acc), newUIAAdapter(acc), &fakeWindowAdapter{}).(*windowsProvider)
 
 	uiaRoot, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
 	if err != nil {
@@ -119,7 +119,7 @@ func TestACCTraversalAndPropertyMapping(t *testing.T) {
 		point: &accBridgeElement{Key: "child", ParentKey: "root", RuntimeID: "child", HWND: "0x1", Name: "OK", Role: "PushButton", ClassName: "Button", Framework: "MSAA", Rect: childRect, Value: &value},
 	}
 	deps := &nativeACCDeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*accBridgeElement{}, keyToRef: map[string]string{}}
-	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(&fakeAdapter{root: &uiaElement{Ref: "uia", RuntimeID: "1", Name: "UIA"}}), newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(&fakeAdapter{root: &uiaElement{Ref: "uia", RuntimeID: "1", Name: "UIA"}}), newUIAAdapter(deps), newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
 
 	rootResp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeWindowTree})
 	if err != nil {

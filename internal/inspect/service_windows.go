@@ -23,6 +23,7 @@ type windowAdapter interface {
 type windowsProvider struct {
 	uiaCore    *providerCore
 	accCore    *providerCore
+	windowCore *providerCore
 	highlights *highlightController
 	windows    windowAdapter
 	modeMu     sync.RWMutex
@@ -41,14 +42,14 @@ type windowsProvider struct {
 }
 
 func newWindowsProvider() WindowsProvider {
-	return newWindowsProviderWithModeAdapters(newUIAAdapter(newNativeUIADeps()), newUIAAdapter(newNativeACCDeps()), window.NewOSProvider())
+	return newWindowsProviderWithModeAdapters(newUIAAdapter(newNativeUIADeps()), newUIAAdapter(newNativeACCDeps()), newWindowTreeAdapter(newNativeWindowTreeDeps()), window.NewOSProvider())
 }
 
 func newWindowsProviderWithDeps(adapter uiaAdapter, windows windowAdapter) WindowsProvider {
-	return newWindowsProviderWithModeAdapters(adapter, adapter, windows)
+	return newWindowsProviderWithModeAdapters(adapter, adapter, adapter, windows)
 }
 
-func newWindowsProviderWithModeAdapters(uiaAdapter uiaAdapter, accAdapter uiaAdapter, windows windowAdapter) WindowsProvider {
+func newWindowsProviderWithModeAdapters(uiaAdapter uiaAdapter, accAdapter uiaAdapter, windowTreeAdapter uiaAdapter, windows windowAdapter) WindowsProvider {
 	if uiaAdapter == nil {
 		uiaAdapter = newUIAAdapter(nil)
 	}
@@ -58,9 +59,13 @@ func newWindowsProviderWithModeAdapters(uiaAdapter uiaAdapter, accAdapter uiaAda
 	if windows == nil {
 		windows = window.NewOSProvider()
 	}
+	if windowTreeAdapter == nil {
+		windowTreeAdapter = newWindowTreeAdapter(newNativeWindowTreeDeps())
+	}
 	return &windowsProvider{
 		uiaCore:    newProviderCoreWithNamespace(uiaAdapter, false, "uia"),
 		accCore:    newProviderCoreWithNamespace(accAdapter, false, "acc"),
+		windowCore: newProviderCoreWithNamespace(windowTreeAdapter, false, "window"),
 		highlights: newHighlightController(newNativeHighlightOverlay()),
 		windows:    windows,
 		activeMode: InspectModeUIATree,
@@ -93,10 +98,7 @@ func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRe
 		return InspectWindowResponse{}, err
 	}
 	p.setActiveMode(resolvedMode)
-	state := InspectModeState{
-		ActiveMode:   resolvedMode,
-		FallbackUsed: mode != resolvedMode,
-	}
+	state := InspectModeState{RequestedMode: mode, ActiveMode: resolvedMode, SatisfiedMode: resolvedMode, FallbackUsed: mode != resolvedMode}
 	var diagnostics *InspectDiagnostics
 	if state.FallbackUsed {
 		state.FailureStage = "ResolveWindowRoot"
@@ -124,10 +126,7 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 	p.setActiveMode(resolvedMode)
 	_ = p.refreshHighlightForCurrentSelection(ctx)
 	_ = p.highlights.ClearOnWindowSwitch(ctx, req.HWND)
-	state := InspectModeState{
-		ActiveMode:   resolvedMode,
-		FallbackUsed: mode != resolvedMode,
-	}
+	state := InspectModeState{RequestedMode: mode, ActiveMode: resolvedMode, SatisfiedMode: resolvedMode, FallbackUsed: mode != resolvedMode}
 	if state.FallbackUsed {
 		state.FailureStage = "ResolveWindowRoot"
 		state.GuidanceText = "UIA tree is unavailable. Switch to ACC/MSAA mode to continue inspecting this window."
@@ -788,24 +787,32 @@ func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode
 	if err == nil {
 		return root, mode, nil
 	}
-	if mode != InspectModeUIATree || !shouldFallbackToACC(err) {
+	if mode != InspectModeUIATree || !shouldFallbackFromUIAToAlternateTree(err) {
 		return TreeNodeDTO{}, mode, err
 	}
 	root, fallbackErr := p.accCore.treeRoot(ctx, hwnd, refresh)
-	if fallbackErr != nil {
+	if fallbackErr == nil {
+		return root, InspectModeWindowTree, nil
+	}
+	root, windowErr := p.windowCore.treeRoot(ctx, hwnd, refresh)
+	if windowErr != nil {
 		return TreeNodeDTO{}, mode, err
 	}
 	return root, InspectModeWindowTree, nil
 }
 
-func shouldFallbackToACC(err error) bool {
-	if errors.Is(err, ErrProviderActionUnsupported) {
+func shouldFallbackFromUIAToAlternateTree(err error) bool {
+	if errors.Is(err, ErrProviderActionUnsupported) || errors.Is(err, ErrProviderTransientFailure) || errors.Is(err, ErrTransientFailure) || errors.Is(err, ErrStaleCache) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "access denied") || strings.Contains(msg, "element not available") || strings.Contains(msg, "nil element") || strings.Contains(msg, "transient") || strings.Contains(msg, "stale") {
 		return true
 	}
 	var pErr *ProviderCallError
 	if errors.As(err, &pErr) {
 		msg := strings.ToLower(pErr.Err.Error())
-		return strings.Contains(msg, "access is denied") || strings.Contains(msg, "e_accessdenied")
+		return strings.Contains(msg, "access is denied") || strings.Contains(msg, "e_accessdenied") || strings.Contains(msg, "element not available") || strings.Contains(msg, "nil element") || strings.Contains(msg, "transient") || strings.Contains(msg, "stale")
 	}
 	return false
 }

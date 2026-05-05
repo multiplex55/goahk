@@ -83,10 +83,12 @@ const (
 )
 
 type InspectModeState struct {
-	ActiveMode   InspectMode `json:"activeMode"`
-	FallbackUsed bool        `json:"fallbackUsed"`
-	FailureStage string      `json:"failureStage,omitempty"`
-	GuidanceText string      `json:"guidanceText,omitempty"`
+	RequestedMode InspectMode `json:"requestedMode,omitempty"`
+	ActiveMode    InspectMode `json:"activeMode"`
+	SatisfiedMode InspectMode `json:"satisfiedMode,omitempty"`
+	FallbackUsed  bool        `json:"fallbackUsed"`
+	FailureStage  string      `json:"failureStage,omitempty"`
+	GuidanceText  string      `json:"guidanceText,omitempty"`
 }
 
 type ProviderSourceDTO struct {
