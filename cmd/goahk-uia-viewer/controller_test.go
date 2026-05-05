@@ -434,6 +434,10 @@ type fakeControllerService struct {
 	root                                                                                      inspect.TreeNodeDTO
 	activateCalls, inspectCalls, treeRootCalls, nodeDetailsCalls, selectCalls, highlightCalls int
 	inspectErr                                                                                error
+	nodeDetailsErr                                                                            error
+	nodeChildrenErr                                                                           error
+	selectErr                                                                                 error
+	highlightErr                                                                              error
 }
 
 func (f *fakeControllerService) ActivateWindow(context.Context, inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
@@ -453,14 +457,29 @@ func (f *fakeControllerService) GetTreeRoot(context.Context, inspect.GetTreeRoot
 }
 func (f *fakeControllerService) GetNodeDetails(context.Context, inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
 	f.nodeDetailsCalls++
+	if f.nodeDetailsErr != nil {
+		return inspect.GetNodeDetailsResponse{}, f.nodeDetailsErr
+	}
 	return f.nodeDetailsResp, nil
+}
+func (f *fakeControllerService) GetNodeChildren(context.Context, inspect.GetNodeChildrenRequest) (inspect.GetNodeChildrenResponse, error) {
+	if f.nodeChildrenErr != nil {
+		return inspect.GetNodeChildrenResponse{}, f.nodeChildrenErr
+	}
+	return inspect.GetNodeChildrenResponse{Children: []inspect.TreeNodeDTO{{NodeID: "child-1"}}}, nil
 }
 func (f *fakeControllerService) SelectNode(context.Context, inspect.SelectNodeRequest) (inspect.SelectNodeResponse, error) {
 	f.selectCalls++
+	if f.selectErr != nil {
+		return inspect.SelectNodeResponse{}, f.selectErr
+	}
 	return inspect.SelectNodeResponse{}, nil
 }
 func (f *fakeControllerService) HighlightNode(context.Context, inspect.HighlightNodeRequest) (inspect.HighlightNodeResponse, error) {
 	f.highlightCalls++
+	if f.highlightErr != nil {
+		return inspect.HighlightNodeResponse{}, f.highlightErr
+	}
 	return inspect.HighlightNodeResponse{}, nil
 }
 
@@ -472,5 +491,78 @@ func TestSelectWindowSelectsAndHighlightsRoot(t *testing.T) {
 	}
 	if svc.selectCalls != 1 || svc.highlightCalls != 1 {
 		t.Fatalf("expected select/highlight once for root, got select=%d highlight=%d", svc.selectCalls, svc.highlightCalls)
+	}
+}
+
+func TestSelectWindowReturnsDetailsWhenRootChildrenFail(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root"}},
+		root:               inspect.TreeNodeDTO{NodeID: "root-id"},
+		nodeChildrenErr:    errors.New("children failed"),
+	}
+	c := NewController(context.Background(), svc)
+	result, err := c.SelectWindow("0x1", false)
+	if err != nil {
+		t.Fatalf("expected nil fatal error, got: %v", err)
+	}
+	if result.Root.Root.NodeID == "" || result.Details.ACCPath == "" {
+		t.Fatalf("expected root/details to be populated: %+v", result)
+	}
+	if result.ChildLoadErr == nil {
+		t.Fatal("expected ChildLoadErr warning")
+	}
+}
+
+func TestSelectWindowReturnsDetailsWhenHighlightFails(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root"}},
+		root:               inspect.TreeNodeDTO{NodeID: "root-id"},
+		highlightErr:       errors.New("highlight failed"),
+	}
+	c := NewController(context.Background(), svc)
+	result, err := c.SelectWindow("0x1", false)
+	if err != nil {
+		t.Fatalf("expected nil fatal error, got: %v", err)
+	}
+	if result.Root.Root.NodeID == "" || result.Details.ACCPath == "" {
+		t.Fatalf("expected root/details to be populated: %+v", result)
+	}
+	if result.HighlightErr == nil {
+		t.Fatal("expected HighlightErr warning")
+	}
+}
+
+func TestSelectWindowReturnsDetailsWhenSelectNodeFails(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root"}},
+		root:               inspect.TreeNodeDTO{NodeID: "root-id"},
+		selectErr:          errors.New("select failed"),
+	}
+	c := NewController(context.Background(), svc)
+	result, err := c.SelectWindow("0x1", false)
+	if err != nil {
+		t.Fatalf("expected nil fatal error, got: %v", err)
+	}
+	if result.Root.Root.NodeID == "" || result.Details.ACCPath == "" {
+		t.Fatalf("expected root/details to be populated: %+v", result)
+	}
+	if result.SelectErr == nil {
+		t.Fatal("expected SelectErr warning")
+	}
+}
+
+func TestSelectWindowAbortsWhenGetNodeDetailsFails(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{},
+		root:               inspect.TreeNodeDTO{NodeID: "root-id"},
+		nodeDetailsErr:     errors.New("details failed"),
+	}
+	c := NewController(context.Background(), svc)
+	result, err := c.SelectWindow("0x1", false)
+	if err == nil {
+		t.Fatal("expected fatal error")
+	}
+	if result.Root.Root.NodeID != "" || result.Details.ACCPath != "" || result.ChildLoadErr != nil || result.SelectErr != nil || result.HighlightErr != nil {
+		t.Fatalf("expected empty result on fatal failure: %+v", result)
 	}
 }
