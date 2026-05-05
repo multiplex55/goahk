@@ -100,6 +100,24 @@ func TestHighlightController_Lifecycle(t *testing.T) {
 		}
 	})
 
+	t.Run("clear-before-show failure aborts rehighlight", func(t *testing.T) {
+		overlay := &mockOverlay{screen: &Rect{Left: 0, Top: 0, Width: 500, Height: 500}}
+		controller := newHighlightController(overlay)
+		_, _ = controller.ShowNode(context.Background(), "node:1", InspectElement{BoundingRect: &Rect{Left: 10, Top: 20, Width: 100, Height: 50}}, "0x1")
+		overlay.clearErr = context.Canceled
+
+		highlighted, err := controller.ShowNode(context.Background(), "node:2", InspectElement{BoundingRect: &Rect{Left: 20, Top: 30, Width: 80, Height: 40}}, "0x1")
+		if err == nil {
+			t.Fatalf("expected clear failure")
+		}
+		if highlighted {
+			t.Fatalf("expected highlight=false on clear failure")
+		}
+		if len(overlay.showCalls) != 1 {
+			t.Fatalf("expected no second show call when clear fails, got %d", len(overlay.showCalls))
+		}
+	})
+
 	t.Run("selection change to no selectable rect clears highlight", func(t *testing.T) {
 		overlay := &mockOverlay{}
 		controller := newHighlightController(overlay)

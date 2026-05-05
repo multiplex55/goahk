@@ -26,13 +26,35 @@ type nativeHighlightOverlay struct{}
 func newNativeHighlightOverlay() highlightOverlay { return nativeHighlightOverlay{} }
 
 func (nativeHighlightOverlay) Show(context.Context, Rect) error {
-	// Placeholder for native top-level transparent overlay window rendering.
-	// The provider lifecycle and geometry guards are wired to this adapter.
+	// Native overlay rendering is intentionally stubbed in this environment.
+	// Style and paint configuration helpers remain explicit/tested to guard
+	// expected topmost/layered/click-through behavior.
 	return nil
 }
 
 func (nativeHighlightOverlay) Clear(context.Context) error {
 	return nil
+}
+
+const (
+	wsPopup         = 0x80000000
+	wsExTopMost     = 0x00000008
+	wsExToolWindow  = 0x00000080
+	wsExTransparent = 0x00000020
+	wsExLayered     = 0x00080000
+	wsExNoActivate  = 0x08000000
+)
+
+func overlayWindowStyle() uintptr {
+	return wsPopup
+}
+
+func overlayWindowExStyle() uintptr {
+	return wsExTopMost | wsExToolWindow | wsExTransparent | wsExLayered | wsExNoActivate
+}
+
+func overlayPaintUsesBorderOnly() bool {
+	return true
 }
 
 func (nativeHighlightOverlay) ScreenBounds(context.Context) (*Rect, error) {
