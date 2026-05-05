@@ -82,3 +82,45 @@ func TestPropertyControlTypeFormatting(t *testing.T) {
 		t.Fatalf("ControlType=%q", rows[0].Value)
 	}
 }
+
+func TestPropertyRowsPrimaryPathUsesDetailsProperties(t *testing.T) {
+	name := "From Properties"
+	rows := mapPropertyRowsFromDetails(inspect.GetNodeDetailsResponse{Properties: []inspect.PropertyDTO{{Name: "Name", Value: &name, Status: "ok"}}})
+	if rows[2].Name != "Name" || rows[2].Value != "From Properties" || rows[2].Status != "ok" {
+		t.Fatalf("expected Name row from primary property path, got %#v", rows[2])
+	}
+}
+
+func TestPropertyRowsFallbackToElementWhenPropertiesEmpty(t *testing.T) {
+	details := inspect.GetNodeDetailsResponse{
+		Element: inspect.ElementPropertiesDTO{
+			Name:                 "Fallback Name",
+			Value:                "Fallback Value",
+			ControlType:          "50004",
+			LocalizedControlType: "edit",
+			AutomationID:         "auto-id",
+			Bounds:               &inspect.Rect{Left: 1, Top: 2, Width: 3, Height: 4},
+		},
+		WindowInfo: inspect.WindowInfoDTO{Class: "Edit", PID: 314},
+	}
+
+	rows := mapPropertyRowsFromDetails(details)
+	if rows[0].Value != "50004 (edit)" {
+		t.Fatalf("expected ControlType fallback formatting, got %q", rows[0].Value)
+	}
+	if rows[2].Value != "Fallback Name" || rows[2].Status != "ok" {
+		t.Fatalf("expected Name fallback row populated, got %#v", rows[2])
+	}
+	if rows[3].Value != "Fallback Value" {
+		t.Fatalf("expected Value fallback row populated, got %#v", rows[3])
+	}
+	if rows[5].Value != "x:1 y:2 w:3 h:4 | l:1 t:2 r:4 b:6" {
+		t.Fatalf("expected BoundingRectangle fallback formatting, got %#v", rows[5])
+	}
+	if rows[6].Value != "Edit" {
+		t.Fatalf("expected ClassName fallback from WindowInfo, got %#v", rows[6])
+	}
+	if rows[13].Value != "314" {
+		t.Fatalf("expected ProcessId fallback from WindowInfo, got %#v", rows[13])
+	}
+}
