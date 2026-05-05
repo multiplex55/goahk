@@ -162,7 +162,7 @@ func formatPropertyValue(name, value string, byName map[string]inspect.PropertyD
 			return formatted
 		}
 	case "ControlType":
-		if localized := propertyValue(byName, "LocalizedControlType"); localized != "" {
+		if localized := propertyValueFromMap(byName, "LocalizedControlType"); localized != "" {
 			if strings.Contains(value, "(") {
 				return value
 			}
@@ -172,7 +172,7 @@ func formatPropertyValue(name, value string, byName map[string]inspect.PropertyD
 	return value
 }
 
-func propertyValue(byName map[string]inspect.PropertyDTO, name string) string {
+func propertyValueFromMap(byName map[string]inspect.PropertyDTO, name string) string {
 	p, ok := byName[name]
 	if !ok || p.Value == nil {
 		return ""
