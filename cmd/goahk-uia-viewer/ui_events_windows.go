@@ -62,6 +62,7 @@ func (ui *viewerUI) attachEvents() {
 	ui.walkUIThread = ui.mw
 	ui.dispatcher = &walkUIThread{mw: ui.walkUIThread}
 	ui.windowModel = newWindowTableModel()
+	ui.infoModel = newInfoTableModel()
 	ui.propertiesModel = newPropertyTableModel()
 	ui.treeModel = newUIATreeModel()
 	ui.patternModel = newPatternTreeModel()
@@ -77,6 +78,9 @@ func (ui *viewerUI) attachEvents() {
 				ui.events.OnWindowSelected(row.ID, ui.activateOnSelect())
 			}
 		})
+	}
+	if ui.infoTable != nil {
+		ui.infoTable.SetModel(ui.infoModel)
 	}
 	if ui.propertiesTV != nil {
 		ui.propertiesTV.SetModel(ui.propertiesModel)
@@ -161,8 +165,8 @@ func (ui *viewerUI) UpdateWindowDetails(details inspect.GetNodeDetailsResponse) 
 	ui.UpdateNodeDetails(details)
 }
 func (ui *viewerUI) UpdateNodeDetails(details inspect.GetNodeDetailsResponse) {
-	if ui.infoView != nil {
-		ui.infoView.SetText(formatSelectedInfo(&details))
+	if ui.infoModel != nil {
+		ui.infoModel.SetRows(mapWindowInfoRows(&details))
 	}
 	if ui.propertiesModel != nil {
 		ui.propertiesModel.SetRows(mapPropertyTableRows(details.Properties))
@@ -188,41 +192,3 @@ func (ui *viewerUI) ExpandTreeNode(nodeID string) {
 	}
 }
 func (ui *viewerUI) SelectTreeNode(string) {}
-
-func formatSelectedInfo(details *inspect.GetNodeDetailsResponse) string {
-	if details == nil {
-		return "No selection"
-	}
-	lines := []string{
-		"Window:",
-		"  Title: " + fallback(details.WindowInfo.Title),
-		"  Process: " + fallback(details.WindowInfo.Process),
-		"  PID: " + intOrNA(details.WindowInfo.PID),
-		"  HWND: " + fallback(details.WindowInfo.HWND),
-		"  Class: " + fallback(details.WindowInfo.Class),
-		"",
-		"Element:",
-		"  NodeID: " + fallback(details.Element.NodeID),
-		"  Name: " + fallback(details.Element.Name),
-		"  ControlType: " + fallback(details.Element.ControlType),
-		"  LocalizedControlType: " + fallback(details.Element.LocalizedControlType),
-	}
-	if strings.TrimSpace(details.ACCPath) != "" {
-		lines = append(lines, "", "ACC Path: "+details.ACCPath)
-	}
-	return strings.Join(lines, "\n")
-}
-
-func fallback(v string) string {
-	if strings.TrimSpace(v) == "" {
-		return "N/A"
-	}
-	return v
-}
-
-func intOrNA(v int) string {
-	if v <= 0 {
-		return "N/A"
-	}
-	return fmt.Sprintf("%d", v)
-}
