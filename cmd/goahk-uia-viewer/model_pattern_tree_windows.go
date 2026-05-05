@@ -20,6 +20,8 @@ type patternTreeNode struct {
 	children []patternTreeNode
 }
 
+const emptyPatternNodeID = "patterns.empty"
+
 func (n *patternTreeNode) Text() string { return n.label }
 func (n *patternTreeNode) Parent() walk.TreeItem {
 	if n == nil || n.parent == nil {
@@ -61,6 +63,12 @@ func (m *patternTreeModel) RootAt(index int) walk.TreeItem {
 }
 
 func (m *patternTreeModel) SetRoots(roots []patternTreeNode) {
+	if len(roots) == 0 {
+		roots = []patternTreeNode{{
+			id:    emptyPatternNodeID,
+			label: "No supported patterns",
+		}}
+	}
 	m.nodes = map[string]*patternTreeNode{}
 	m.roots = m.roots[:0]
 	for i := range roots {

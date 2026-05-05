@@ -42,7 +42,7 @@ func (ui *viewerUI) executePatternAction(action string) {
 				return
 			}
 			ui.UpdateNodeDetails(details)
-			ui.setStatus("action completed: " + callableActionLabel(action))
+			ui.setStatus(fmt.Sprintf("action completed: %s (patterns=%d)", callableActionLabel(action), len(details.Patterns)))
 		})
 	}()
 }
