@@ -338,10 +338,20 @@ func (ui *viewerUI) UpdateNodeDetails(details inspect.GetNodeDetailsResponse) {
 	}
 }
 func (ui *viewerUI) UpdateTreeRoot(root inspect.TreeNodeDTO) {
-	if ui.treeModel != nil {
-		ui.treeModel.SetRoot(root)
+	if ui == nil || ui.treeModel == nil {
+		return
 	}
 
+	ui.treeModel.SetRoot(root)
+	if ui.treeView == nil {
+		return
+	}
+
+	ui.treeView.SetModel(ui.treeModel)
+	if item, ok := ui.treeModel.ItemByID(root.NodeID); ok {
+		ui.treeView.SetCurrentItem(item)
+	}
+	ui.treeView.Invalidate()
 }
 func (ui *viewerUI) UpdateNodeChildren(nodeID string, children []inspect.TreeNodeDTO) {
 	if ui.treeModel != nil {
@@ -353,4 +363,13 @@ func (ui *viewerUI) ExpandTreeNode(nodeID string) {
 		ui.treeModel.SetExpanded(nodeID, true)
 	}
 }
-func (ui *viewerUI) SelectTreeNode(string) {}
+func (ui *viewerUI) SelectTreeNode(nodeID string) {
+	if ui == nil || ui.treeView == nil || ui.treeModel == nil {
+		return
+	}
+	item, ok := ui.treeModel.ItemByID(nodeID)
+	if !ok {
+		return
+	}
+	ui.treeView.SetCurrentItem(item)
+}
