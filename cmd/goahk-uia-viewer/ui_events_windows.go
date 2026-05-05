@@ -334,7 +334,7 @@ func (ui *viewerUI) UpdateNodeDetails(details inspect.GetNodeDetailsResponse) {
 		ui.infoModel.SetRows(mapWindowInfoRows(&details))
 	}
 	if ui.propertiesModel != nil {
-		ui.propertiesModel.SetRows(mapPropertyTableRows(details.Properties))
+		ui.propertiesModel.SetRows(mapPropertyRowsFromDetails(details))
 	}
 	if ui.patternModel != nil {
 		ui.patternModel.SetRoots(mapPatternTree(details.Patterns))
