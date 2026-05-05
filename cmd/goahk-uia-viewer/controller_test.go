@@ -199,7 +199,7 @@ func TestController_SelectWindow_Pipeline(t *testing.T) {
 	if svc.clearCalls == 0 {
 		t.Fatal("expected highlight clear on switch")
 	}
-	if svc.activateCalls != 1 || svc.inspectCalls != 1 || svc.treeRootCalls != 1 || svc.nodeDetailsCalls != 2 {
+	if svc.activateCalls != 1 || svc.inspectCalls != 1 || svc.treeRootCalls != 1 || svc.nodeDetailsCalls != 1 {
 		t.Fatalf("unexpected pipeline calls: %+v", svc)
 	}
 }

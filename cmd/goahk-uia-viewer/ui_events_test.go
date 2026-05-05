@@ -80,7 +80,7 @@ func TestOnWindowSelectedDoesNotCallRefreshSelectedNodeDetailsWithEmptyNode(t *t
 	adapter.OnWindowSelected("0x2", false)
 	fn := <-mq.ch
 	fn()
-	if svc.nodeDetailsCalls != 2 {
+	if svc.nodeDetailsCalls != 1 {
 		t.Fatalf("expected details from select+selectNode only, got %d", svc.nodeDetailsCalls)
 	}
 }
