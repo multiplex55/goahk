@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/lxn/walk"
@@ -54,20 +55,68 @@ func mapWindowInfoRows(details *inspect.GetNodeDetailsResponse) []infoTableRow {
 	if rect == nil {
 		rect = element.Bounds
 	}
-	classNN := strings.TrimSpace(window.Class)
-	if classNN == "" {
-		classNN = "N/A"
+	classNN := coalesce(window.Class, propertyValue(details.Properties, "ClassName"))
+	pid := coalescePID(window.PID, propertyInt(details.Properties, "ProcessId"))
+	process := coalesce(window.Process, propertyValue(details.Properties, "ProcessName"))
+	if strings.TrimSpace(process) == "" && pid > 0 {
+		process = fmt.Sprintf("pid:%d", pid)
 	}
 	return []infoTableRow{
-		{Property: "Title", Value: fallback(window.Title)},
-		{Property: "Text", Value: fallback(window.Text)},
+		{Property: "Title", Value: fallback(coalesce(window.Title, element.Name))},
+		{Property: "Text", Value: fallback(coalesce(window.Text, element.Value))},
 		{Property: "Hwnd", Value: formatAHKID(window.HWND, element.HWND)},
 		{Property: "Location", Value: formatLocation(rect)},
 		{Property: "Size", Value: formatSize(rect)},
-		{Property: "Class(NN)", Value: classNN},
-		{Property: "Process", Value: fallback(window.Process)},
-		{Property: "PID", Value: intOrNA(window.PID)},
+		{Property: "Class(NN)", Value: fallback(classNN)},
+		{Property: "Process", Value: fallback(process)},
+		{Property: "PID", Value: intOrNA(pid)},
 	}
+}
+
+func coalesce(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func propertyValue(properties []inspect.PropertyDTO, name string) string {
+	for _, prop := range properties {
+		if !strings.EqualFold(strings.TrimSpace(prop.Name), name) || prop.Value == nil {
+			continue
+		}
+		if value := strings.TrimSpace(*prop.Value); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func propertyInt(properties []inspect.PropertyDTO, name string) int {
+	for _, prop := range properties {
+		if !strings.EqualFold(strings.TrimSpace(prop.Name), name) || prop.Value == nil {
+			continue
+		}
+		value := strings.TrimSpace(*prop.Value)
+		if value == "" || strings.EqualFold(value, "<nil>") {
+			continue
+		}
+		if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return 0
+}
+
+func coalescePID(values ...int) int {
+	for _, v := range values {
+		if v > 0 {
+			return v
+		}
+	}
+	return 0
 }
 
 func formatAHKID(windowHWND, elementHWND string) string {
