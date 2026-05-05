@@ -98,6 +98,25 @@ func TestUIATreeSetChildrenRemovesPlaceholder(t *testing.T) {
 	}
 }
 
+func TestUIATreeSetChildrenMakesNestedChildrenVisibleImmediately(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "parent"}})
+	m.SetChildren("parent", []inspect.TreeNodeDTO{{NodeID: "leaf"}})
+
+	parent, ok := m.ItemByID("parent")
+	if !ok {
+		t.Fatal("expected parent node")
+	}
+	if parent.ChildCount() != 1 {
+		t.Fatalf("expected 1 visible child after update, got %d", parent.ChildCount())
+	}
+	leaf := parent.ChildAt(0).(*uiaTreeNode)
+	if leaf.NodeID != "leaf" || leaf.placeholder {
+		t.Fatalf("expected leaf child to be visible immediately, got %#v", leaf)
+	}
+}
+
 func TestUIATreeIdentityUsesNodeIDNotLabel(t *testing.T) {
 	m := newUIATreeModel()
 	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
