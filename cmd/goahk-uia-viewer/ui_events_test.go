@@ -239,3 +239,25 @@ func TestOnWindowSelectedExpandsAndSelectsRoot(t *testing.T) {
 		t.Fatalf("expected root selected, got %v", view.selected)
 	}
 }
+
+func TestTreeSelectionTracksDisplayedDetails(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 4)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if len(view.selected) == 0 || view.selected[len(view.selected)-1] != "root" {
+		t.Fatalf("expected selected root, got %v", view.selected)
+	}
+
+	adapter.OnTreeExpanded("root", false)
+	fn = <-mq.ch
+	fn()
+	if len(view.selected) == 0 || view.selected[len(view.selected)-1] != "root" {
+		t.Fatalf("expected root to remain selected after expansion, got %v", view.selected)
+	}
+}

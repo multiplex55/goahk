@@ -63,6 +63,7 @@ func (a *ViewerEventAdapter) OnTreeExpanded(nodeID string, loaded bool) {
 				return
 			}
 			a.view.UpdateNodeChildren(nodeID, resp.Children)
+			a.view.SelectTreeNode(nodeID)
 			a.view.SetStatus("node expanded")
 		})
 	}()
