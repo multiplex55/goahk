@@ -21,12 +21,14 @@ type guardedView struct {
 	updates  int
 	expanded []string
 	selected []string
+	fatal    []string
 }
 
 func (v *guardedView) enterQueue()                                        { v.mu.Lock(); v.queued = true; v.mu.Unlock() }
 func (v *guardedView) exitQueue()                                         { v.mu.Lock(); v.queued = false; v.mu.Unlock() }
 func (v *guardedView) SetBusy(b bool)                                     { v.mu.Lock(); v.busy = append(v.busy, b); v.mu.Unlock() }
 func (v *guardedView) SetStatus(s string)                                 { v.mu.Lock(); v.status = append(v.status, s); v.mu.Unlock() }
+func (v *guardedView) ShowFatal(s string)                                 { v.mu.Lock(); v.fatal = append(v.fatal, s); v.mu.Unlock() }
 func (v *guardedView) UpdateWindowDetails(inspect.GetNodeDetailsResponse) { v.updates++ }
 func (v *guardedView) UpdateNodeDetails(inspect.GetNodeDetailsResponse)   { v.updates++ }
 func (v *guardedView) UpdateTreeRoot(inspect.TreeNodeDTO)                 { v.updates++ }
@@ -141,7 +143,7 @@ func TestViewerEventAdapter_WindowSelectionStatusSet(t *testing.T) {
 	view.enterQueue()
 	fn()
 	view.exitQueue()
-	if len(view.status) == 0 || view.status[len(view.status)-1] != "window loaded: properties=0 patterns=0 children=1" {
+	if len(view.status) == 0 || view.status[len(view.status)-1] != "window loaded InspectWindow [0x2]: properties=0 patterns=0 children=1" {
 		t.Fatalf("expected success status with counts, got %v", view.status)
 	}
 }
@@ -172,7 +174,7 @@ func TestOnWindowSelectedShowsErrorWhenInspectFails(t *testing.T) {
 	adapter.OnWindowSelected("0x2", false)
 	fn := <-mq.ch
 	fn()
-	if len(view.status) == 0 {
+	if len(view.status) == 0 || len(view.fatal) == 0 {
 		t.Fatal("expected error status")
 	}
 }
@@ -189,7 +191,7 @@ func TestViewerEventAdapter_TreeExpandStatusSet(t *testing.T) {
 	view.enterQueue()
 	fn()
 	view.exitQueue()
-	if len(view.status) == 0 || view.status[len(view.status)-1] != "node expanded" {
+	if len(view.status) == 0 || view.status[len(view.status)-1] != "node expanded GetTreeRoot [n1]" {
 		t.Fatalf("expected expand status, got %v", view.status)
 	}
 }
