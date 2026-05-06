@@ -80,3 +80,57 @@ func TestNativeWindowTreeDeps_UIAOnlyMethodsGuarded(t *testing.T) {
 		t.Fatalf("expected UIA ref rejection in window tree mode, got %v", err)
 	}
 }
+
+func TestNativeWindowTreeDeps_GetElementByRef_BoundingRectPresent(t *testing.T) {
+	deps := &nativeWindowTreeDeps{bridge: fakeWindowTreeBridge{
+		elements: map[window.HWND]*uiaElement{
+			0x10: {
+				Ref:          "win:0x10",
+				RuntimeID:    "16",
+				BoundingRect: &uiaRect{Left: 10, Top: 20, Width: 300, Height: 200},
+				UnsupportedProps: map[string]bool{
+					"BoundingRectangle": false,
+				},
+			},
+		},
+	}}
+
+	el, err := deps.GetElementByRef(context.Background(), "win:0x10")
+	if err != nil {
+		t.Fatalf("GetElementByRef failed: %v", err)
+	}
+	if el.BoundingRect == nil {
+		t.Fatalf("expected bounding rect to be populated")
+	}
+	if got := el.BoundingRect; got.Left != 10 || got.Top != 20 || got.Width != 300 || got.Height != 200 {
+		t.Fatalf("unexpected bounding rect: %+v", got)
+	}
+	if el.UnsupportedProps["BoundingRectangle"] {
+		t.Fatalf("expected BoundingRectangle to be supported when rect is present")
+	}
+}
+
+func TestNativeWindowTreeDeps_GetElementByRef_BoundingRectAbsent(t *testing.T) {
+	deps := &nativeWindowTreeDeps{bridge: fakeWindowTreeBridge{
+		elements: map[window.HWND]*uiaElement{
+			0x20: {
+				Ref:       "win:0x20",
+				RuntimeID: "32",
+				UnsupportedProps: map[string]bool{
+					"BoundingRectangle": true,
+				},
+			},
+		},
+	}}
+
+	el, err := deps.GetElementByRef(context.Background(), "win:0x20")
+	if err != nil {
+		t.Fatalf("GetElementByRef failed: %v", err)
+	}
+	if el.BoundingRect != nil {
+		t.Fatalf("expected bounding rect to be nil when unavailable, got %+v", el.BoundingRect)
+	}
+	if !el.UnsupportedProps["BoundingRectangle"] {
+		t.Fatalf("expected BoundingRectangle to remain unsupported when rect is unavailable")
+	}
+}
