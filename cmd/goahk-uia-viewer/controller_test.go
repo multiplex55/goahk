@@ -690,6 +690,31 @@ func TestControllerModeAccessors(t *testing.T) {
 	}
 }
 
+func TestSelectWindowCarriesFallbackModeState(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root"}},
+		root:               inspect.TreeNodeDTO{NodeID: "root-id"},
+		rootState: inspect.InspectModeState{
+			RequestedMode: inspect.InspectModeUIATree,
+			ActiveMode:    inspect.InspectModeHWNDTree,
+			FallbackUsed:  true,
+			GuidanceText:  "UIA tree is unavailable. Switch to ACC/MSAA mode to continue inspecting this window.",
+		},
+	}
+	c := NewController(context.Background(), svc)
+	c.SetMode(inspect.InspectModeUIATree)
+	result, err := c.SelectWindow("0x1", false)
+	if err != nil {
+		t.Fatalf("expected fallback success, got %v", err)
+	}
+	if !result.Root.State.FallbackUsed || result.Root.State.ActiveMode != inspect.InspectModeHWNDTree {
+		t.Fatalf("expected degraded fallback mode state, got %+v", result.Root.State)
+	}
+	if result.Root.State.GuidanceText == "" {
+		t.Fatalf("expected fallback guidance text, got %+v", result.Root.State)
+	}
+}
+
 func TestSelectWindowLogsDetailsError(t *testing.T) {
 	svc := &fakeControllerService{
 		fakeInspectService: fakeInspectService{},

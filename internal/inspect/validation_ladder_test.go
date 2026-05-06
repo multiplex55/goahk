@@ -84,4 +84,22 @@ func TestValidationLadder_A_to_F(t *testing.T) {
 			t.Fatalf("ACC mode behavior failed: root=%+v state=%+v err=%v", resp.Root, resp.State, err)
 		}
 	})
+
+	t.Run("G UIA parity contract vs degraded fallback", func(t *testing.T) {
+		uia := &fakeAdapter{root: nil}
+		acc := &fakeAdapter{root: &uiaElement{Ref: "acc-root", RuntimeID: "10", Name: "ACC Root"}}
+		hwnd := &fakeAdapter{root: &uiaElement{Ref: "hwnd-root", RuntimeID: "11", Name: "HWND Root"}}
+		provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(acc), newUIAAdapter(hwnd), &fakeWindowAdapter{}).(*windowsProvider)
+
+		resp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+		if err != nil {
+			t.Fatalf("expected degraded fallback root, got err=%v", err)
+		}
+		if !resp.State.FallbackUsed || resp.State.ActiveMode == InspectModeUIATree {
+			t.Fatalf("expected non-parity fallback state, got %+v", resp.State)
+		}
+		if resp.State.GuidanceText == "" {
+			t.Fatalf("expected guidance text for fallback state, got %+v", resp.State)
+		}
+	})
 }
