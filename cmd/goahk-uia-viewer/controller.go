@@ -55,6 +55,7 @@ type WindowSelectionResult struct {
 	Root              inspect.GetTreeRootResponse
 	Children          []inspect.TreeNodeDTO
 	Details           inspect.GetNodeDetailsResponse
+	DetailsErr        error
 	ChildLoadErr      error
 	SelectErr         error
 	HighlightErr      error
@@ -155,19 +156,25 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	c.nodesByID[rootNodeID] = root.Root
 	c.diagnostics = root.Diagnostics
 	c.mu.Unlock()
+	log.Printf("uia.viewer inspect_details_start hwnd=%s node=%s", hwnd, rootNodeID)
 	details, err := c.service.GetNodeDetails(c.runtimeContext(), inspect.GetNodeDetailsRequest{NodeID: rootNodeID})
 	if err != nil {
-		return WindowSelectionResult{}, fmt.Errorf("get node details node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
+		result.DetailsErr = fmt.Errorf("get node details node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
+		result.Details = synthesizeRootDetails(root, result.DetailsErr)
+		log.Printf("uia.viewer inspect_details_err hwnd=%s node=%s err=%v", hwnd, rootNodeID, err)
+		log.Printf("uia.viewer inspect_details_fallback_ok hwnd=%s node=%s provider=%s", hwnd, rootNodeID, root.Source.Provider)
+	} else {
+		result.Details = details
+		log.Printf("uia.viewer inspect_details_ok hwnd=%s node=%s properties=%d patterns=%d", hwnd, rootNodeID, len(details.Properties), len(details.Patterns))
 	}
-	result.Details = details
-	log.Printf("uia.viewer inspect_details_ok hwnd=%s node=%s properties=%d patterns=%d", hwnd, rootNodeID, len(details.Properties), len(details.Patterns))
 	c.mu.Lock()
-	if c.accPathCaptureEnabled && strings.TrimSpace(details.ACCPath) != "" {
-		c.lastACCPath = details.ACCPath
-		c.statusText = "Path: " + details.ACCPath
+	if c.accPathCaptureEnabled && strings.TrimSpace(result.Details.ACCPath) != "" {
+		c.lastACCPath = result.Details.ACCPath
+		c.statusText = "Path: " + result.Details.ACCPath
 	}
 	c.mu.Unlock()
 
+	log.Printf("uia.viewer inspect_children_start hwnd=%s node=%s", hwnd, rootNodeID)
 	childrenResp, childErr := c.ExpandNode(rootNodeID)
 	if childErr != nil {
 		result.ChildLoadErr = fmt.Errorf("load root children node=%s hwnd=%s: %w", rootNodeID, hwnd, childErr)
@@ -177,12 +184,14 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 		log.Printf("uia.viewer inspect_children_ok hwnd=%s node=%s children=%d", hwnd, rootNodeID, len(result.Children))
 	}
 
+	log.Printf("uia.viewer inspect_select_start hwnd=%s node=%s", hwnd, rootNodeID)
 	if _, err := c.service.SelectNode(c.runtimeContext(), inspect.SelectNodeRequest{NodeID: rootNodeID}); err != nil {
 		result.SelectErr = fmt.Errorf("select root node node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
 		log.Printf("uia.viewer inspect_select_err hwnd=%s node=%s err=%v", hwnd, rootNodeID, err)
 	} else {
 		log.Printf("uia.viewer inspect_select_ok hwnd=%s node=%s", hwnd, rootNodeID)
 	}
+	log.Printf("uia.viewer inspect_highlight_start hwnd=%s node=%s", hwnd, rootNodeID)
 	if _, err := c.service.HighlightNode(c.runtimeContext(), inspect.HighlightNodeRequest{NodeID: rootNodeID}); err != nil {
 		result.HighlightErr = fmt.Errorf("highlight root node node=%s hwnd=%s: %w", rootNodeID, hwnd, err)
 		log.Printf("uia.viewer inspect_highlight_err hwnd=%s node=%s err=%v", hwnd, rootNodeID, err)
@@ -194,6 +203,40 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	}
 	log.Printf("uia.viewer select_window_end hwnd=%s mode=%s provider=%s active_mode=%s fallback=%t err=nil", hwnd, mode, result.Root.Source.Provider, result.Root.State.ActiveMode, result.Root.State.FallbackUsed)
 	return result, nil
+}
+
+func synthesizeRootDetails(root inspect.GetTreeRootResponse, detailsErr error) inspect.GetNodeDetailsResponse {
+	status := "partial load: using root fallback details"
+	if detailsErr != nil {
+		status = fmt.Sprintf("partial load: details unavailable (%v); using root fallback details", detailsErr)
+	}
+	return inspect.GetNodeDetailsResponse{
+		WindowInfo: inspect.WindowInfoDTO{
+			Title: root.Root.Name,
+			HWND:  root.Root.HWND,
+			Class: firstNonEmpty(root.Root.ClassName, root.Root.DebugMeta.ClassName),
+		},
+		Element: inspect.ElementPropertiesDTO{
+			NodeID:               root.Root.NodeID,
+			HWND:                 firstNonEmpty(root.Root.HWND, root.Root.DebugMeta.HWND),
+			Name:                 root.Root.Name,
+			ControlType:          root.Root.ControlType,
+			LocalizedControlType: root.Root.LocalizedControlType,
+			AutomationID:         root.Root.DebugMeta.AutomationID,
+			Status:               "partial",
+		},
+		StatusText: status,
+		Source:     root.Source,
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func (c *Controller) getTreeRootWithRetry(hwnd string, mode inspect.InspectMode) (inspect.GetTreeRootResponse, []error, error) {

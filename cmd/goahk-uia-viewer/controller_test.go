@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -633,7 +636,7 @@ func TestSelectWindowCollectsRootRetryWarnings(t *testing.T) {
 	}
 }
 
-func TestSelectWindowAbortsWhenGetNodeDetailsFails(t *testing.T) {
+func TestSelectWindowReturnsRootWhenDetailsFail(t *testing.T) {
 	svc := &fakeControllerService{
 		fakeInspectService: fakeInspectService{},
 		root:               inspect.TreeNodeDTO{NodeID: "root-id"},
@@ -641,11 +644,17 @@ func TestSelectWindowAbortsWhenGetNodeDetailsFails(t *testing.T) {
 	}
 	c := NewController(context.Background(), svc)
 	result, err := c.SelectWindow("0x1", false)
-	if err == nil {
-		t.Fatal("expected fatal error")
+	if err != nil {
+		t.Fatalf("expected non-fatal details fallback, got %v", err)
 	}
-	if result.Root.Root.NodeID != "" || result.Details.ACCPath != "" || result.ChildLoadErr != nil || result.SelectErr != nil || result.HighlightErr != nil || len(result.RootRetryWarnings) != 0 {
-		t.Fatalf("expected empty result on fatal failure: %+v", result)
+	if result.Root.Root.NodeID != "root-id" {
+		t.Fatalf("expected root retained, got %+v", result.Root.Root)
+	}
+	if result.DetailsErr == nil {
+		t.Fatal("expected details error recorded")
+	}
+	if result.Details.Element.NodeID != "root-id" || result.Details.StatusText == "" {
+		t.Fatalf("expected synthesized details, got %+v", result.Details)
 	}
 }
 
@@ -658,5 +667,26 @@ func TestControllerModeAccessors(t *testing.T) {
 	c.SetMode(inspect.InspectModeWindowTree)
 	if got := c.Mode(); got != inspect.InspectModeWindowTree {
 		t.Fatalf("mode=%q", got)
+	}
+}
+
+func TestSelectWindowLogsDetailsError(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{},
+		root:               inspect.TreeNodeDTO{NodeID: "root-id"},
+		nodeDetailsErr:     errors.New("details failed"),
+	}
+	c := NewController(context.Background(), svc)
+	var buf bytes.Buffer
+	orig := log.Writer()
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(orig) })
+	_, err := c.SelectWindow("0x1", false)
+	if err != nil {
+		t.Fatalf("expected non-fatal details fallback, got %v", err)
+	}
+	logs := buf.String()
+	if !strings.Contains(logs, "inspect_details_start") || !strings.Contains(logs, "inspect_details_err") || !strings.Contains(logs, "inspect_details_fallback_ok") {
+		t.Fatalf("expected details logs, got %s", logs)
 	}
 }
