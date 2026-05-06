@@ -227,3 +227,16 @@ func parseNodeRef(raw string) (parsedNodeRef, error) {
 		return parsedNodeRef{}, ErrInvalidNodeRef
 	}
 }
+
+func coreForNodeID(nodeID string, uiaCore, accCore, windowCore, fallback *providerCore) *providerCore {
+	switch {
+	case strings.HasPrefix(strings.TrimSpace(nodeID), "node:uia:"):
+		return uiaCore
+	case strings.HasPrefix(strings.TrimSpace(nodeID), "node:acc:"):
+		return accCore
+	case strings.HasPrefix(strings.TrimSpace(nodeID), "node:window:"):
+		return windowCore
+	default:
+		return fallback
+	}
+}

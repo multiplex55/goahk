@@ -310,6 +310,35 @@ func (c *Controller) ExpandNode(nodeID string) (inspect.GetNodeChildrenResponse,
 	delete(c.nodeLoadFailed, nodeID)
 	return resp, nil
 }
+
+func (c *Controller) ExpandTreeDepth(rootID string, maxDepth int) error {
+	if strings.TrimSpace(rootID) == "" || maxDepth <= 0 {
+		return nil
+	}
+	type depthNode struct {
+		id    string
+		depth int
+	}
+	queue := []depthNode{{id: rootID, depth: 0}}
+	seen := map[string]bool{}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if seen[current.id] || current.depth >= maxDepth {
+			continue
+		}
+		seen[current.id] = true
+		children, err := c.ExpandNode(current.id)
+		if err != nil {
+			return err
+		}
+		nextDepth := current.depth + 1
+		for _, child := range children.Children {
+			queue = append(queue, depthNode{id: child.NodeID, depth: nextDepth})
+		}
+	}
+	return nil
+}
 func (c *Controller) SelectNode(nodeID string) error {
 	if _, err := c.service.SelectNode(c.runtimeContext(), inspect.SelectNodeRequest{NodeID: nodeID}); err != nil {
 		return err

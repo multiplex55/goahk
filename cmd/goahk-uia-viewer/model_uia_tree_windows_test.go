@@ -19,6 +19,20 @@ func TestUIATreeLabelPrecedence(t *testing.T) {
 	_ = m
 }
 
+func TestUIATreeLabelUsesLocalizedControlTypeAndQuotedName(t *testing.T) {
+	got := (&uiaTreeNode{TreeNodeDTO: inspect.TreeNodeDTO{NodeID: "n", LocalizedControlType: "pane", Name: "Main"}}).Text()
+	if got != `pane "Main"` {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestUIATreeLabelPreservesEmptyName(t *testing.T) {
+	got := (&uiaTreeNode{TreeNodeDTO: inspect.TreeNodeDTO{NodeID: "n", LocalizedControlType: "pane", Name: ""}}).Text()
+	if got != `pane ""` {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestUIATreeLoadedAndExpandedState(t *testing.T) {
 	m := newUIATreeModel()
 	m.MarkChildrenLoaded("n1")

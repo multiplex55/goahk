@@ -149,6 +149,28 @@ func TestViewerEventAdapter_WindowSelectionStatusSet(t *testing.T) {
 	}
 }
 
+func TestViewerEventAdapter_WindowSelectionFallbackStatusCopy(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{},
+		root:               inspect.TreeNodeDTO{NodeID: "root"},
+		rootState: inspect.InspectModeState{
+			RequestedMode: inspect.InspectModeUIATree,
+			ActiveMode:    inspect.InspectModeHWNDTree,
+			FallbackUsed:  true,
+		},
+	}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 4)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if len(view.status) == 0 || !strings.Contains(view.status[len(view.status)-1], "fallback mode active: degraded HWND/compatibility tree") {
+		t.Fatalf("expected fallback warning status, got %v", view.status)
+	}
+}
+
 func TestViewerEventAdapter_WindowSelection_RespectsActivateFlag(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
 	c := NewController(context.Background(), svc)
