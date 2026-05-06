@@ -93,6 +93,17 @@ func (c *Controller) WithClipboard(cb Clipboard) *Controller { c.clipboard = cb;
 func (c *Controller) WithDialogs(d Dialogs) *Controller      { c.dialogs = d; return c }
 func (c *Controller) SetClipboard(cb Clipboard)              { c.clipboard = cb }
 func (c *Controller) SetDialogs(d Dialogs)                   { c.dialogs = d }
+func (c *Controller) SetMode(mode inspect.InspectMode) {
+	c.mu.Lock()
+	c.mode = mode
+	c.mu.Unlock()
+	log.Printf("uia.viewer mode_set mode=%s", mode)
+}
+func (c *Controller) Mode() inspect.InspectMode {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.mode
+}
 func (c *Controller) runtimeContext() context.Context {
 	if c.ctx != nil {
 		return c.ctx
@@ -118,7 +129,7 @@ func (c *Controller) RefreshWindows(filter string, visibleOnly, titleOnly bool) 
 	return c.service.RefreshWindows(c.runtimeContext(), inspect.RefreshWindowsRequest{Filter: filter, VisibleOnly: visibleOnly, TitleOnly: titleOnly})
 }
 func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionResult, error) {
-	log.Printf("uia.viewer window_select_start hwnd=%s activate=%t", hwnd, activate)
+	log.Printf("uia.viewer select_window_start hwnd=%s activate=%t", hwnd, activate)
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 	c.mu.Lock()
 	mode := c.mode
@@ -132,6 +143,7 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	}
 	root, retryWarnings, err := c.getTreeRootWithRetry(hwnd, mode)
 	if err != nil {
+		log.Printf("uia.viewer select_window_end hwnd=%s mode=%s err=%v", hwnd, mode, err)
 		return WindowSelectionResult{}, fmt.Errorf("get tree root hwnd=%s: %w", hwnd, err)
 	}
 	result.Root = root
@@ -180,6 +192,7 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 		c.selectedNodeID = rootNodeID
 		c.mu.Unlock()
 	}
+	log.Printf("uia.viewer select_window_end hwnd=%s mode=%s provider=%s active_mode=%s fallback=%t err=nil", hwnd, mode, result.Root.Source.Provider, result.Root.State.ActiveMode, result.Root.State.FallbackUsed)
 	return result, nil
 }
 
@@ -189,12 +202,16 @@ func (c *Controller) getTreeRootWithRetry(hwnd string, mode inspect.InspectMode)
 	var lastErr error
 	for i, delay := range delays {
 		if i > 0 {
+			log.Printf("uia.viewer root_retry_delay hwnd=%s mode=%s attempt=%d delay_ms=%d", hwnd, mode, i+1, delay.Milliseconds())
 			time.Sleep(delay)
 		}
+		log.Printf("uia.viewer root_attempt_start hwnd=%s mode=%s attempt=%d", hwnd, mode, i+1)
 		root, err := c.service.GetTreeRoot(c.runtimeContext(), inspect.GetTreeRootRequest{HWND: hwnd, Refresh: true, Mode: mode})
 		if err == nil {
+			log.Printf("uia.viewer root_attempt_ok hwnd=%s mode=%s attempt=%d provider=%s active_mode=%s fallback=%t", hwnd, mode, i+1, root.Source.Provider, root.State.ActiveMode, root.State.FallbackUsed)
 			return root, warnings, nil
 		}
+		log.Printf("uia.viewer root_attempt_err hwnd=%s mode=%s attempt=%d err=%v", hwnd, mode, i+1, err)
 		lastErr = err
 		if !isTransientInspectError(err) || i == len(delays)-1 {
 			return inspect.GetTreeRootResponse{}, warnings, err

@@ -6,6 +6,7 @@ package inspect
 import (
 	"context"
 	"errors"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -782,22 +783,31 @@ func containsFold(haystack, needle string) bool {
 }
 
 func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode InspectMode, refresh bool) (TreeNodeDTO, InspectMode, error) {
+	log.Printf("inspect.resolve_root_start hwnd=%s mode=%s refresh=%t", hwnd, mode, refresh)
 	core := p.coreForMode(mode)
 	root, err := core.treeRoot(ctx, hwnd, refresh)
 	if err == nil {
+		log.Printf("inspect.resolve_root_ok hwnd=%s mode=%s provider=%s fallback=false", hwnd, mode, sourceMetadataForMode(mode).Provider)
 		return root, mode, nil
 	}
+	log.Printf("inspect.resolve_root_err hwnd=%s mode=%s provider=%s err=%v", hwnd, mode, sourceMetadataForMode(mode).Provider, err)
 	if mode != InspectModeUIATree || !shouldFallbackFromUIAToAlternateTree(err) {
 		return TreeNodeDTO{}, mode, err
 	}
+	log.Printf("inspect.fallback_attempt hwnd=%s mode=%s provider=acc", hwnd, mode)
 	root, fallbackErr := p.accCore.treeRoot(ctx, hwnd, refresh)
 	if fallbackErr == nil {
+		log.Printf("inspect.fallback_ok hwnd=%s mode=%s provider=acc active_mode=%s", hwnd, mode, InspectModeWindowTree)
 		return root, InspectModeWindowTree, nil
 	}
+	log.Printf("inspect.fallback_err hwnd=%s mode=%s provider=acc err=%v", hwnd, mode, fallbackErr)
+	log.Printf("inspect.fallback_attempt hwnd=%s mode=%s provider=hwnd", hwnd, mode)
 	root, windowErr := p.windowCore.treeRoot(ctx, hwnd, refresh)
 	if windowErr != nil {
+		log.Printf("inspect.fallback_err hwnd=%s mode=%s provider=hwnd err=%v", hwnd, mode, windowErr)
 		return TreeNodeDTO{}, mode, err
 	}
+	log.Printf("inspect.fallback_ok hwnd=%s mode=%s provider=hwnd active_mode=%s", hwnd, mode, InspectModeWindowTree)
 	return root, InspectModeWindowTree, nil
 }
 

@@ -648,3 +648,15 @@ func TestSelectWindowAbortsWhenGetNodeDetailsFails(t *testing.T) {
 		t.Fatalf("expected empty result on fatal failure: %+v", result)
 	}
 }
+
+func TestControllerModeAccessors(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}}
+	c := NewController(context.Background(), svc)
+	if got := c.Mode(); got != "" {
+		t.Fatalf("default mode=%q", got)
+	}
+	c.SetMode(inspect.InspectModeWindowTree)
+	if got := c.Mode(); got != inspect.InspectModeWindowTree {
+		t.Fatalf("mode=%q", got)
+	}
+}

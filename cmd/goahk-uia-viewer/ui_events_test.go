@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -143,7 +144,7 @@ func TestViewerEventAdapter_WindowSelectionStatusSet(t *testing.T) {
 	view.enterQueue()
 	fn()
 	view.exitQueue()
-	if len(view.status) == 0 || view.status[len(view.status)-1] != "window loaded GetTreeRoot [0x2]: properties=0 patterns=0 children=1" {
+	if len(view.status) == 0 || !strings.Contains(view.status[len(view.status)-1], "window loaded GetTreeRoot [0x2]: properties=0 patterns=0 children=1; mode:") {
 		t.Fatalf("expected success status with counts, got %v", view.status)
 	}
 }

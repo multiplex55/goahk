@@ -11,6 +11,13 @@ import (
 	"goahk/internal/inspect"
 )
 
+func inspectModeFromComboIndex(idx int) inspect.InspectMode {
+	if idx == 1 {
+		return inspect.InspectModeWindowTree
+	}
+	return inspect.InspectModeUIATree
+}
+
 func (ui *viewerUI) executePatternAction(action string) {
 	action = normalizePatternActionName(action)
 	ui.SetBusy(true)
@@ -139,6 +146,14 @@ func (ui *viewerUI) attachEvents() {
 	}
 	if ui.refreshBtn != nil {
 		ui.refreshBtn.Clicked().Attach(func() { ui.queueRefreshWindowListFromCurrentFilters() })
+	}
+	if ui.modeCombo != nil {
+		ui.controller.SetMode(inspectModeFromComboIndex(ui.modeCombo.CurrentIndex()))
+		ui.modeCombo.CurrentIndexChanged().Attach(func() {
+			mode := inspectModeFromComboIndex(ui.modeCombo.CurrentIndex())
+			ui.controller.SetMode(mode)
+			ui.setStatus("inspect mode set: " + string(mode))
+		})
 	}
 	if ui.visibleChk != nil {
 		ui.visibleChk.CheckedChanged().Attach(func() { ui.queueRefreshWindowListFromCurrentFilters() })

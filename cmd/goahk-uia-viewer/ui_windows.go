@@ -20,6 +20,7 @@ type viewerUI struct {
 	windowTable *walk.TableView
 	windowModel *windowTableModel
 	refreshBtn  *walk.PushButton
+	modeCombo   *walk.ComboBox
 	visibleChk  *walk.CheckBox
 	titleChk    *walk.CheckBox
 	activateChk *walk.CheckBox
