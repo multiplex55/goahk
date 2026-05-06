@@ -783,6 +783,7 @@ func containsFold(haystack, needle string) bool {
 }
 
 func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode InspectMode, refresh bool) (TreeNodeDTO, InspectMode, error) {
+	mode = normalizeInspectMode(mode)
 	log.Printf("inspect.resolve_root_start hwnd=%s mode=%s refresh=%t", hwnd, mode, refresh)
 	core := p.coreForMode(mode)
 	root, err := core.treeRoot(ctx, hwnd, refresh)
@@ -807,8 +808,8 @@ func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode
 		log.Printf("inspect.fallback_err hwnd=%s mode=%s provider=hwnd err=%v", hwnd, mode, windowErr)
 		return TreeNodeDTO{}, mode, err
 	}
-	log.Printf("inspect.fallback_ok hwnd=%s mode=%s provider=hwnd active_mode=%s", hwnd, mode, InspectModeWindowTree)
-	return root, InspectModeWindowTree, nil
+	log.Printf("inspect.fallback_ok hwnd=%s mode=%s provider=hwnd active_mode=%s", hwnd, mode, InspectModeHWNDTree)
+	return root, InspectModeHWNDTree, nil
 }
 
 func shouldFallbackFromUIAToAlternateTree(err error) bool {
@@ -828,15 +829,19 @@ func shouldFallbackFromUIAToAlternateTree(err error) bool {
 }
 
 func normalizeInspectMode(mode InspectMode) InspectMode {
-	if mode == InspectModeWindowTree {
-		return InspectModeWindowTree
+	switch mode {
+	case InspectModeWindowTree, InspectModeHWNDTree:
+		return mode
 	}
 	return InspectModeUIATree
 }
 
 func (p *windowsProvider) coreForMode(mode InspectMode) *providerCore {
-	if mode == InspectModeWindowTree {
+	switch mode {
+	case InspectModeWindowTree:
 		return p.accCore
+	case InspectModeHWNDTree:
+		return p.windowCore
 	}
 	return p.uiaCore
 }
@@ -861,9 +866,11 @@ func (p *windowsProvider) activeModeForRead() InspectMode {
 }
 
 func sourceMetadataForMode(mode InspectMode) ProviderSourceDTO {
-	switch normalizeInspectMode(mode) {
+	switch mode {
 	case InspectModeWindowTree:
 		return ProviderSourceDTO{Provider: "acc", Source: "msaa", Mode: InspectModeWindowTree}
+	case InspectModeHWNDTree:
+		return ProviderSourceDTO{Provider: "hwnd", Source: "win32", Mode: InspectModeHWNDTree}
 	default:
 		return ProviderSourceDTO{Provider: "uia", Source: "uia", Mode: InspectModeUIATree}
 	}

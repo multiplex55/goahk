@@ -80,6 +80,7 @@ type InspectMode string
 const (
 	InspectModeUIATree    InspectMode = "UIA_TREE"
 	InspectModeWindowTree InspectMode = "WINDOW_TREE"
+	InspectModeHWNDTree   InspectMode = "HWND_TREE"
 )
 
 type InspectModeState struct {

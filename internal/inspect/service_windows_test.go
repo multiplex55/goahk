@@ -134,6 +134,59 @@ func TestWindowsProvider_GetTreeRoot_ModeRoutingAndFallbackState(t *testing.T) {
 	}
 }
 
+func TestGetTreeRoot_HWNDFallbackSetsActiveModeToHWNDTree(t *testing.T) {
+	uia := newUIAAdapter(nil)
+	acc := newUIAAdapter(nil)
+	windowTree := &fakeAdapter{
+		root: &uiaElement{Ref: "root-hwnd", RuntimeID: "42", HWND: "0x1", Name: "HWND Root"},
+	}
+	provider := newWindowsProviderWithModeAdapters(uia, acc, newUIAAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
+
+	resp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+	if err != nil {
+		t.Fatalf("GetTreeRoot fallback failed: %v", err)
+	}
+	if resp.State.ActiveMode != InspectModeHWNDTree {
+		t.Fatalf("expected active mode HWND_TREE, got %s", resp.State.ActiveMode)
+	}
+	if resp.Source.Provider != "hwnd" || resp.Source.Mode != InspectModeHWNDTree {
+		t.Fatalf("expected source provider=hwnd/mode=HWND_TREE, got %+v", resp.Source)
+	}
+}
+
+func TestGetNodeDetailsAfterHWNDFallbackUsesWindowCore(t *testing.T) {
+	uia := newUIAAdapter(nil)
+	acc := newUIAAdapter(nil)
+	windowTree := &fakeAdapter{
+		root: &uiaElement{Ref: "root-hwnd", RuntimeID: "42", HWND: "0x1", Name: "HWND Root"},
+		byRef: map[string]*uiaElement{
+			"root-hwnd": {Ref: "root-hwnd", RuntimeID: "42", HWND: "0x1", Name: "HWND Root", ControlType: "Window"},
+		},
+	}
+	provider := newWindowsProviderWithModeAdapters(uia, acc, newUIAAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
+
+	rootResp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+	if err != nil {
+		t.Fatalf("GetTreeRoot fallback failed: %v", err)
+	}
+	if rootResp.State.ActiveMode != InspectModeHWNDTree {
+		t.Fatalf("expected active mode HWND_TREE, got %s", rootResp.State.ActiveMode)
+	}
+	details, err := provider.GetNodeDetails(context.Background(), GetNodeDetailsRequest{NodeID: rootResp.Root.NodeID})
+	if err != nil {
+		t.Fatalf("GetNodeDetails on fallback root failed: %v", err)
+	}
+	if details.Element.NodeID == "" {
+		t.Fatalf("expected node details for fallback root")
+	}
+	if details.Source.Provider != "hwnd" || details.Source.Mode != InspectModeHWNDTree {
+		t.Fatalf("expected details provider=hwnd mode=HWND_TREE, got %+v", details.Source)
+	}
+	if windowTree.getByRefCount["root-hwnd"] == 0 {
+		t.Fatalf("expected window core inspectByNodeID call for fallback root")
+	}
+}
+
 func TestWindowsProvider_GetTreeRoot_ManualWindowTreeMode(t *testing.T) {
 	uia := &fakeAdapter{root: &uiaElement{Ref: "root-uia", RuntimeID: "1", HWND: "0x1", Name: "UIA Root"}}
 	windowTree := &fakeAdapter{root: &uiaElement{Ref: "root-window", RuntimeID: "2", HWND: "0x1", Name: "Window Root"}}
