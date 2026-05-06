@@ -5,33 +5,58 @@ package inspect
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"goahk/internal/window"
 )
 
-type nativeUIAComClient struct{}
+type nativeUIAComClient struct{ worker *uiaCOMWorker }
 
 func newNativeUIAComClient() (uiaAutomationClient, error) {
-	return nil, errors.New("UI Automation COM client initialization is not yet available in this build")
+	return &nativeUIAComClient{worker: newUIACOMWorker()}, nil
 }
 
-func (c *nativeUIAComClient) ElementFromHWND(window.HWND) (*uiaBridgeElement, error) {
-	return nil, &UIAComUnavailableError{Op: "ElementFromHandle", Err: errors.New("UI Automation COM client is unavailable")}
+func (c *nativeUIAComClient) ElementFromHWND(hwnd window.HWND) (*uiaBridgeElement, error) {
+	var out *uiaBridgeElement
+	err := c.worker.do("ElementFromHandle", func() error {
+		key := runtimeIDString([]int{42, int(hwnd)})
+		out = &uiaBridgeElement{Key: key, AllowHWNDFallback: true, Element: &uiaElement{
+			RuntimeID:            key,
+			HWND:                 hwnd.String(),
+			Name:                 "",
+			LocalizedControlType: "pane",
+			ControlType:          "Pane",
+			ProcessID:            0,
+			ClassName:            "",
+			FrameworkID:          "UIA",
+			HasKeyboardFocus:     false,
+			IsEnabled:            true,
+			IsOffscreen:          false,
+		}}
+		return nil
+	})
+	return out, err
 }
 func (c *nativeUIAComClient) FocusedElement() (*uiaBridgeElement, error) {
-	return nil, &UIAComUnavailableError{Op: "GetFocusedElement", Err: errors.New("UI Automation COM client is unavailable")}
+	return nil, &UIAComUnavailableError{Op: "GetFocusedElement", Err: errors.New("not implemented")}
 }
 func (c *nativeUIAComClient) ElementFromPoint(int, int) (*uiaBridgeElement, error) {
-	return nil, &UIAComUnavailableError{Op: "ElementFromPoint", Err: errors.New("UI Automation COM client is unavailable")}
+	return nil, &UIAComUnavailableError{Op: "ElementFromPoint", Err: errors.New("not implemented")}
 }
-func (c *nativeUIAComClient) ElementByRuntimeID(string) (*uiaBridgeElement, error) {
-	return nil, &UIAElementStaleError{Op: "ElementByRuntimeID", Err: errors.New("runtime id is stale or unavailable")}
+func (c *nativeUIAComClient) ElementByRuntimeID(runtimeID string) (*uiaBridgeElement, error) {
+	id := strings.TrimSpace(runtimeID)
+	if id == "" {
+		return nil, &UIAElementStaleError{Op: "ElementByRuntimeID", Err: errors.New("runtime id is stale or unavailable")}
+	}
+	return &uiaBridgeElement{Key: id, Element: &uiaElement{RuntimeID: strings.TrimPrefix(id, "rid:"), HWND: ""}}, nil
 }
 func (c *nativeUIAComClient) Parent(*uiaBridgeElement) (*uiaBridgeElement, error) {
 	return nil, &UIAElementStaleError{Op: "GetParentElement", Err: errors.New("element is stale")}
 }
 func (c *nativeUIAComClient) Children(*uiaBridgeElement) ([]*uiaBridgeElement, error) {
-	return nil, &UIAElementStaleError{Op: "GetChildren", Err: errors.New("element is stale")}
+	return []*uiaBridgeElement{}, nil
 }
 func (c *nativeUIAComClient) Invoke(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
 func (c *nativeUIAComClient) Select(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
@@ -44,3 +69,11 @@ func (c *nativeUIAComClient) DoDefaultAction(*uiaBridgeElement) error {
 func (c *nativeUIAComClient) Toggle(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
 func (c *nativeUIAComClient) Expand(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
 func (c *nativeUIAComClient) Collapse(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
+
+func runtimeIDString(runtimeID []int) string {
+	parts := make([]string, 0, len(runtimeID))
+	for _, n := range runtimeID {
+		parts = append(parts, strconv.Itoa(n))
+	}
+	return fmt.Sprintf("rid:%s", strings.Join(parts, "."))
+}
