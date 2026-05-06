@@ -1069,3 +1069,37 @@ func TestUIATransientRetriesBeforeFallback(t *testing.T) {
 		}
 	})
 }
+
+func TestGetTreeRoot_PrefersUIAWhenUIASucceeds(t *testing.T) {
+	uia := &fakeAdapter{root: &uiaElement{Ref: "uia-root", RuntimeID: "1", HWND: "0x1", Name: "UIA Root"}}
+	windowTree := &fakeAdapter{root: &uiaElement{Ref: "hwnd-root", RuntimeID: "2", HWND: "0x1", Name: "HWND Root"}}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(windowTree), newUIAAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
+
+	resp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+	if err != nil {
+		t.Fatalf("GetTreeRoot failed: %v", err)
+	}
+	if resp.Source.Provider != "uia" || resp.Source.Mode != InspectModeUIATree {
+		t.Fatalf("expected UIA source, got %+v", resp.Source)
+	}
+	if resp.State.FallbackUsed {
+		t.Fatalf("expected no fallback, got %+v", resp.State)
+	}
+}
+
+func TestGetTreeRoot_UsesHWNDFallbackOnlyWhenUIAFails(t *testing.T) {
+	uia := &fakeAdapter{resolveRootErr: ErrProviderTransientFailure}
+	windowTree := &fakeAdapter{root: &uiaElement{Ref: "hwnd-root", RuntimeID: "2", HWND: "0x1", Name: "HWND Root"}}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(windowTree), newUIAAdapter(windowTree), &fakeWindowAdapter{}).(*windowsProvider)
+
+	resp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+	if err != nil {
+		t.Fatalf("GetTreeRoot failed: %v", err)
+	}
+	if !resp.State.FallbackUsed || resp.State.ActiveMode != InspectModeHWNDTree {
+		t.Fatalf("expected HWND fallback state, got %+v", resp.State)
+	}
+	if resp.Source.Provider != "hwnd" || resp.Source.Mode != InspectModeHWNDTree {
+		t.Fatalf("expected HWND source, got %+v", resp.Source)
+	}
+}

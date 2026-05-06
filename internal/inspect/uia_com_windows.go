@@ -48,11 +48,18 @@ type uiaAutomationClient interface {
 }
 
 type win32UIAComBridge struct {
-	client uiaAutomationClient
+	client  uiaAutomationClient
+	initErr error
 }
 
+var newUIAComClient = newNativeUIAComClient
+
 func newWin32UIABridge() nativeUIABridge {
-	return &win32UIAComBridge{client: newUnavailableUIAClient()}
+	client, err := newUIAComClient()
+	if err != nil {
+		return &win32UIAComBridge{client: newUnavailableUIAClient(err), initErr: err}
+	}
+	return &win32UIAComBridge{client: client}
 }
 
 func (b *win32UIAComBridge) ResolveRoot(hwnd window.HWND) (*uiaBridgeElement, error) {
@@ -101,18 +108,28 @@ func (b *win32UIAComBridge) Toggle(*uiaBridgeElement) error   { return ErrProvid
 func (b *win32UIAComBridge) Expand(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
 func (b *win32UIAComBridge) Collapse(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
 
-type unavailableUIAClient struct{}
-
-func newUnavailableUIAClient() uiaAutomationClient { return unavailableUIAClient{} }
-
-func (unavailableUIAClient) ElementFromHWND(window.HWND) (*uiaBridgeElement, error) {
-	return nil, &UIAComUnavailableError{Op: "ElementFromHandle", Err: errors.New("UI Automation COM bridge is not initialized")}
+func newUnavailableUIAClient(initErr error) uiaAutomationClient {
+	return unavailableUIAClient{initErr: initErr}
 }
-func (unavailableUIAClient) FocusedElement() (*uiaBridgeElement, error) {
-	return nil, &UIAComUnavailableError{Op: "GetFocusedElement", Err: errors.New("UI Automation COM bridge is not initialized")}
+
+type unavailableUIAClient struct{ initErr error }
+
+func (c unavailableUIAClient) wrap(op string) error {
+	err := c.initErr
+	if err == nil {
+		err = errors.New("UI Automation COM bridge is not initialized")
+	}
+	return &UIAComUnavailableError{Op: op, Err: err}
 }
-func (unavailableUIAClient) ElementFromPoint(int, int) (*uiaBridgeElement, error) {
-	return nil, &UIAComUnavailableError{Op: "ElementFromPoint", Err: errors.New("UI Automation COM bridge is not initialized")}
+
+func (c unavailableUIAClient) ElementFromHWND(window.HWND) (*uiaBridgeElement, error) {
+	return nil, c.wrap("ElementFromHandle")
+}
+func (c unavailableUIAClient) FocusedElement() (*uiaBridgeElement, error) {
+	return nil, c.wrap("GetFocusedElement")
+}
+func (c unavailableUIAClient) ElementFromPoint(int, int) (*uiaBridgeElement, error) {
+	return nil, c.wrap("ElementFromPoint")
 }
 func (unavailableUIAClient) ElementByRuntimeID(string) (*uiaBridgeElement, error) {
 	return nil, &UIAElementStaleError{Op: "ElementByRuntimeID", Err: errors.New("runtime id is stale or unavailable")}
