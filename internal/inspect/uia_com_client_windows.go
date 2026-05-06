@@ -33,3 +33,14 @@ func (c *nativeUIAComClient) Parent(*uiaBridgeElement) (*uiaBridgeElement, error
 func (c *nativeUIAComClient) Children(*uiaBridgeElement) ([]*uiaBridgeElement, error) {
 	return nil, &UIAElementStaleError{Op: "GetChildren", Err: errors.New("element is stale")}
 }
+func (c *nativeUIAComClient) Invoke(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
+func (c *nativeUIAComClient) Select(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
+func (c *nativeUIAComClient) SetValue(*uiaBridgeElement, string) error {
+	return ErrProviderActionUnsupported
+}
+func (c *nativeUIAComClient) DoDefaultAction(*uiaBridgeElement) error {
+	return ErrProviderActionUnsupported
+}
+func (c *nativeUIAComClient) Toggle(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
+func (c *nativeUIAComClient) Expand(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
+func (c *nativeUIAComClient) Collapse(*uiaBridgeElement) error { return ErrProviderActionUnsupported }

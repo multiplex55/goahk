@@ -45,6 +45,13 @@ type uiaAutomationClient interface {
 	ElementByRuntimeID(runtimeID string) (*uiaBridgeElement, error)
 	Parent(*uiaBridgeElement) (*uiaBridgeElement, error)
 	Children(*uiaBridgeElement) ([]*uiaBridgeElement, error)
+	Invoke(*uiaBridgeElement) error
+	Select(*uiaBridgeElement) error
+	SetValue(*uiaBridgeElement, string) error
+	DoDefaultAction(*uiaBridgeElement) error
+	Toggle(*uiaBridgeElement) error
+	Expand(*uiaBridgeElement) error
+	Collapse(*uiaBridgeElement) error
 }
 
 type win32UIAComBridge struct {
@@ -96,17 +103,17 @@ func (b *win32UIAComBridge) Children(el *uiaBridgeElement) ([]*uiaBridgeElement,
 }
 
 func (b *win32UIAComBridge) CursorPosition() (int, int, error) { return currentCursorPos() }
-func (b *win32UIAComBridge) Invoke(*uiaBridgeElement) error    { return ErrProviderActionUnsupported }
-func (b *win32UIAComBridge) Select(*uiaBridgeElement) error    { return ErrProviderActionUnsupported }
-func (b *win32UIAComBridge) SetValue(*uiaBridgeElement, string) error {
-	return ErrProviderActionUnsupported
+func (b *win32UIAComBridge) Invoke(el *uiaBridgeElement) error { return b.client.Invoke(el) }
+func (b *win32UIAComBridge) Select(el *uiaBridgeElement) error { return b.client.Select(el) }
+func (b *win32UIAComBridge) SetValue(el *uiaBridgeElement, value string) error {
+	return b.client.SetValue(el, value)
 }
-func (b *win32UIAComBridge) DoDefaultAction(*uiaBridgeElement) error {
-	return ErrProviderActionUnsupported
+func (b *win32UIAComBridge) DoDefaultAction(el *uiaBridgeElement) error {
+	return b.client.DoDefaultAction(el)
 }
-func (b *win32UIAComBridge) Toggle(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
-func (b *win32UIAComBridge) Expand(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
-func (b *win32UIAComBridge) Collapse(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
+func (b *win32UIAComBridge) Toggle(el *uiaBridgeElement) error   { return b.client.Toggle(el) }
+func (b *win32UIAComBridge) Expand(el *uiaBridgeElement) error   { return b.client.Expand(el) }
+func (b *win32UIAComBridge) Collapse(el *uiaBridgeElement) error { return b.client.Collapse(el) }
 
 func newUnavailableUIAClient(initErr error) uiaAutomationClient {
 	return unavailableUIAClient{initErr: initErr}
@@ -140,6 +147,17 @@ func (unavailableUIAClient) Parent(*uiaBridgeElement) (*uiaBridgeElement, error)
 func (unavailableUIAClient) Children(*uiaBridgeElement) ([]*uiaBridgeElement, error) {
 	return nil, &UIAElementStaleError{Op: "GetChildren", Err: errors.New("element is stale")}
 }
+func (unavailableUIAClient) Invoke(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
+func (unavailableUIAClient) Select(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
+func (unavailableUIAClient) SetValue(*uiaBridgeElement, string) error {
+	return ErrProviderActionUnsupported
+}
+func (unavailableUIAClient) DoDefaultAction(*uiaBridgeElement) error {
+	return ErrProviderActionUnsupported
+}
+func (unavailableUIAClient) Toggle(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
+func (unavailableUIAClient) Expand(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
+func (unavailableUIAClient) Collapse(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
 
 func currentCursorPos() (int, int, error) {
 	pt := winPoint{}
