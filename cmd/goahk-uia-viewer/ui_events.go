@@ -51,6 +51,7 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 	go func() {
 		result, err := a.controller.SelectWindow(hwnd, activate)
 		if err != nil {
+			log.Printf("uia.viewer on_window_selected_err hwnd=%s activate=%t err=%v", hwnd, activate, err)
 			a.ui.Queue(func() {
 				a.view.SetBusy(false)
 				msg := formatFatal("InspectWindow", hwnd, err)
@@ -67,8 +68,11 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			rootID := result.Root.Root.NodeID
 			a.view.UpdateTreeRoot(result.Root.Root)
 			a.view.SelectTreeNode(rootID)
-			a.view.UpdateWindowDetails(result.Details)
-			a.view.UpdateNodeDetails(result.Details)
+			hasDetails := result.DetailsErr == nil || result.Details.StatusText != ""
+			if hasDetails {
+				a.view.UpdateWindowDetails(result.Details)
+				a.view.UpdateNodeDetails(result.Details)
+			}
 
 			if len(result.Children) > 0 {
 				a.view.UpdateNodeChildren(rootID, result.Children)
@@ -81,6 +85,9 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			for _, warning := range result.RootRetryWarnings {
 				warnings = append(warnings, formatWarning("GetTreeRoot", hwnd, warning.Error()))
 			}
+			if result.DetailsErr != nil {
+				warnings = append(warnings, formatWarning("GetNodeDetails", rootID, result.DetailsErr.Error()))
+			}
 			if result.ChildLoadErr != nil {
 				warnings = append(warnings, formatWarning("GetNodeChildren", rootID, result.ChildLoadErr.Error()))
 			}
@@ -92,6 +99,9 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			}
 			if len(warnings) > 0 {
 				status = "loaded with warning: " + strings.Join(warnings, "; ")
+			}
+			if result.DetailsErr != nil && result.Details.StatusText != "" {
+				status = status + "; " + result.Details.StatusText
 			}
 			if result.Root.State.FallbackUsed {
 				status = status + "; degraded provider outcome: fallback in use (" + modeSummary + ")"

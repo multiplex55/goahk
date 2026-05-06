@@ -319,3 +319,46 @@ func TestTreeSelectionTracksDisplayedDetails(t *testing.T) {
 		t.Fatalf("expected root to remain selected after expansion, got %v", view.selected)
 	}
 }
+
+func TestOnWindowSelectedUpdatesTreeRootEvenWhenDetailsFail(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{},
+		root:               inspect.TreeNodeDTO{NodeID: "root"},
+		nodeDetailsErr:     context.DeadlineExceeded,
+	}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if len(view.selected) == 0 || view.selected[0] != "root" {
+		t.Fatalf("expected root selected despite details error, got %v", view.selected)
+	}
+	if view.updates == 0 {
+		t.Fatal("expected tree root update")
+	}
+}
+
+func TestOnWindowSelectedShowsFallbackStatus(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{},
+		root:               inspect.TreeNodeDTO{NodeID: "root"},
+		nodeDetailsErr:     context.DeadlineExceeded,
+	}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if len(view.status) == 0 {
+		t.Fatal("expected status")
+	}
+	status := view.status[len(view.status)-1]
+	if !strings.Contains(status, "partial load") || !strings.Contains(status, "GetNodeDetails") {
+		t.Fatalf("expected partial fallback status, got %q", status)
+	}
+}
