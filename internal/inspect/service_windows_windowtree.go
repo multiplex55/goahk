@@ -173,6 +173,10 @@ var (
 	procGetWindowTextLengthW = user32DLL.NewProc("GetWindowTextLengthW")
 	procGetWindowTextW       = user32DLL.NewProc("GetWindowTextW")
 	procGetClassNameW        = user32DLL.NewProc("GetClassNameW")
+	procGetWindowRect        = user32DLL.NewProc("GetWindowRect")
+	procGetWindowThreadPID   = user32DLL.NewProc("GetWindowThreadProcessId")
+	procIsWindowEnabled      = user32DLL.NewProc("IsWindowEnabled")
+	procIsWindowVisible      = user32DLL.NewProc("IsWindowVisible")
 )
 
 const (
@@ -181,6 +185,7 @@ const (
 )
 
 type winPoint struct{ X, Y int32 }
+type winRect struct{ Left, Top, Right, Bottom int32 }
 
 func describeHWND(hwnd window.HWND) (*uiaElement, error) {
 	if hwnd == 0 {
@@ -189,21 +194,29 @@ func describeHWND(hwnd window.HWND) (*uiaElement, error) {
 	title, _ := getWindowText(hwnd)
 	className, _ := getClassName(hwnd)
 	parent, _, _ := win32WindowTreeBridge{}.ParentHWND(hwnd)
+	rect, hasRect := getWindowRect(hwnd)
+	pid := getWindowProcessID(hwnd)
+	enabled := getWindowEnabled(hwnd)
+	visible := getWindowVisible(hwnd)
 	return &uiaElement{
-		Ref:         makeWindowNodeRef(hwnd.String()),
-		RuntimeID:   strconv.FormatUint(uint64(hwnd), 10),
-		HWND:        hwnd.String(),
-		ParentRef:   makeWindowNodeRef(parent.String()),
-		Name:        title,
-		ControlType: "Window",
-		ClassName:   className,
-		FrameworkID: "Win32",
-		IsEnabled:   true,
+		Ref:                  makeWindowNodeRef(hwnd.String()),
+		RuntimeID:            strconv.FormatUint(uint64(hwnd), 10),
+		HWND:                 hwnd.String(),
+		ParentRef:            makeWindowNodeRef(parent.String()),
+		Name:                 title,
+		ControlType:          "Window",
+		LocalizedControlType: "window",
+		ClassName:            className,
+		FrameworkID:          "Win32",
+		IsEnabled:            enabled,
+		IsOffscreen:          !visible,
+		ProcessID:            pid,
+		Bounds:               rect,
 		UnsupportedProps: map[string]bool{
 			"LocalizedControlType": true,
 			"Value":                true,
 			"AutomationId":         true,
-			"BoundingRectangle":    true,
+			"BoundingRectangle":    !hasRect,
 			"HelpText":             true,
 			"AccessKey":            true,
 			"AcceleratorKey":       true,
@@ -211,14 +224,39 @@ func describeHWND(hwnd window.HWND) (*uiaElement, error) {
 			"IsKeyboardFocusable":  true,
 			"ItemType":             true,
 			"ItemStatus":           true,
-			"ProcessId":            true,
+			"ProcessId":            pid <= 0,
 			"IsPassword":           true,
-			"IsOffscreen":          true,
+			"IsOffscreen":          false,
 			"IsRequiredForForm":    true,
 			"LabeledBy":            true,
 		},
 		SupportedPatterns: []string{},
 	}, nil
+}
+
+func getWindowRect(hwnd window.HWND) (*Rect, bool) {
+	var rect winRect
+	ret, _, _ := procGetWindowRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&rect)))
+	if ret == 0 {
+		return nil, false
+	}
+	return &Rect{Left: int(rect.Left), Top: int(rect.Top), Width: int(rect.Right - rect.Left), Height: int(rect.Bottom - rect.Top)}, true
+}
+
+func getWindowProcessID(hwnd window.HWND) int {
+	var pid uint32
+	_, _, _ = procGetWindowThreadPID.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&pid)))
+	return int(pid)
+}
+
+func getWindowEnabled(hwnd window.HWND) bool {
+	ret, _, _ := procIsWindowEnabled.Call(uintptr(hwnd))
+	return ret != 0
+}
+
+func getWindowVisible(hwnd window.HWND) bool {
+	ret, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
+	return ret != 0
 }
 
 func parseWindowTreeRef(ref string) (window.HWND, error) {

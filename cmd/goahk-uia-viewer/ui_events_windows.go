@@ -15,6 +15,9 @@ func inspectModeFromComboIndex(idx int) inspect.InspectMode {
 	if idx == 1 {
 		return inspect.InspectModeWindowTree
 	}
+	if idx == 2 {
+		return inspect.InspectModeHWNDTree
+	}
 	return inspect.InspectModeUIATree
 }
 

@@ -668,6 +668,10 @@ func TestControllerModeAccessors(t *testing.T) {
 	if got := c.Mode(); got != inspect.InspectModeWindowTree {
 		t.Fatalf("mode=%q", got)
 	}
+	c.SetMode(inspect.InspectMode("bogus"))
+	if got := c.Mode(); got != inspect.InspectModeUIATree {
+		t.Fatalf("invalid mode should normalize to UIA_TREE, got=%q", got)
+	}
 }
 
 func TestSelectWindowLogsDetailsError(t *testing.T) {
