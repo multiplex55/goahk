@@ -76,6 +76,7 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			}
 
 			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("GetTreeRoot", hwnd), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
+			modeSummary := fmt.Sprintf("requested=%s active=%s provider=%s fallback=%t", result.Root.State.RequestedMode, result.Root.State.ActiveMode, result.Root.Source.Provider, result.Root.State.FallbackUsed)
 			warnings := make([]string, 0, 6)
 			for _, warning := range result.RootRetryWarnings {
 				warnings = append(warnings, formatWarning("GetTreeRoot", hwnd, warning.Error()))
@@ -91,6 +92,11 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			}
 			if len(warnings) > 0 {
 				status = "loaded with warning: " + strings.Join(warnings, "; ")
+			}
+			if result.Root.State.FallbackUsed {
+				status = status + "; degraded provider outcome: fallback in use (" + modeSummary + ")"
+			} else {
+				status = status + "; mode: " + modeSummary
 			}
 
 			a.view.SetStatus(status)

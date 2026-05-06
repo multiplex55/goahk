@@ -133,6 +133,11 @@ func (ui *viewerUI) buildLeftPane(parent walk.Container) error {
 		return err
 	}
 	ui.refreshBtn.SetText("Refresh list")
+	if ui.modeCombo, err = walk.NewComboBox(toolbar); err != nil {
+		return err
+	}
+	ui.modeCombo.SetModel([]string{"Auto/UIA + fallback", "ACC/MSAA (forced)"})
+	ui.modeCombo.SetCurrentIndex(0)
 	if ui.visibleChk, err = walk.NewCheckBox(toolbar); err != nil {
 		return err
 	}
