@@ -40,11 +40,19 @@ type fakeAdapter struct {
 	collapseCount     int
 	lastSetValue      string
 	resolveRootCalls  int
+	resolveRootErrors []error
 	pointCalls        int
 }
 
 func (f *fakeAdapter) ResolveWindowRoot(context.Context, string) (*uiaElement, error) {
 	f.resolveRootCalls++
+	if len(f.resolveRootErrors) > 0 {
+		err := f.resolveRootErrors[0]
+		f.resolveRootErrors = f.resolveRootErrors[1:]
+		if err != nil {
+			return nil, err
+		}
+	}
 	return f.root, nil
 }
 func (f *fakeAdapter) GetFocusedElement(context.Context) (*uiaElement, error) {

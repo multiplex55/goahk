@@ -1022,3 +1022,50 @@ func TestWindowsProvider_GetTreeRoot_FallbackToHWNDTreeWhenUIAAndACCFail(t *test
 		t.Fatalf("expected fallback state, got %+v", resp.State)
 	}
 }
+
+func TestUIATransientRetriesBeforeFallback(t *testing.T) {
+	t.Run("transient uia failure then success", func(t *testing.T) {
+		uia := &fakeAdapter{
+			root:              &uiaElement{Ref: "uia-root", RuntimeID: "1", HWND: "0x1", Name: "UIA Root"},
+			resolveRootErrors: []error{errors.New("transient startup hiccup"), nil},
+		}
+		acc := &fakeAdapter{root: &uiaElement{Ref: "acc-root", RuntimeID: "2", HWND: "0x1", Name: "ACC Root"}}
+		hwnd := &fakeAdapter{root: &uiaElement{Ref: "hwnd-root", RuntimeID: "3", HWND: "0x1", Name: "HWND Root"}}
+		provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(acc), newUIAAdapter(hwnd), &fakeWindowAdapter{}).(*windowsProvider)
+
+		resp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+		if err != nil {
+			t.Fatalf("GetTreeRoot failed: %v", err)
+		}
+		if resp.State.ActiveMode != InspectModeUIATree || resp.State.FallbackUsed {
+			t.Fatalf("expected UIA_TREE success without fallback, got %+v", resp.State)
+		}
+		if uia.resolveRootCalls != 2 {
+			t.Fatalf("expected two UIA attempts, got %d", uia.resolveRootCalls)
+		}
+		if acc.resolveRootCalls != 0 || hwnd.resolveRootCalls != 0 {
+			t.Fatalf("expected no fallback attempts, acc=%d hwnd=%d", acc.resolveRootCalls, hwnd.resolveRootCalls)
+		}
+	})
+
+	t.Run("repeated uia failure falls back through acc to hwnd", func(t *testing.T) {
+		uia := &fakeAdapter{resolveRootErrors: []error{errors.New("transient 1"), errors.New("transient 2"), errors.New("transient 3")}}
+		acc := &fakeAdapter{resolveRootErrors: []error{errors.New("acc unavailable")}}
+		hwnd := &fakeAdapter{root: &uiaElement{Ref: "hwnd-root", RuntimeID: "3", HWND: "0x1", Name: "HWND Root"}}
+		provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(acc), newUIAAdapter(hwnd), &fakeWindowAdapter{}).(*windowsProvider)
+
+		resp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+		if err != nil {
+			t.Fatalf("GetTreeRoot failed: %v", err)
+		}
+		if resp.State.ActiveMode != InspectModeHWNDTree || !resp.State.FallbackUsed {
+			t.Fatalf("expected HWND fallback after retries, got %+v", resp.State)
+		}
+		if uia.resolveRootCalls != 3 {
+			t.Fatalf("expected three UIA attempts, got %d", uia.resolveRootCalls)
+		}
+		if acc.resolveRootCalls != 1 || hwnd.resolveRootCalls != 1 {
+			t.Fatalf("expected acc/hwnd fallback chain, acc=%d hwnd=%d", acc.resolveRootCalls, hwnd.resolveRootCalls)
+		}
+	})
+}
