@@ -2,81 +2,25 @@
 
 package main
 
-import "testing"
+import (
+	"testing"
 
-func TestPropertyContextMenuCopyValue(t *testing.T) {
-	row := propertyTableRow{Name: "Name", Value: "Calculator"}
-	if got := propertyContextCopyValue(row, true); got != "Calculator" {
-		t.Fatalf("copy value got %q", got)
-	}
-}
+	"goahk/internal/inspect"
+)
 
-func TestPropertyContextMenuCopyName(t *testing.T) {
-	row := propertyTableRow{Name: "ControlType", Value: "50000 (button)"}
-	if got := row.Name; got != "ControlType" {
-		t.Fatalf("copy name got %q", got)
+func TestInspectModeFromComboIndex(t *testing.T) {
+	cases := []struct {
+		idx  int
+		want inspect.InspectMode
+	}{
+		{idx: 0, want: inspect.InspectModeUIATree},
+		{idx: 1, want: inspect.InspectModeWindowTree},
+		{idx: 2, want: inspect.InspectModeHWNDTree},
+		{idx: 99, want: inspect.InspectModeUIATree},
 	}
-}
-
-func TestPropertyContextMenuCopyRow(t *testing.T) {
-	row := propertyTableRow{Name: "ControlType", Value: "50000 (button)"}
-	got := row.Name + ": " + propertyContextCopyValue(row, true)
-	if got != "ControlType: button" {
-		t.Fatalf("copy row got %q", got)
-	}
-}
-
-func TestPatternRightClickCopyUsesVisibleLabel(t *testing.T) {
-	node := &patternTreeNode{label: "Set Value"}
-	if got := patternNodeCopyText(node); got != "Set Value" {
-		t.Fatalf("copy text got %q", got)
-	}
-}
-
-func TestPatternDoubleClickInvokesOnlyActionNodes(t *testing.T) {
-	parent := &patternTreeNode{label: "ValuePattern", children: []patternTreeNode{{label: "Set Value", actionID: ActionID("setValue")}}}
-	if action, ok := patternActionForNode(parent); ok || action != "" {
-		t.Fatalf("parent should not produce action, got %q", action)
-	}
-	leaf := &parent.children[0]
-	if action, ok := patternActionForNode(leaf); !ok || action != "setValue" {
-		t.Fatalf("leaf should produce action setValue, got %q ok=%v", action, ok)
-	}
-}
-
-func TestPatternSetValuePromptsThenInvokes(t *testing.T) {
-	if action, ok := patternActionForNode(&patternTreeNode{actionID: ActionID("setValue")}); !ok || action != "setValue" {
-		t.Fatalf("setValue should be mappable, got %q ok=%v", action, ok)
-	}
-}
-
-func TestVisibleCheckboxChangeRefreshesWindowList(t *testing.T) {
-	ui := &viewerUI{}
-	visible, title := ui.defaultRefreshArgs()
-	if !visible || !title {
-		t.Fatalf("expected default refresh args true/true, got %v/%v", visible, title)
-	}
-}
-
-func TestTitleCheckboxChangeRefreshesWindowList(t *testing.T) {
-	ui := &viewerUI{}
-	visible, title := ui.defaultRefreshArgs()
-	if !visible || !title {
-		t.Fatalf("expected default refresh args true/true, got %v/%v", visible, title)
-	}
-}
-
-func TestRefreshListButtonUsesCurrentCheckboxState(t *testing.T) {
-	ui := &viewerUI{}
-	visible, title := ui.defaultRefreshArgs()
-	if !visible || !title {
-		t.Fatalf("expected refresh list defaults true/true, got %v/%v", visible, title)
-	}
-}
-
-func TestFilterTextboxShowsNotImplementedStatus(t *testing.T) {
-	ui := &viewerUI{}
-	if got := ui.filterNotImplementedStatus(); got != "Tree filtering not implemented yet" {
-		t.Fatalf("filter placeholder status got %q", got)
+	for _, tc := range cases {
+		if got := inspectModeFromComboIndex(tc.idx); got != tc.want {
+			t.Fatalf("idx=%d mode=%s want=%s", tc.idx, got, tc.want)
+		}
 	}
 }

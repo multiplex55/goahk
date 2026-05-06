@@ -190,7 +190,7 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 	properties := buildPropertyList(selected)
 	patterns, err := core.getPatternActions(ctx, req.NodeID)
 	if err != nil {
-		return GetNodeDetailsResponse{}, err
+		patterns = []PatternActionDTO{}
 	}
 	path := p.nodePath(ctx, req.NodeID)
 	if len(path) == 0 {
@@ -219,6 +219,12 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 	statusText := "Loaded node details"
 	if strings.TrimSpace(selected.Name) != "" {
 		statusText = "Loaded node details: " + selected.Name
+	}
+	if err != nil {
+		statusText += "; pattern actions unavailable"
+		if diag := diagnosticsFromError("GetPatternActions", err, ""); diag != nil && strings.TrimSpace(diag.Message) != "" {
+			statusText += " (" + strings.TrimSpace(diag.Message) + ")"
+		}
 	}
 	return GetNodeDetailsResponse{
 		WindowInfo:   windowInfo,

@@ -136,7 +136,7 @@ func (ui *viewerUI) buildLeftPane(parent walk.Container) error {
 	if ui.modeCombo, err = walk.NewComboBox(toolbar); err != nil {
 		return err
 	}
-	ui.modeCombo.SetModel([]string{"Auto/UIA + fallback", "ACC/MSAA (forced)"})
+	ui.modeCombo.SetModel([]string{"Auto/UIA + fallback", "ACC/MSAA", "HWND"})
 	ui.modeCombo.SetCurrentIndex(0)
 	if ui.visibleChk, err = walk.NewCheckBox(toolbar); err != nil {
 		return err

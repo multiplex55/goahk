@@ -25,6 +25,7 @@ func TestInfoRowsPrimaryPathUsesWindowInfo(t *testing.T) {
 			Process: "notepad.exe",
 			PID:     1337,
 		},
+		Source: inspect.ProviderSourceDTO{Provider: "uia", Mode: inspect.InspectModeUIATree},
 	}
 
 	rows := mapWindowInfoRows(details)
@@ -36,6 +37,9 @@ func TestInfoRowsPrimaryPathUsesWindowInfo(t *testing.T) {
 	assertInfoRowValue(t, rows, "Class(NN)", "WindowClass")
 	assertInfoRowValue(t, rows, "Process", "notepad.exe")
 	assertInfoRowValue(t, rows, "PID", "1337")
+	assertInfoRowValue(t, rows, "Provider", "uia")
+	assertInfoRowValue(t, rows, "Mode", "UIA_TREE")
+	assertInfoRowValue(t, rows, "Fallback", "No")
 }
 
 func TestInfoRowsFallbackToElementWhenWindowInfoEmpty(t *testing.T) {
@@ -54,6 +58,7 @@ func TestInfoRowsFallbackToElementWhenWindowInfoEmpty(t *testing.T) {
 			{Name: "ProcessName", Value: &processName, Status: "ok"},
 			{Name: "ProcessId", Value: &processID, Status: "ok"},
 		},
+		Source: inspect.ProviderSourceDTO{Provider: "acc", Mode: inspect.InspectModeWindowTree},
 	}
 
 	rows := mapWindowInfoRows(details)
@@ -65,6 +70,9 @@ func TestInfoRowsFallbackToElementWhenWindowInfoEmpty(t *testing.T) {
 	assertInfoRowValue(t, rows, "Class(NN)", "Button")
 	assertInfoRowValue(t, rows, "Process", "calc.exe")
 	assertInfoRowValue(t, rows, "PID", "99")
+	assertInfoRowValue(t, rows, "Provider", "acc")
+	assertInfoRowValue(t, rows, "Mode", "WINDOW_TREE")
+	assertInfoRowValue(t, rows, "Fallback", "Yes")
 }
 
 func TestPropertyValueFromList_ExactNameHit(t *testing.T) {

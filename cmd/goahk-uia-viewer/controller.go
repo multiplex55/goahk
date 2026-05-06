@@ -95,6 +95,11 @@ func (c *Controller) WithDialogs(d Dialogs) *Controller      { c.dialogs = d; re
 func (c *Controller) SetClipboard(cb Clipboard)              { c.clipboard = cb }
 func (c *Controller) SetDialogs(d Dialogs)                   { c.dialogs = d }
 func (c *Controller) SetMode(mode inspect.InspectMode) {
+	switch mode {
+	case inspect.InspectModeUIATree, inspect.InspectModeWindowTree, inspect.InspectModeHWNDTree:
+	default:
+		mode = inspect.InspectModeUIATree
+	}
 	c.mu.Lock()
 	c.mode = mode
 	c.mu.Unlock()

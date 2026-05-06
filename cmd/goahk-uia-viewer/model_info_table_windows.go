@@ -69,7 +69,17 @@ func mapWindowInfoRows(details *inspect.GetNodeDetailsResponse) []infoTableRow {
 		{Property: "Class(NN)", Value: fallback(classNN)},
 		{Property: "Process", Value: fallback(process)},
 		{Property: "PID", Value: intOrNA(pid)},
+		{Property: "Provider", Value: fallback(details.Source.Provider)},
+		{Property: "Mode", Value: fallback(string(details.Source.Mode))},
+		{Property: "Fallback", Value: yesNo(details.Source.Mode != "" && details.Source.Mode != inspect.InspectModeUIATree)},
 	}
+}
+
+func yesNo(v bool) string {
+	if v {
+		return "Yes"
+	}
+	return "No"
 }
 
 func coalesce(values ...string) string {
