@@ -211,7 +211,7 @@ func describeHWND(hwnd window.HWND) (*uiaElement, error) {
 		IsEnabled:            enabled,
 		IsOffscreen:          !visible,
 		ProcessID:            pid,
-		Bounds:               rect,
+		BoundingRect:         toUIARect(rect),
 		UnsupportedProps: map[string]bool{
 			"LocalizedControlType": true,
 			"Value":                true,
