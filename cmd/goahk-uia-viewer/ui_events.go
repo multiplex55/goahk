@@ -137,7 +137,6 @@ func (a *ViewerEventAdapter) OnTreeExpanded(nodeID string, loaded bool) {
 			if err != nil {
 				msg := formatFatal("GetTreeRoot", nodeID, err)
 				a.view.SetStatus(msg)
-				a.view.ShowFatal(msg)
 				return
 			}
 			a.view.UpdateNodeChildren(nodeID, resp.Children)
@@ -157,13 +156,11 @@ func (a *ViewerEventAdapter) OnTreeSelected(nodeID string) {
 			if err != nil {
 				msg := formatFatal("InspectWindow", nodeID, err)
 				a.view.SetStatus(msg)
-				a.view.ShowFatal(msg)
 				return
 			}
 			if detailsErr != nil {
 				msg := formatFatal("GetNodeDetails", nodeID, detailsErr)
 				a.view.SetStatus(msg)
-				a.view.ShowFatal(msg)
 				return
 			}
 			a.view.UpdateNodeDetails(details)

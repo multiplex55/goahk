@@ -111,3 +111,36 @@ func TestPatternTreeShowsNoSupportedPatternsPlaceholder(t *testing.T) {
 		t.Fatalf("placeholder node should not be actionable")
 	}
 }
+
+func TestPatternTreeShowsInvokeAction(t *testing.T) {
+	nodes := mapPatternTree([]inspect.PatternActionDTO{{Pattern: "Invoke", Name: "invoke"}})
+	if len(nodes) != 1 || len(nodes[0].children) != 1 || nodes[0].children[0].label != "Invoke()" {
+		t.Fatalf("expected Invoke() action node, got %+v", nodes)
+	}
+}
+
+func TestPatternTreeShowsDoDefaultAction(t *testing.T) {
+	nodes := mapPatternTree([]inspect.PatternActionDTO{{Pattern: "LegacyIAccessible", Name: "do_default_action"}})
+	if len(nodes) != 1 || len(nodes[0].children) != 1 || nodes[0].children[0].label != "DoDefaultAction()" {
+		t.Fatalf("expected DoDefaultAction() action node, got %+v", nodes)
+	}
+}
+
+func TestPatternTreeShowsSetValue(t *testing.T) {
+	nodes := mapPatternTree([]inspect.PatternActionDTO{{Pattern: "Value", Name: "set_value"}})
+	if len(nodes) != 1 || len(nodes[0].children) != 1 || nodes[0].children[0].label != "SetValue()" {
+		t.Fatalf("expected SetValue() action node, got %+v", nodes)
+	}
+}
+
+func TestPatternTreeShowsNoSupportedPatternsOnlyWhenEmpty(t *testing.T) {
+	m := newPatternTreeModel()
+	m.SetRoots(mapPatternTree([]inspect.PatternActionDTO{{Pattern: "Invoke", Name: "invoke"}}))
+	if m.RootCount() == 0 {
+		t.Fatalf("expected non-empty roots")
+	}
+	root := m.RootAt(0).(*patternTreeNode)
+	if root.id == emptyPatternNodeID {
+		t.Fatalf("placeholder should not be shown when patterns exist")
+	}
+}
