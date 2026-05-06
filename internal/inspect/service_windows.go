@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"goahk/internal/window"
 )
@@ -785,8 +786,7 @@ func containsFold(haystack, needle string) bool {
 func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode InspectMode, refresh bool) (TreeNodeDTO, InspectMode, error) {
 	mode = normalizeInspectMode(mode)
 	log.Printf("inspect.resolve_root_start hwnd=%s mode=%s refresh=%t", hwnd, mode, refresh)
-	core := p.coreForMode(mode)
-	root, err := core.treeRoot(ctx, hwnd, refresh)
+	root, err := p.resolveRequestedRootWithRetry(ctx, hwnd, mode, refresh)
 	if err == nil {
 		log.Printf("inspect.resolve_root_ok hwnd=%s mode=%s provider=%s fallback=false", hwnd, mode, sourceMetadataForMode(mode).Provider)
 		return root, mode, nil
@@ -810,6 +810,43 @@ func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode
 	}
 	log.Printf("inspect.fallback_ok hwnd=%s mode=%s provider=hwnd active_mode=%s", hwnd, mode, InspectModeHWNDTree)
 	return root, InspectModeHWNDTree, nil
+}
+
+func (p *windowsProvider) resolveRequestedRootWithRetry(ctx context.Context, hwnd string, mode InspectMode, refresh bool) (TreeNodeDTO, error) {
+	core := p.coreForMode(mode)
+	if mode != InspectModeUIATree {
+		return core.treeRoot(ctx, hwnd, refresh)
+	}
+	return treeRootWithTransientRetry(ctx, core, hwnd, refresh)
+}
+
+func treeRootWithTransientRetry(ctx context.Context, core *providerCore, hwnd string, refresh bool) (TreeNodeDTO, error) {
+	retryDelays := []time.Duration{0, 50 * time.Millisecond, 150 * time.Millisecond}
+	var lastErr error
+	for i, delay := range retryDelays {
+		if i > 0 {
+			if err := sleepWithContext(ctx, delay); err != nil {
+				return TreeNodeDTO{}, err
+			}
+		}
+		root, err := core.treeRoot(ctx, hwnd, refresh)
+		if err == nil {
+			return root, nil
+		}
+		lastErr = err
+	}
+	return TreeNodeDTO{}, lastErr
+}
+
+func sleepWithContext(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func shouldFallbackFromUIAToAlternateTree(err error) bool {
