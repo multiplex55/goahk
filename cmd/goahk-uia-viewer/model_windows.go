@@ -19,8 +19,7 @@ func uiaNodeLabel(nodeID, displayLabel, localizedControlType, controlType, name 
 
 func composeTypeNameLabel(typ, name string) string {
 	typ = strings.TrimSpace(typ)
-	name = strings.TrimSpace(name)
-	if typ == "" || name == "" {
+	if typ == "" {
 		return ""
 	}
 	return typ + " \"" + name + "\""

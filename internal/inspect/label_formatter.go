@@ -5,11 +5,12 @@ import "strings"
 func formatDisplayLabel(name, localizedControlType, controlType string) string {
 	control := strings.TrimSpace(localizedControlType)
 	if control == "" {
+		control = strings.TrimSpace(controlType)
+	}
+	if control == "" {
 		control = "element"
 	}
-	trimmedName := strings.TrimSpace(name)
-	escapedName := strings.ReplaceAll(trimmedName, `"`, `\"`)
-	_ = controlType // retained for API compatibility at call sites
+	escapedName := strings.ReplaceAll(name, `"`, `\"`)
 	return control + ` "` + escapedName + `"`
 }
 

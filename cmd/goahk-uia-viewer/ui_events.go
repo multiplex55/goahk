@@ -78,6 +78,9 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 				a.view.UpdateNodeChildren(rootID, result.Children)
 				a.view.ExpandTreeNode(rootID)
 			}
+			if err := a.controller.ExpandTreeDepth(rootID, 2); err == nil {
+				a.view.ExpandTreeNode(rootID)
+			}
 
 			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("GetTreeRoot", hwnd), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
 			modeSummary := fmt.Sprintf("requested=%s active=%s provider=%s fallback=%t", result.Root.State.RequestedMode, result.Root.State.ActiveMode, result.Root.Source.Provider, result.Root.State.FallbackUsed)
@@ -104,7 +107,7 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 				status = status + "; " + result.Details.StatusText
 			}
 			if result.Root.State.FallbackUsed {
-				status = status + "; degraded provider outcome: fallback in use (" + modeSummary + ")"
+				status = status + "; fallback mode active: degraded HWND/compatibility tree, selector parity may differ (" + modeSummary + ")"
 			} else {
 				status = status + "; mode: " + modeSummary
 			}

@@ -146,7 +146,7 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 }
 
 func (p *windowsProvider) GetNodeChildren(ctx context.Context, req GetNodeChildrenRequest) (GetNodeChildrenResponse, error) {
-	children, err := p.activeCore().nodeChildren(ctx, req.NodeID)
+	children, err := p.coreForNodeID(req.NodeID).nodeChildren(ctx, req.NodeID)
 	if err != nil {
 		return GetNodeChildrenResponse{}, err
 	}
@@ -154,7 +154,7 @@ func (p *windowsProvider) GetNodeChildren(ctx context.Context, req GetNodeChildr
 }
 
 func (p *windowsProvider) SelectNode(ctx context.Context, req SelectNodeRequest) (SelectNodeResponse, error) {
-	core := p.activeCore()
+	core := p.coreForNodeID(req.NodeID)
 	selected, err := core.inspectByNodeID(ctx, req.NodeID)
 	if err != nil {
 		_ = p.highlights.Clear(ctx)
@@ -182,7 +182,7 @@ func (p *windowsProvider) SelectNode(ctx context.Context, req SelectNodeRequest)
 }
 
 func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetailsRequest) (GetNodeDetailsResponse, error) {
-	core := p.activeCore()
+	core := p.coreForNodeID(req.NodeID)
 	selected, err := core.inspectByNodeID(ctx, req.NodeID)
 	if err != nil {
 		return GetNodeDetailsResponse{}, err
@@ -243,6 +243,10 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 		ACCPath:         accPathFromElement(selected),
 		Source:          sourceMetadataForMode(p.activeModeForRead()),
 	}, nil
+}
+
+func (p *windowsProvider) coreForNodeID(nodeID string) *providerCore {
+	return coreForNodeID(nodeID, p.uiaCore, p.accCore, p.windowCore, p.activeCore())
 }
 
 func accPathFromElement(selected InspectElement) string {

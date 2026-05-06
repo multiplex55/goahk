@@ -257,6 +257,41 @@ func TestWindowsProvider_ModeAdaptersAreDistinct(t *testing.T) {
 	}
 }
 
+func TestGetNodeChildren_RoutesByNodeIDProvider(t *testing.T) {
+	uia := &fakeAdapter{root: &uiaElement{Ref: "uia-root", RuntimeID: "1", HWND: "0x1"}}
+	acc := &fakeAdapter{root: &uiaElement{Ref: "acc-root", RuntimeID: "2", HWND: "0x1"}}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(acc), newUIAAdapter(acc), &fakeWindowAdapter{}).(*windowsProvider)
+	accRoot, _ := provider.accCore.treeRoot(context.Background(), "0x1", true)
+	if _, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: accRoot.NodeID}); err != nil && !errors.Is(err, ErrStaleCache) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if acc.resolveRootCalls == 0 {
+		t.Fatal("expected ACC core route")
+	}
+}
+
+func TestGetNodeDetails_RoutesByNodeIDProvider(t *testing.T) {
+	uia := &fakeAdapter{root: &uiaElement{Ref: "uia-root", RuntimeID: "1", HWND: "0x1"}}
+	acc := &fakeAdapter{root: &uiaElement{Ref: "acc-root", RuntimeID: "2", HWND: "0x1"}, byRef: map[string]*uiaElement{"acc-root": {Ref: "acc-root", RuntimeID: "2", HWND: "0x1"}}}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(acc), newUIAAdapter(acc), &fakeWindowAdapter{}).(*windowsProvider)
+	accRoot, _ := provider.accCore.treeRoot(context.Background(), "0x1", true)
+	_, _ = provider.GetNodeDetails(context.Background(), GetNodeDetailsRequest{NodeID: accRoot.NodeID})
+	if acc.getByRefCount["acc-root"] == 0 {
+		t.Fatal("expected details to route to ACC core")
+	}
+}
+
+func TestSelectNode_RoutesByNodeIDProvider(t *testing.T) {
+	uia := &fakeAdapter{root: &uiaElement{Ref: "uia-root", RuntimeID: "1", HWND: "0x1"}}
+	win := &fakeAdapter{root: &uiaElement{Ref: "window-root", RuntimeID: "3", HWND: "0x1"}, byRef: map[string]*uiaElement{"window-root": {Ref: "window-root", RuntimeID: "3", HWND: "0x1"}}}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(win), newUIAAdapter(win), &fakeWindowAdapter{}).(*windowsProvider)
+	windowRoot, _ := provider.windowCore.treeRoot(context.Background(), "0x1", true)
+	_, _ = provider.SelectNode(context.Background(), SelectNodeRequest{NodeID: windowRoot.NodeID})
+	if win.getByRefCount["window-root"] == 0 {
+		t.Fatal("expected select to route to window core")
+	}
+}
+
 func TestWindowsProvider_WindowModeParentChildRegression(t *testing.T) {
 	windowTree := &fakeAdapter{
 		root: &uiaElement{Ref: "root-window", RuntimeID: "1", HWND: "0x1", Name: "Window Root"},

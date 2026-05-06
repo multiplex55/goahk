@@ -180,6 +180,21 @@ func TestController_ExpandNode_CachesChildren(t *testing.T) {
 	}
 }
 
+func TestController_ExpandTreeDepth_ExpandsBreadthFirstToDepth(t *testing.T) {
+	svc := &fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{
+		"root": {{NodeID: "a"}, {NodeID: "b"}},
+		"a":    {{NodeID: "a1"}},
+		"b":    {{NodeID: "b1"}},
+	}}
+	c := NewController(context.Background(), svc)
+	if err := c.ExpandTreeDepth("root", 2); err != nil {
+		t.Fatal(err)
+	}
+	if len(svc.nodeChildrenReqs) < 3 {
+		t.Fatalf("expected depth expansion calls, got %d", len(svc.nodeChildrenReqs))
+	}
+}
+
 func TestController_InvokePattern_ForSelection(t *testing.T) {
 	svc := &fakeInspectService{}
 	c := NewController(context.Background(), svc)
@@ -459,6 +474,7 @@ type fakeControllerService struct {
 	nodeChildrenErr                                                                           error
 	selectErr                                                                                 error
 	highlightErr                                                                              error
+	rootState                                                                                 inspect.InspectModeState
 }
 
 func (f *fakeControllerService) ActivateWindow(context.Context, inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
@@ -484,7 +500,7 @@ func (f *fakeControllerService) GetTreeRoot(context.Context, inspect.GetTreeRoot
 	if f.treeRootErr != nil {
 		return inspect.GetTreeRootResponse{}, f.treeRootErr
 	}
-	return inspect.GetTreeRootResponse{Root: f.root}, nil
+	return inspect.GetTreeRootResponse{Root: f.root, State: f.rootState}, nil
 }
 
 func TestGetTreeRootWithRetry_RetriesTransient(t *testing.T) {

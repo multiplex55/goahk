@@ -297,7 +297,7 @@ func (ui *viewerUI) buildStatusBar() error {
 		return err
 	}
 	ui.statusText = item
-	ui.statusText.SetText("Ready. Click Refresh to enumerate windows.")
+	ui.statusText.SetText("Ready. Click Refresh to enumerate windows. Fallback mode will be labeled as degraded HWND compatibility tree.")
 	return nil
 }
 
