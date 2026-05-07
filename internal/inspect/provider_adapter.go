@@ -230,7 +230,7 @@ func (p *providerCore) inspectByNodeID(ctx context.Context, nodeID string) (Insp
 	if el.ParentRef != "" {
 		parentID := p.parentOf(nodeID)
 		if parentID == "" {
-			parentID = "node:ref:" + el.ParentRef
+			parentID = runtimeNodeIDWithNamespace(p.nodeNamespace, "", el.ParentRef)
 		}
 		p.mu.Lock()
 		p.parentByID[nodeID] = parentID
@@ -465,7 +465,7 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 	if el.ParentRef != "" {
 		parentID := p.parentOf(nodeID)
 		if parentID == "" {
-			parentID = "node:ref:" + el.ParentRef
+			parentID = runtimeNodeIDWithNamespace(p.nodeNamespace, "", el.ParentRef)
 		}
 		p.mu.Lock()
 		p.parentByID[nodeID] = parentID

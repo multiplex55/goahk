@@ -292,6 +292,57 @@ func TestSelectNode_RoutesByNodeIDProvider(t *testing.T) {
 	}
 }
 
+func TestHighlightNode_RoutesByNodeIDPrefix(t *testing.T) {
+	uia := &fakeAdapter{root: &uiaElement{Ref: "uia-root", RuntimeID: "1", HWND: "0x1"}}
+	win := &fakeAdapter{root: &uiaElement{Ref: "window-root", RuntimeID: "3", HWND: "0x1"}, byRef: map[string]*uiaElement{"window-root": {Ref: "window-root", RuntimeID: "3", HWND: "0x1"}}}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(win), newUIAAdapter(win), &fakeWindowAdapter{}).(*windowsProvider)
+	windowRoot, _ := provider.windowCore.treeRoot(context.Background(), "0x1", true)
+	_, _ = provider.HighlightNode(context.Background(), HighlightNodeRequest{NodeID: windowRoot.NodeID})
+	if win.getByRefCount["window-root"] == 0 {
+		t.Fatal("expected highlight to route to window core")
+	}
+}
+
+func TestPatternRoutesByNodeIDPrefix(t *testing.T) {
+	uia := &fakeAdapter{
+		root:  &uiaElement{Ref: "uia-root", RuntimeID: "1", HWND: "0x1"},
+		byRef: map[string]*uiaElement{"uia-root": {Ref: "uia-root", RuntimeID: "1", HWND: "0x1", SupportedPatterns: []string{"Invoke"}}},
+	}
+	acc := &fakeAdapter{root: &uiaElement{Ref: "acc-root", RuntimeID: "2", HWND: "0x1"}, byRef: map[string]*uiaElement{"acc-root": {Ref: "acc-root", RuntimeID: "2", HWND: "0x1", SupportedPatterns: []string{"Invoke"}}}}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(acc), newUIAAdapter(acc), &fakeWindowAdapter{}).(*windowsProvider)
+	accRoot, _ := provider.accCore.treeRoot(context.Background(), "0x1", true)
+	if _, err := provider.GetPatternActions(context.Background(), GetPatternActionsRequest{NodeID: accRoot.NodeID}); err != nil {
+		t.Fatalf("GetPatternActions failed: %v", err)
+	}
+	if _, err := provider.InvokePattern(context.Background(), InvokePatternRequest{NodeID: accRoot.NodeID, Action: "invoke"}); err != nil {
+		t.Fatalf("InvokePattern failed: %v", err)
+	}
+	if acc.invokeCount == 0 {
+		t.Fatal("expected invoke to route to ACC core")
+	}
+}
+
+func TestGetNodeChildren_UnknownNodeIDFallsBackToActiveCore(t *testing.T) {
+	uia := &fakeAdapter{
+		root: &uiaElement{Ref: "uia-root", RuntimeID: "1", HWND: "0x1"},
+		kids: map[string][]*uiaElement{"uia-root": {}},
+	}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(nil), newUIAAdapter(nil), &fakeWindowAdapter{}).(*windowsProvider)
+	rootResp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+	if err != nil {
+		t.Fatalf("GetTreeRoot failed: %v", err)
+	}
+	if _, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: rootResp.Root.NodeID}); err != nil {
+		t.Fatalf("GetNodeChildren for root failed: %v", err)
+	}
+	if _, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: "node:unknown:anything"}); err == nil {
+		t.Fatalf("expected stale cache error for unknown node id")
+	}
+	if uia.childrenCallCount["uia-root"] == 0 {
+		t.Fatal("expected fallback routing to active (UIA) core")
+	}
+}
+
 func TestWindowsProvider_WindowModeParentChildRegression(t *testing.T) {
 	windowTree := &fakeAdapter{
 		root: &uiaElement{Ref: "root-window", RuntimeID: "1", HWND: "0x1", Name: "Window Root"},
