@@ -180,3 +180,8 @@ No viewer-polish task should be marked complete until:
 
 - rungs **1–4** (window list, root resolution, root details, child expansion) pass in automated coverage, and
 - fallback/degraded status labeling remains explicit so triage can separate UIA-unavailable environments from true regressions.
+
+
+## UIA parity criteria
+
+A run is parity-valid only when diagnostics/reporting indicates `Provider=uia`, `Mode=UIA_TREE`, and `Fallback=No`. Any `HWND_TREE` result is degraded-by-design and non-parity.

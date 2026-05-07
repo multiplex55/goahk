@@ -294,6 +294,8 @@ func normalizeSupportedPatterns(patterns []string) []string {
 		"value":             "Value",
 		"toggle":            "Toggle",
 		"expandcollapse":    "ExpandCollapse",
+		"window":            "Window",
+		"transform":         "Transform",
 	}
 	seen := map[string]bool{}
 	out := make([]string, 0, len(patterns))

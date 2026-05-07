@@ -63,3 +63,8 @@ Build from repository root using the Go build command documented in `docs/BUILD.
 ### UI tree appears stale after switching target windows
 
 Use the refresh action, then re-select the target window to force a new root/details fetch path. If stale state persists, restart the viewer process and retry.
+
+
+## UIA parity criteria
+
+A run is parity-valid only when diagnostics/reporting indicates `Provider=uia`, `Mode=UIA_TREE`, and `Fallback=No`. Any `HWND_TREE` result is degraded-by-design and non-parity.
