@@ -185,3 +185,37 @@ No viewer-polish task should be marked complete until:
 ## UIA parity criteria
 
 A run is parity-valid only when diagnostics/reporting indicates `Provider=uia`, `Mode=UIA_TREE`, and `Fallback=No`. Any `HWND_TREE` result is degraded-by-design and non-parity.
+
+
+## Manual Windows desktop verification ladder (Notepad)
+
+This ladder is **manual verification on an interactive Windows desktop**. It complements deterministic unit tests that use fake provider trees; it does not replace those tests.
+
+### Preconditions
+
+1. Use Windows desktop session (not headless CI).
+2. Build and launch `goahk-uia-viewer`.
+3. Launch `notepad.exe` and type `goahk parity check`.
+
+### Step-by-step checks
+
+1. Refresh windows and select Notepad.
+2. Inspect in auto/UIA mode and record the status fields:
+   - `Provider`
+   - `Backend`
+   - `Mode`
+   - `Fallback`
+3. Expand root, then expand the first `pane ""` node (empty-name pane must be retained).
+4. Confirm expected descendants are visible, such as document/edit content and status elements.
+5. Select an editable node and open details; verify UIA-backed properties populate.
+6. Open pattern actions and verify common mappings (for example `Invoke()` and `SetValue()`) are shown when supported.
+
+### Expected outcomes
+
+- **Parity pass:** `Provider=uia`, `Mode=UIA_TREE`, `Fallback=No`.
+- **UIA degraded fallback:** `Fallback=Yes`, with active mode moving to `WINDOW_TREE` or `HWND_TREE`; results are diagnostic, not parity-equivalent.
+- **Failure:** root/details/actions fail without clear fallback messaging.
+
+### Deterministic test complement
+
+The fake-provider tests should remain authoritative for repeatable correctness checks (including empty-name panes, AHK-style labels, and pattern-action mappings). Manual ladder results are an additional confidence signal for real desktop behavior.

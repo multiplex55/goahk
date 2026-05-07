@@ -152,3 +152,48 @@ func TestUIATreeAppendChildrenAvoidsDuplicates(t *testing.T) {
 		t.Fatalf("expected two unique children, got %d", root.ChildCount())
 	}
 }
+
+func fakeNotepadTreeNodes() (inspect.TreeNodeDTO, []inspect.TreeNodeDTO, []inspect.TreeNodeDTO) {
+	root := inspect.TreeNodeDTO{NodeID: "root", LocalizedControlType: "window", Name: "Untitled - Notepad"}
+	pane := inspect.TreeNodeDTO{NodeID: "pane-empty", LocalizedControlType: "pane", Name: ""}
+	descendants := []inspect.TreeNodeDTO{{NodeID: "doc", LocalizedControlType: "document", Name: "Text Editor"}, {NodeID: "status", LocalizedControlType: "status bar", Name: "Ln 1, Col 1"}}
+	return root, []inspect.TreeNodeDTO{pane}, descendants
+}
+
+func TestUIATreeFakeNotepadTree_AHKStyleLabelsAndEmptyNameRetention(t *testing.T) {
+	m := newUIATreeModel()
+	root, rootChildren, paneChildren := fakeNotepadTreeNodes()
+	m.SetRoot(root)
+	m.SetChildren("root", rootChildren)
+	m.SetChildren("pane-empty", paneChildren)
+
+	pane, ok := m.ItemByID("pane-empty")
+	if !ok {
+		t.Fatal("expected pane node")
+	}
+	if got := pane.Text(); got != `pane ""` {
+		t.Fatalf("expected AHK-style empty-name pane label, got %q", got)
+	}
+	doc, ok := m.ItemByID("doc")
+	if !ok || doc.Text() != `document "Text Editor"` {
+		t.Fatalf("expected rich descendant label, got %#v ok=%v", doc, ok)
+	}
+}
+
+func TestUIATreeFakeNotepadTree_ConfiguredAutoExpandMarksExpandedNodes(t *testing.T) {
+	m := newUIATreeModel()
+	root, rootChildren, paneChildren := fakeNotepadTreeNodes()
+	m.SetRoot(root)
+	m.SetChildren("root", rootChildren)
+	m.SetChildren("pane-empty", paneChildren)
+
+	for _, id := range []string{"root", "pane-empty"} {
+		m.SetExpanded(id, true)
+	}
+	if !m.IsExpanded("root") || !m.IsExpanded("pane-empty") {
+		t.Fatalf("expected configured auto-expand state for fake tree")
+	}
+	if m.IsExpanded("doc") {
+		t.Fatalf("leaf nodes should not be auto-expanded by default")
+	}
+}
