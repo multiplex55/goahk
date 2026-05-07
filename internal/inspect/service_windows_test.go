@@ -33,6 +33,43 @@ func (f *fakeWindowAdapter) ActivateWindow(_ context.Context, hwnd window.HWND) 
 	return nil
 }
 
+type fakeProviderFixture struct {
+	Root *uiaElement
+	Kids map[string][]*uiaElement
+}
+
+func makeNotepadLikeProviderFixture() fakeProviderFixture {
+	root := &uiaElement{Ref: "root", RuntimeID: "1", HWND: "0x1001", Name: "Untitled - Notepad", ControlType: "Window", LocalizedControlType: "window"}
+	pane := &uiaElement{Ref: "pane-empty", RuntimeID: "2", ParentRef: "root", Name: "", ControlType: "Pane", LocalizedControlType: "pane"}
+	document := &uiaElement{Ref: "document", RuntimeID: "3", ParentRef: "pane-empty", Name: "Text Editor", ControlType: "Document", LocalizedControlType: "document"}
+	edit := &uiaElement{Ref: "edit", RuntimeID: "4", ParentRef: "document", Name: "Text Editor", ControlType: "Edit", LocalizedControlType: "edit"}
+	status := &uiaElement{Ref: "status", RuntimeID: "5", ParentRef: "pane-empty", Name: "Ln 1, Col 1", ControlType: "StatusBar", LocalizedControlType: "status bar"}
+	return fakeProviderFixture{Root: root, Kids: map[string][]*uiaElement{"root": {pane}, "pane-empty": {document, status}, "document": {edit}}}
+}
+
+func TestWindowsProvider_NotepadLikeFixtureRetainsEmptyNamePaneAndRichDescendants(t *testing.T) {
+	fixture := makeNotepadLikeProviderFixture()
+	deps := &fakeAdapter{root: fixture.Root, kids: fixture.Kids}
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	rootResp, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1001"})
+	if err != nil {
+		t.Fatalf("GetTreeRoot failed: %v", err)
+	}
+	rootChildren, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: rootResp.Root.NodeID})
+	if err != nil {
+		t.Fatalf("GetNodeChildren(root) failed: %v", err)
+	}
+	if len(rootChildren.Children) != 1 || rootChildren.Children[0].Name != "" || rootChildren.Children[0].LocalizedControlType != "pane" {
+		t.Fatalf("expected empty-name pane child, got %+v", rootChildren.Children)
+	}
+	paneChildren, err := provider.GetNodeChildren(context.Background(), GetNodeChildrenRequest{NodeID: rootChildren.Children[0].NodeID})
+	if err != nil {
+		t.Fatalf("GetNodeChildren(pane) failed: %v", err)
+	}
+	if len(paneChildren.Children) != 2 || paneChildren.Children[0].LocalizedControlType != "document" || paneChildren.Children[1].LocalizedControlType != "status bar" {
+		t.Fatalf("expected rich pane descendants, got %+v", paneChildren.Children)
+	}
+}
 func TestWindowsProvider_InspectAndTreeCacheBehavior(t *testing.T) {
 	deps := &fakeAdapter{
 		root: &uiaElement{Ref: "root", RuntimeID: "1", HWND: "0x1", Name: "Root"},

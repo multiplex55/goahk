@@ -26,3 +26,32 @@ func TestFormatDisplayLabel(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatDisplayLabel_QuotedNameFormatting(t *testing.T) {
+	got := formatDisplayLabel(`He said "hello"`, "edit", "Edit")
+	want := `edit "He said \"hello\""`
+	if got != want {
+		t.Fatalf("formatDisplayLabel() = %q, want %q", got, want)
+	}
+}
+
+func TestFormatDisplayLabel_ControlTypeFallbacks(t *testing.T) {
+	tests := []struct {
+		name      string
+		localized string
+		control   string
+		want      string
+	}{
+		{name: "controltype prefix stripped", control: "ControlType.Button", want: `button ""`},
+		{name: "plain fallback lowercased", control: "Pane", want: `pane ""`},
+		{name: "empty fallback uses element", control: "", want: `element ""`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := formatDisplayLabel("", tc.localized, tc.control); got != tc.want {
+				t.Fatalf("formatDisplayLabel() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

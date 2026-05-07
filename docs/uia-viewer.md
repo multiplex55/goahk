@@ -65,6 +65,23 @@ Build from repository root using the Go build command documented in `docs/BUILD.
 Use the refresh action, then re-select the target window to force a new root/details fetch path. If stale state persists, restart the viewer process and retry.
 
 
+
+### Status shows `backend=synthetic`
+
+`backend=synthetic` means the viewer is presenting a synthesized compatibility tree instead of a native UIA provider tree. This is useful for diagnostics, but it is not a UIA parity pass.
+
+### How UIA-only failures should appear
+
+When UIA calls fail, status text should keep stage context (for example `Failed GetTreeRoot: ...` or `Failed GetNodeDetails: ...`). If fallback succeeds, the status should explicitly indicate fallback/degraded mode so failures are triaged as UIA-path issues rather than total viewer failure.
+
+### What HWND fallback implies for parity expectations
+
+`HWND_TREE` fallback means the viewer is using window-handle hierarchy data. This mode is intentionally degraded for parity comparisons: selector and structure differences from UIA are expected, so treat results as compatibility diagnostics only.
+
+### Manual verification vs deterministic tests
+
+UIA viewer parity checks on Notepad are manual Windows desktop verification. Keep deterministic fake-provider tests as the baseline regression suite, and use manual runs as a complementary signal for desktop integration behavior.
+
 ## UIA parity criteria
 
 A run is parity-valid only when diagnostics/reporting indicates `Provider=uia`, `Mode=UIA_TREE`, and `Fallback=No`. Any `HWND_TREE` result is degraded-by-design and non-parity.

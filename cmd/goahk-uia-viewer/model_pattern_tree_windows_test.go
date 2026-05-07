@@ -133,6 +133,25 @@ func TestPatternTreeShowsSetValue(t *testing.T) {
 	}
 }
 
+func TestMapPatternTree_InvokeAndValueMappings(t *testing.T) {
+	nodes := mapPatternTree([]inspect.PatternActionDTO{
+		{Pattern: "InvokePattern", Name: "invoke"},
+		{Pattern: "ValuePattern", Name: "set_value"},
+	})
+	if len(nodes) != 2 {
+		t.Fatalf("expected two pattern groups, got %d", len(nodes))
+	}
+	if nodes[0].label != "InvokePattern" || len(nodes[0].children) != 1 || nodes[0].children[0].label != "Invoke()" {
+		t.Fatalf("unexpected invoke mapping: %+v", nodes[0])
+	}
+	if nodes[1].label != "ValuePattern" || len(nodes[1].children) != 1 || nodes[1].children[0].label != "SetValue()" {
+		t.Fatalf("unexpected value mapping: %+v", nodes[1])
+	}
+	if nodes[1].children[0].ActionID() != ActionID("setValue") {
+		t.Fatalf("expected setValue action id, got %q", nodes[1].children[0].ActionID())
+	}
+}
+
 func TestPatternTreeShowsNoSupportedPatternsOnlyWhenEmpty(t *testing.T) {
 	m := newPatternTreeModel()
 	m.SetRoots(mapPatternTree([]inspect.PatternActionDTO{{Pattern: "Invoke", Name: "invoke"}}))

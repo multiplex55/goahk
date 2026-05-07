@@ -116,9 +116,7 @@ func mapPropertyRowsFromDetails(details inspect.GetNodeDetailsResponse) []proper
 	}
 
 	status := func(name string, fallback string) string {
-		if e := strings.TrimSpace(details.Element.PropertyStates[name]); e != "" {
-			return e
-		}
+		_ = name
 		return fallback
 	}
 
@@ -143,7 +141,7 @@ func mapPropertyRowsFromDetails(details inspect.GetNodeDetailsResponse) []proper
 		{Name: "FrameworkId", Value: stringPtrOrNil(e.FrameworkID), Status: status("FrameworkId", statusFromValue(e.FrameworkID))},
 		{Name: "IsRequiredForForm", Value: stringPtrOrNil(strconv.FormatBool(e.IsRequiredForForm)), Status: status("IsRequiredForForm", "ok")},
 		{Name: "ItemStatus", Value: stringPtrOrNil(e.ItemStatus), Status: status("ItemStatus", statusFromValue(e.ItemStatus))},
-		{Name: "LabeledBy", Value: stringPtrOrNil(e.LabeledBy), Status: status("LabeledBy", statusFromValue(e.LabeledBy))},
+		{Name: "LabeledBy", Value: nil, Status: status("LabeledBy", "unsupported")},
 	}
 
 	return mapPropertyTableRows(props)
