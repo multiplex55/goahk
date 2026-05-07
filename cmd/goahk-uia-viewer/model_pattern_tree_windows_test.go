@@ -144,3 +144,18 @@ func TestPatternTreeShowsNoSupportedPatternsOnlyWhenEmpty(t *testing.T) {
 		t.Fatalf("placeholder should not be shown when patterns exist")
 	}
 }
+
+func TestPatternTreeDisablesUnsupportedOrDisabledActionNodes(t *testing.T) {
+	nodes := mapPatternTree([]inspect.PatternActionDTO{{
+		Pattern:   "Invoke",
+		Name:      "invoke",
+		Supported: true,
+		Enabled:   false,
+	}})
+	if len(nodes) != 1 || len(nodes[0].children) != 1 {
+		t.Fatalf("unexpected tree shape: %+v", nodes)
+	}
+	if nodes[0].children[0].IsActionableLeaf() {
+		t.Fatalf("disabled action should not be actionable")
+	}
+}

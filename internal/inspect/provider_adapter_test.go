@@ -436,6 +436,8 @@ func TestProviderAdapter_PatternActionMatrixByPatternSupport(t *testing.T) {
 		{name: "legacy", patterns: []string{"LegacyIAccessible"}, actions: []string{"doDefaultAction"}},
 		{name: "toggle", patterns: []string{"Toggle"}, actions: []string{"toggle"}},
 		{name: "expand collapse", patterns: []string{"ExpandCollapse"}, actions: []string{"collapse", "expand"}},
+		{name: "window", patterns: []string{"Window"}, actions: []string{"invoke"}},
+		{name: "transform", patterns: []string{"Transform"}, actions: []string{"invoke"}},
 	}
 
 	for _, tc := range cases {
