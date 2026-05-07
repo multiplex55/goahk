@@ -95,7 +95,7 @@ func (p *windowsProvider) ListWindows(ctx context.Context, req ListWindowsReques
 
 func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRequest) (InspectWindowResponse, error) {
 	mode := normalizeInspectMode(req.Mode)
-	root, resolvedMode, err := p.resolveTreeRoot(ctx, req.HWND, mode, false)
+	root, resolvedMode, err := p.resolveTreeRoot(ctx, req.HWND, mode, false, modeAllowsFallback(mode))
 	if err != nil {
 		return InspectWindowResponse{}, err
 	}
@@ -119,7 +119,7 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 		_ = p.highlights.Clear(ctx)
 	}
 	mode := normalizeInspectMode(req.Mode)
-	root, resolvedMode, err := p.resolveTreeRoot(ctx, req.HWND, mode, req.Refresh)
+	root, resolvedMode, err := p.resolveTreeRoot(ctx, req.HWND, mode, req.Refresh, modeAllowsFallback(mode))
 	if err != nil {
 		p.setDiagnostics(diagnosticsFromError("ResolveWindowRoot", err, ""))
 		return GetTreeRootResponse{}, err
@@ -793,7 +793,7 @@ func containsFold(haystack, needle string) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(haystack)), strings.ToLower(strings.TrimSpace(needle)))
 }
 
-func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode InspectMode, refresh bool) (TreeNodeDTO, InspectMode, error) {
+func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode InspectMode, refresh bool, allowFallback bool) (TreeNodeDTO, InspectMode, error) {
 	mode = normalizeInspectMode(mode)
 	log.Printf("inspect.resolve_root_start hwnd=%s mode=%s refresh=%t", hwnd, mode, refresh)
 	root, err := p.resolveRequestedRootWithRetry(ctx, hwnd, mode, refresh)
@@ -802,7 +802,7 @@ func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode
 		return root, mode, nil
 	}
 	log.Printf("inspect.resolve_root_err hwnd=%s mode=%s provider=%s err=%v", hwnd, mode, sourceMetadataForMode(mode).Provider, err)
-	if (mode != InspectModeUIATree && mode != InspectModeAuto) || !shouldFallbackFromUIAToAlternateTree(err) {
+	if !allowFallback || (mode != InspectModeUIATree && mode != InspectModeAuto) || !shouldFallbackFromUIAToAlternateTree(err) {
 		return TreeNodeDTO{}, mode, err
 	}
 	log.Printf("inspect.fallback_attempt hwnd=%s mode=%s provider=acc", hwnd, mode)
@@ -883,6 +883,15 @@ func normalizeInspectMode(mode InspectMode) InspectMode {
 	return InspectModeAuto
 }
 
+func modeAllowsFallback(mode InspectMode) bool {
+	switch normalizeInspectMode(mode) {
+	case InspectModeAuto, InspectModeUIATree:
+		return true
+	default:
+		return false
+	}
+}
+
 func (p *windowsProvider) coreForMode(mode InspectMode) *providerCore {
 	switch mode {
 	case InspectModeWindowTree:
@@ -922,13 +931,13 @@ func (p *windowsProvider) activeModeForRead() InspectMode {
 func sourceMetadataForMode(mode InspectMode) ProviderSourceDTO {
 	switch mode {
 	case InspectModeWindowTree:
-		return ProviderSourceDTO{Provider: "acc", Source: "msaa", Mode: InspectModeWindowTree}
+		return ProviderSourceDTO{Provider: "acc", Source: "msaa", Backend: string(SourceBackendSynthetic), Mode: InspectModeWindowTree}
 	case InspectModeHWNDTree:
-		return ProviderSourceDTO{Provider: "hwnd", Source: "win32", Mode: InspectModeHWNDTree}
+		return ProviderSourceDTO{Provider: "hwnd", Source: "win32", Backend: string(SourceBackendUnavailable), Mode: InspectModeHWNDTree}
 	case InspectModeUIAOnly:
-		return ProviderSourceDTO{Provider: "uia", Source: "uia", Mode: InspectModeUIAOnly}
+		return ProviderSourceDTO{Provider: "uia", Source: "uia", Backend: string(SourceBackendNativeCOM), Mode: InspectModeUIAOnly}
 	default:
-		return ProviderSourceDTO{Provider: "uia", Source: "uia", Mode: InspectModeUIATree}
+		return ProviderSourceDTO{Provider: "uia", Source: "uia", Backend: string(SourceBackendNativeCOM), Mode: InspectModeUIATree}
 	}
 }
 

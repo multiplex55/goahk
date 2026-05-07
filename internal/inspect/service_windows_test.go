@@ -1053,8 +1053,23 @@ func TestWindowsProvider_GetTreeRoot_FallbackToHWNDTreeWhenUIAAndACCFail(t *test
 	if resp.Root.Name != "HWND Root" || resp.Root.NodeID == "" {
 		t.Fatalf("unexpected hwnd fallback root shape: %+v", resp.Root)
 	}
-	if !resp.State.FallbackUsed || resp.State.ActiveMode != InspectModeWindowTree {
-		t.Fatalf("expected fallback state, got %+v", resp.State)
+	if !resp.State.FallbackUsed || resp.State.ActiveMode != InspectModeHWNDTree {
+		t.Fatalf("expected hwnd fallback state, got %+v", resp.State)
+	}
+}
+
+func TestGetTreeRoot_UIAOnly_NeverFallsBackToHWNDTree(t *testing.T) {
+	uia := &fakeAdapter{resolveRootErr: ErrProviderTransientFailure}
+	acc := &fakeAdapter{root: &uiaElement{Ref: "acc-root", RuntimeID: "2", HWND: "0x1", Name: "ACC Root"}}
+	hwnd := &fakeAdapter{root: &uiaElement{Ref: "hwnd-root", RuntimeID: "3", HWND: "0x1", Name: "HWND Root"}}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(uia), newUIAAdapter(acc), newUIAAdapter(hwnd), &fakeWindowAdapter{}).(*windowsProvider)
+
+	_, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIAOnly})
+	if err == nil {
+		t.Fatalf("expected UIA-only failure without fallback")
+	}
+	if acc.resolveRootCalls != 0 || hwnd.resolveRootCalls != 0 {
+		t.Fatalf("expected no fallback attempts in UIA-only mode, acc=%d hwnd=%d", acc.resolveRootCalls, hwnd.resolveRootCalls)
 	}
 }
 

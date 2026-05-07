@@ -24,6 +24,10 @@ func inspectModeFromComboIndex(idx int) inspect.InspectMode {
 	return inspect.InspectModeAuto
 }
 
+func allowFallbackFromComboIndex(idx int) bool {
+	return idx == 0
+}
+
 func (ui *viewerUI) executePatternAction(action string) {
 	action = normalizePatternActionName(action)
 	ui.SetBusy(true)
@@ -155,9 +159,12 @@ func (ui *viewerUI) attachEvents() {
 	}
 	if ui.modeCombo != nil {
 		ui.controller.SetMode(inspectModeFromComboIndex(ui.modeCombo.CurrentIndex()))
+		ui.controller.SetAllowFallback(allowFallbackFromComboIndex(ui.modeCombo.CurrentIndex()))
 		ui.modeCombo.CurrentIndexChanged().Attach(func() {
-			mode := inspectModeFromComboIndex(ui.modeCombo.CurrentIndex())
+			idx := ui.modeCombo.CurrentIndex()
+			mode := inspectModeFromComboIndex(idx)
 			ui.controller.SetMode(mode)
+			ui.controller.SetAllowFallback(allowFallbackFromComboIndex(idx))
 			ui.setStatus("inspect mode set: " + string(mode))
 		})
 	}
