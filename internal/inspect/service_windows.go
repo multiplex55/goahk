@@ -503,7 +503,7 @@ func (p *windowsProvider) GetElementUnderCursor(ctx context.Context, req GetElem
 }
 
 func (p *windowsProvider) HighlightNode(ctx context.Context, req HighlightNodeRequest) (HighlightNodeResponse, error) {
-	core := p.activeCore()
+	core := p.coreForNodeID(req.NodeID)
 	selected, err := core.inspectByNodeID(ctx, req.NodeID)
 	if err != nil {
 		_ = p.highlights.Clear(ctx)
@@ -524,7 +524,7 @@ func (p *windowsProvider) ClearHighlight(ctx context.Context, _ ClearHighlightRe
 }
 
 func (p *windowsProvider) CopyBestSelector(ctx context.Context, req CopyBestSelectorRequest) (CopyBestSelectorResponse, error) {
-	selected, err := p.activeCore().inspectByNodeID(ctx, req.NodeID)
+	selected, err := p.coreForNodeID(req.NodeID).inspectByNodeID(ctx, req.NodeID)
 	if err != nil {
 		return CopyBestSelectorResponse{}, err
 	}
@@ -539,7 +539,7 @@ func (p *windowsProvider) CopyBestSelector(ctx context.Context, req CopyBestSele
 }
 
 func (p *windowsProvider) GetPatternActions(ctx context.Context, req GetPatternActionsRequest) (GetPatternActionsResponse, error) {
-	actions, err := p.activeCore().getPatternActions(ctx, req.NodeID)
+	actions, err := p.coreForNodeID(req.NodeID).getPatternActions(ctx, req.NodeID)
 	if err != nil {
 		return GetPatternActionsResponse{}, err
 	}
@@ -547,7 +547,7 @@ func (p *windowsProvider) GetPatternActions(ctx context.Context, req GetPatternA
 }
 
 func (p *windowsProvider) InvokePattern(ctx context.Context, req InvokePatternRequest) (InvokePatternResponse, error) {
-	resp, err := p.activeCore().invokePattern(ctx, req)
+	resp, err := p.coreForNodeID(req.NodeID).invokePattern(ctx, req)
 	if err != nil {
 		return InvokePatternResponse{}, err
 	}
@@ -730,7 +730,7 @@ func (p *windowsProvider) refreshHighlightForCurrentSelection(ctx context.Contex
 }
 
 func (p *windowsProvider) RefreshNodeChildren(ctx context.Context, req RefreshNodeChildrenRequest) (RefreshNodeChildrenResponse, error) {
-	core := p.activeCore()
+	core := p.coreForNodeID(req.NodeID)
 	core.childrenCache.invalidateNode(core.childrenCache.window(), req.NodeID)
 	children, err := core.nodeChildren(ctx, req.NodeID)
 	if err != nil {
