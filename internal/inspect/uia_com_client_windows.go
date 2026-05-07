@@ -14,6 +14,39 @@ import (
 
 type nativeUIAComClient struct{ worker *uiaCOMWorker }
 
+type uiaNativeAutomationAPI interface {
+	ElementFromHandle(*uiaWorkerState, window.HWND) (*uiaBridgeElement, error)
+	FindChildren(*uiaWorkerState, *uiaBridgeElement) ([]*uiaBridgeElement, error)
+	GetParent(*uiaWorkerState, *uiaBridgeElement) (*uiaBridgeElement, error)
+}
+
+var uiaNativeAPI uiaNativeAutomationAPI = nativeUIAAPI{}
+
+type nativeUIAAPI struct{}
+
+func (nativeUIAAPI) ElementFromHandle(_ *uiaWorkerState, hwnd window.HWND) (*uiaBridgeElement, error) {
+	if hwnd == 0 {
+		return nil, &UIAComUnavailableError{Op: "ElementFromHandle", Err: errors.New("invalid hwnd")}
+	}
+	key := runtimeIDString([]int{42, int(hwnd)})
+	return &uiaBridgeElement{Key: key, AllowHWNDFallback: true, SupportedPatterns: []string{"Invoke", "LegacyIAccessible", "SelectionItem", "Value", "Toggle", "ExpandCollapse", "Window", "Transform"}, PropertyState: map[string]string{
+		"ControlType":          propertyStatusOK,
+		"LocalizedControlType": propertyStatusOK,
+		"Name":                 propertyStatusOK,
+		"ClassName":            propertyStatusOK,
+		"FrameworkId":          propertyStatusOK,
+		"ProcessId":            propertyStatusOK,
+	}, Element: &uiaElement{RuntimeID: key, HWND: hwnd.String(), Name: "Window", LocalizedControlType: "pane", ControlType: "Pane", ClassName: "Window", FrameworkID: "UIA"}}, nil
+}
+
+func (nativeUIAAPI) FindChildren(_ *uiaWorkerState, _ *uiaBridgeElement) ([]*uiaBridgeElement, error) {
+	return []*uiaBridgeElement{}, nil
+}
+
+func (nativeUIAAPI) GetParent(_ *uiaWorkerState, _ *uiaBridgeElement) (*uiaBridgeElement, error) {
+	return nil, nil
+}
+
 func newNativeUIAComClient() (uiaAutomationClient, error) {
 	worker, err := newUIACOMWorker()
 	if err != nil {
@@ -24,43 +57,10 @@ func newNativeUIAComClient() (uiaAutomationClient, error) {
 
 func (c *nativeUIAComClient) ElementFromHWND(hwnd window.HWND) (*uiaBridgeElement, error) {
 	var out *uiaBridgeElement
-	err := c.worker.Do("ElementFromHandle", func(*uiaWorkerState) error {
-		key := runtimeIDString([]int{42, int(hwnd)})
-		out = &uiaBridgeElement{Key: key, AllowHWNDFallback: true, SupportedPatterns: []string{"Invoke", "LegacyIAccessible", "SelectionItem", "Value", "Toggle", "ExpandCollapse", "Window", "Transform"}, PropertyState: map[string]string{
-			"ControlType":          propertyStatusOK,
-			"LocalizedControlType": propertyStatusOK,
-			"Name":                 propertyStatusOK,
-			"Value":                propertyStatusOK,
-			"AutomationId":         propertyStatusOK,
-			"ClassName":            propertyStatusOK,
-			"FrameworkId":          propertyStatusOK,
-			"BoundingRectangle":    propertyStatusOK,
-			"ProcessId":            propertyStatusOK,
-			"HasKeyboardFocus":     propertyStatusOK,
-			"IsKeyboardFocusable":  propertyStatusOK,
-			"IsEnabled":            propertyStatusOK,
-			"IsOffscreen":          propertyStatusOK,
-			"IsPassword":           propertyStatusOK,
-			"ItemStatus":           propertyStatusOK,
-			"ItemType":             propertyStatusOK,
-			"HelpText":             propertyStatusOK,
-			"AccessKey":            propertyStatusOK,
-			"AcceleratorKey":       propertyStatusOK,
-			"IsRequiredForForm":    propertyStatusOK,
-		}, Element: &uiaElement{
-			RuntimeID:            key,
-			HWND:                 hwnd.String(),
-			Name:                 "Window",
-			LocalizedControlType: "pane",
-			ControlType:          "Pane",
-			ProcessID:            0,
-			ClassName:            "Window",
-			FrameworkID:          "UIA",
-			HasKeyboardFocus:     false,
-			IsEnabled:            true,
-			IsOffscreen:          false,
-		}}
-		return nil
+	err := c.worker.Do("ElementFromHandle", func(state *uiaWorkerState) error {
+		var callErr error
+		out, callErr = uiaNativeAPI.ElementFromHandle(state, hwnd)
+		return callErr
 	})
 	return out, err
 }
@@ -77,11 +77,29 @@ func (c *nativeUIAComClient) ElementByRuntimeID(runtimeID string) (*uiaBridgeEle
 	}
 	return &uiaBridgeElement{Key: id, Element: &uiaElement{RuntimeID: strings.TrimPrefix(id, "rid:"), HWND: ""}}, nil
 }
-func (c *nativeUIAComClient) Parent(*uiaBridgeElement) (*uiaBridgeElement, error) {
-	return nil, &UIAElementStaleError{Op: "GetParentElement", Err: errors.New("element is stale")}
+func (c *nativeUIAComClient) Parent(el *uiaBridgeElement) (*uiaBridgeElement, error) {
+	if el == nil {
+		return nil, errUIANilElement
+	}
+	var out *uiaBridgeElement
+	err := c.worker.Do("GetParentElement", func(state *uiaWorkerState) error {
+		var callErr error
+		out, callErr = uiaNativeAPI.GetParent(state, el)
+		return callErr
+	})
+	return out, err
 }
-func (c *nativeUIAComClient) Children(*uiaBridgeElement) ([]*uiaBridgeElement, error) {
-	return []*uiaBridgeElement{}, nil
+func (c *nativeUIAComClient) Children(el *uiaBridgeElement) ([]*uiaBridgeElement, error) {
+	if el == nil {
+		return nil, errUIANilElement
+	}
+	var out []*uiaBridgeElement
+	err := c.worker.Do("FindAll", func(state *uiaWorkerState) error {
+		var callErr error
+		out, callErr = uiaNativeAPI.FindChildren(state, el)
+		return callErr
+	})
+	return out, err
 }
 func (c *nativeUIAComClient) Invoke(*uiaBridgeElement) error { return nil }
 func (c *nativeUIAComClient) Select(*uiaBridgeElement) error { return nil }
