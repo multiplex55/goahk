@@ -29,6 +29,7 @@ type Controller struct {
 	visibleOnly           bool
 	titleOnly             bool
 	mode                  inspect.InspectMode
+	allowFallback         bool
 	nodesByID             map[string]inspect.TreeNodeDTO
 	nodeChildren          map[string][]string
 	nodeExpanded          map[string]bool
@@ -72,6 +73,7 @@ type StatusUpdate struct {
 func NewController(ctx context.Context, svc inspect.Service) *Controller {
 	c := &Controller{ctx: ctx, service: svc, followInterval: 120 * time.Millisecond, nodesByID: map[string]inspect.TreeNodeDTO{}, nodeChildren: map[string][]string{}, nodeExpanded: map[string]bool{}, nodeLoadFailed: map[string]error{}, statusText: "Click here to enable Acc path capturing (can't be used with UIA!)"}
 	c.mode = inspect.InspectModeAuto
+	c.allowFallback = true
 	c.followTicker = func() <-chan time.Time {
 		t := time.NewTicker(c.followInterval)
 		out := make(chan time.Time)
@@ -111,6 +113,16 @@ func (c *Controller) Mode() inspect.InspectMode {
 	defer c.mu.Unlock()
 	return c.mode
 }
+func (c *Controller) SetAllowFallback(allow bool) {
+	c.mu.Lock()
+	c.allowFallback = allow
+	c.mu.Unlock()
+}
+func (c *Controller) AllowFallback() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.allowFallback
+}
 func (c *Controller) runtimeContext() context.Context {
 	if c.ctx != nil {
 		return c.ctx
@@ -139,7 +151,7 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	log.Printf("uia.viewer select_window_start hwnd=%s activate=%t", hwnd, activate)
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 	c.mu.Lock()
-	mode := c.mode
+	mode := c.effectiveModeLocked()
 	c.selectedWindowID = hwnd
 	c.mu.Unlock()
 	result := WindowSelectionResult{}
@@ -289,9 +301,19 @@ func isTransientInspectError(err error) bool {
 func (c *Controller) LoadTreeRoot() (inspect.GetTreeRootResponse, error) {
 	c.mu.Lock()
 	hwnd := c.selectedWindowID
-	mode := c.mode
+	mode := c.effectiveModeLocked()
 	c.mu.Unlock()
 	return c.service.GetTreeRoot(c.runtimeContext(), inspect.GetTreeRootRequest{HWND: hwnd, Refresh: true, Mode: mode})
+}
+
+func (c *Controller) effectiveModeLocked() inspect.InspectMode {
+	if c.allowFallback {
+		return c.mode
+	}
+	if c.mode == inspect.InspectModeAuto || c.mode == inspect.InspectModeUIATree {
+		return inspect.InspectModeUIAOnly
+	}
+	return c.mode
 }
 func (c *Controller) ExpandNode(nodeID string) (inspect.GetNodeChildrenResponse, error) {
 	resp, err := c.service.GetNodeChildren(c.runtimeContext(), inspect.GetNodeChildrenRequest{NodeID: nodeID})

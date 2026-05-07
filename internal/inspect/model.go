@@ -167,6 +167,14 @@ type (
 
 type nodeRefProvider string
 
+type SourceBackendKind string
+
+const (
+	SourceBackendNativeCOM   SourceBackendKind = "native-com"
+	SourceBackendSynthetic   SourceBackendKind = "synthetic"
+	SourceBackendUnavailable SourceBackendKind = "unavailable"
+)
+
 const (
 	nodeRefProviderUIA nodeRefProvider = "uia"
 	nodeRefProviderWin nodeRefProvider = "win"

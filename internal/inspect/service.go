@@ -97,6 +97,7 @@ type InspectModeState struct {
 type ProviderSourceDTO struct {
 	Provider string      `json:"provider,omitempty"`
 	Source   string      `json:"source,omitempty"`
+	Backend  string      `json:"backend,omitempty"`
 	Mode     InspectMode `json:"mode,omitempty"`
 }
 

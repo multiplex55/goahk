@@ -70,6 +70,7 @@ func mapWindowInfoRows(details *inspect.GetNodeDetailsResponse) []infoTableRow {
 		{Property: "Process", Value: fallback(process)},
 		{Property: "PID", Value: intOrNA(pid)},
 		{Property: "Provider", Value: fallback(details.Source.Provider)},
+		{Property: "Backend", Value: fallback(details.Source.Backend)},
 		{Property: "Mode", Value: fallback(string(details.Source.Mode))},
 		{Property: "Fallback", Value: yesNo(details.Source.Mode != "" && details.Source.Mode != inspect.InspectModeUIATree && details.Source.Mode != inspect.InspectModeUIAOnly)},
 	}

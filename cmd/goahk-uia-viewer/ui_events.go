@@ -114,11 +114,39 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			} else {
 				status = status + "; mode: " + modeSummary
 			}
+			switch strings.ToLower(strings.TrimSpace(result.Root.Source.Backend)) {
+			case "native-com":
+				status += "; source: native-com UIA success"
+			case "synthetic":
+				status += "; source: synthetic UIA/compatibility tree"
+			case "unavailable":
+				status += "; source: fallback to HWND/ACC"
+			}
+			if result.Root.State.RequestedMode == inspect.InspectModeUIAOnly && result.Root.State.ActiveMode != inspect.InspectModeUIAOnly {
+				status += "; UIA-only failure: fallback disabled"
+			}
+			if shallowTreeWarning(result) != "" {
+				status += "; warning: " + shallowTreeWarning(result)
+			}
 
 			a.view.SetStatus(status)
 			log.Printf("uia.viewer ui_update_done hwnd=%s root_node=%s properties=%d patterns=%d children=%d", hwnd, rootID, len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
 		})
 	}()
+}
+
+func shallowTreeWarning(result WindowSelectionResult) string {
+	if len(result.Children) == 0 {
+		return "tree appears shallow (no root children)"
+	}
+	if strings.Contains(strings.ToLower(result.Root.Root.DisplayLabel), "placeholder") {
+		return "tree appears synthetic placeholder content"
+	}
+	if (result.Root.State.RequestedMode == inspect.InspectModeAuto || result.Root.State.RequestedMode == inspect.InspectModeUIATree || result.Root.State.RequestedMode == inspect.InspectModeUIAOnly) &&
+		strings.ToLower(strings.TrimSpace(result.Root.Source.Backend)) != "native-com" {
+		return "UIA mode resolved to non-native backend"
+	}
+	return ""
 }
 
 func shouldShowSelectionErrorModal(err error) bool {
