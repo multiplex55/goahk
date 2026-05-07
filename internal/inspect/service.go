@@ -78,7 +78,9 @@ type service struct {
 type InspectMode string
 
 const (
+	InspectModeAuto       InspectMode = "AUTO"
 	InspectModeUIATree    InspectMode = "UIA_TREE"
+	InspectModeUIAOnly    InspectMode = "UIA_ONLY"
 	InspectModeWindowTree InspectMode = "WINDOW_TREE"
 	InspectModeHWNDTree   InspectMode = "HWND_TREE"
 )

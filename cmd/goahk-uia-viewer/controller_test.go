@@ -677,7 +677,7 @@ func TestSelectWindowReturnsRootWhenDetailsFail(t *testing.T) {
 func TestControllerModeAccessors(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}}
 	c := NewController(context.Background(), svc)
-	if got := c.Mode(); got != "" {
+	if got := c.Mode(); got != inspect.InspectModeAuto {
 		t.Fatalf("default mode=%q", got)
 	}
 	c.SetMode(inspect.InspectModeWindowTree)
@@ -685,8 +685,8 @@ func TestControllerModeAccessors(t *testing.T) {
 		t.Fatalf("mode=%q", got)
 	}
 	c.SetMode(inspect.InspectMode("bogus"))
-	if got := c.Mode(); got != inspect.InspectModeUIATree {
-		t.Fatalf("invalid mode should normalize to UIA_TREE, got=%q", got)
+	if got := c.Mode(); got != inspect.InspectModeAuto {
+		t.Fatalf("invalid mode should normalize to AUTO, got=%q", got)
 	}
 }
 
