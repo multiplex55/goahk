@@ -138,6 +138,11 @@ func (ui *viewerUI) buildLeftPane(parent walk.Container) error {
 	}
 	ui.modeCombo.SetModel([]string{"Auto/UIA + fallback", "UIA only", "ACC/MSAA only", "HWND only"})
 	ui.modeCombo.SetCurrentIndex(0)
+	if ui.autoExpandCombo, err = walk.NewComboBox(toolbar); err != nil {
+		return err
+	}
+	ui.autoExpandCombo.SetModel([]string{"Expand: 0", "Expand: 1", "Expand: 2", "Expand: 3"})
+	ui.autoExpandCombo.SetCurrentIndex(2)
 	if ui.visibleChk, err = walk.NewCheckBox(toolbar); err != nil {
 		return err
 	}

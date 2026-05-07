@@ -17,13 +17,14 @@ type viewerUI struct {
 	mw                         *walk.MainWindow
 	root                       *walk.Composite
 
-	windowTable *walk.TableView
-	windowModel *windowTableModel
-	refreshBtn  *walk.PushButton
-	modeCombo   *walk.ComboBox
-	visibleChk  *walk.CheckBox
-	titleChk    *walk.CheckBox
-	activateChk *walk.CheckBox
+	windowTable     *walk.TableView
+	windowModel     *windowTableModel
+	refreshBtn      *walk.PushButton
+	modeCombo       *walk.ComboBox
+	autoExpandCombo *walk.ComboBox
+	visibleChk      *walk.CheckBox
+	titleChk        *walk.CheckBox
+	activateChk     *walk.CheckBox
 
 	filterLbl       *walk.Label
 	filterEdit      *walk.LineEdit
@@ -42,6 +43,22 @@ type viewerUI struct {
 	statusText *walk.StatusBarItem
 }
 
+func (ui *viewerUI) autoExpandDepth() int {
+	if ui == nil || ui.autoExpandCombo == nil {
+		return 2
+	}
+	switch ui.autoExpandCombo.CurrentIndex() {
+	case 0:
+		return 0
+	case 1:
+		return 1
+	case 3:
+		return 3
+	default:
+		return 2
+	}
+}
+
 func NewViewerWindow(controller *Controller) (viewerWindow, error) {
 	logStartup("ui_window_new begin")
 	if controller == nil {
@@ -54,6 +71,7 @@ func NewViewerWindow(controller *Controller) (viewerWindow, error) {
 	}
 	ui.attachEvents()
 	ui.events = NewViewerEventAdapter(controller, ui, ui.dispatcher)
+	ui.events.autoExpandDepth = ui.autoExpandDepth
 	logStartup("ui_window_new ready")
 	return ui, nil
 }

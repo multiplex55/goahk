@@ -36,13 +36,14 @@ func formatWarning(stage, target string, warning string) string {
 }
 
 type ViewerEventAdapter struct {
-	controller *Controller
-	view       ViewUpdater
-	ui         UIThreadMarshaller
+	controller      *Controller
+	view            ViewUpdater
+	ui              UIThreadMarshaller
+	autoExpandDepth func() int
 }
 
 func NewViewerEventAdapter(controller *Controller, view ViewUpdater, ui UIThreadMarshaller) *ViewerEventAdapter {
-	return &ViewerEventAdapter{controller: controller, view: view, ui: ui}
+	return &ViewerEventAdapter{controller: controller, view: view, ui: ui, autoExpandDepth: func() int { return 3 }}
 }
 
 func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
@@ -50,8 +51,9 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 	a.view.SetStatus("retrying transient root resolution...")
 	go func() {
 		result, err := a.controller.SelectWindow(hwnd, activate)
+		var expandResults []TreeExpandResult
 		if err == nil {
-			_ = a.controller.ExpandTreeDepth(result.Root.Root.NodeID, 3)
+			expandResults = a.controller.ExpandTreeDepth(result.Root.Root.NodeID, a.autoExpandDepth())
 		}
 		if err != nil {
 			log.Printf("uia.viewer on_window_selected_err hwnd=%s activate=%t err=%v", hwnd, activate, err)
@@ -81,8 +83,10 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 				a.view.UpdateNodeChildren(rootID, result.Children)
 				a.view.ExpandTreeNode(rootID)
 			}
-			for _, expandedID := range a.controller.ExpandedNodeIDs() {
-				a.view.ExpandTreeNode(expandedID)
+			for _, expanded := range expandResults {
+				if expanded.Err == nil {
+					a.view.ExpandTreeNode(expanded.ParentID)
+				}
 			}
 
 			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("GetTreeRoot", hwnd), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))

@@ -141,3 +141,14 @@ func TestUIATreeIdentityUsesNodeIDNotLabel(t *testing.T) {
 		t.Fatal("distinct IDs must map to distinct nodes")
 	}
 }
+
+func TestUIATreeAppendChildrenAvoidsDuplicates(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "a"}})
+	m.AppendChildren("root", []inspect.TreeNodeDTO{{NodeID: "a"}, {NodeID: "b"}})
+	root := m.RootAt(0).(*uiaTreeNode)
+	if root.ChildCount() != 2 {
+		t.Fatalf("expected two unique children, got %d", root.ChildCount())
+	}
+}
