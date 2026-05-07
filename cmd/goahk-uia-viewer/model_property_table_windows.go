@@ -115,27 +115,35 @@ func mapPropertyRowsFromDetails(details inspect.GetNodeDetailsResponse) []proper
 		processID = strconv.Itoa(details.WindowInfo.PID)
 	}
 
+	status := func(name string, fallback string) string {
+		if e := strings.TrimSpace(details.Element.PropertyStates[name]); e != "" {
+			return e
+		}
+		return fallback
+	}
+
 	props := []inspect.PropertyDTO{
 		{Name: "ControlType", Value: stringPtrOrNil(e.ControlType), Status: statusFromValue(e.ControlType)},
-		{Name: "LocalizedControlType", Value: stringPtrOrNil(e.LocalizedControlType), Status: statusFromValue(e.LocalizedControlType)},
-		{Name: "Name", Value: stringPtrOrNil(e.Name), Status: statusFromValue(e.Name)},
-		{Name: "Value", Value: stringPtrOrNil(e.Value), Status: statusFromValue(e.Value)},
-		{Name: "AutomationId", Value: stringPtrOrNil(e.AutomationID), Status: statusFromValue(e.AutomationID)},
-		{Name: "BoundingRectangle", Value: stringPtrOrNil(bounds), Status: statusFromValue(bounds)},
-		{Name: "ClassName", Value: stringPtrOrNil(details.WindowInfo.Class), Status: statusFromValue(details.WindowInfo.Class)},
-		{Name: "HelpText", Value: stringPtrOrNil(e.HelpText), Status: statusFromValue(e.HelpText)},
-		{Name: "AccessKey", Value: stringPtrOrNil(e.AccessKey), Status: statusFromValue(e.AccessKey)},
-		{Name: "AcceleratorKey", Value: stringPtrOrNil(e.AcceleratorKey), Status: statusFromValue(e.AcceleratorKey)},
-		{Name: "HasKeyboardFocus", Value: stringPtrOrNil(strconv.FormatBool(e.HasKeyboardFocus)), Status: "ok"},
-		{Name: "IsKeyboardFocusable", Value: stringPtrOrNil(strconv.FormatBool(e.IsKeyboardFocusable)), Status: "ok"},
-		{Name: "ItemType", Value: stringPtrOrNil(e.ItemType), Status: statusFromValue(e.ItemType)},
-		{Name: "ProcessId", Value: stringPtrOrNil(processID), Status: statusFromValue(processID)},
-		{Name: "IsEnabled", Value: stringPtrOrNil(strconv.FormatBool(e.IsEnabled)), Status: "ok"},
-		{Name: "IsPassword", Value: stringPtrOrNil(strconv.FormatBool(e.IsPassword)), Status: "ok"},
-		{Name: "IsOffscreen", Value: stringPtrOrNil(strconv.FormatBool(e.IsOffscreen)), Status: "ok"},
-		{Name: "FrameworkId", Value: stringPtrOrNil(e.FrameworkID), Status: statusFromValue(e.FrameworkID)},
-		{Name: "IsRequiredForForm", Value: stringPtrOrNil(strconv.FormatBool(e.IsRequiredForForm)), Status: "ok"},
-		{Name: "ItemStatus", Value: stringPtrOrNil(e.ItemStatus), Status: statusFromValue(e.ItemStatus)},
+		{Name: "LocalizedControlType", Value: stringPtrOrNil(e.LocalizedControlType), Status: status("LocalizedControlType", statusFromValue(e.LocalizedControlType))},
+		{Name: "Name", Value: stringPtrOrNil(e.Name), Status: status("Name", statusFromValue(e.Name))},
+		{Name: "Value", Value: stringPtrOrNil(e.Value), Status: status("Value", statusFromValue(e.Value))},
+		{Name: "AutomationId", Value: stringPtrOrNil(e.AutomationID), Status: status("AutomationId", statusFromValue(e.AutomationID))},
+		{Name: "BoundingRectangle", Value: stringPtrOrNil(bounds), Status: status("BoundingRectangle", statusFromValue(bounds))},
+		{Name: "ClassName", Value: stringPtrOrNil(details.WindowInfo.Class), Status: status("ClassName", statusFromValue(details.WindowInfo.Class))},
+		{Name: "HelpText", Value: stringPtrOrNil(e.HelpText), Status: status("HelpText", statusFromValue(e.HelpText))},
+		{Name: "AccessKey", Value: stringPtrOrNil(e.AccessKey), Status: status("AccessKey", statusFromValue(e.AccessKey))},
+		{Name: "AcceleratorKey", Value: stringPtrOrNil(e.AcceleratorKey), Status: status("AcceleratorKey", statusFromValue(e.AcceleratorKey))},
+		{Name: "HasKeyboardFocus", Value: stringPtrOrNil(strconv.FormatBool(e.HasKeyboardFocus)), Status: status("HasKeyboardFocus", "ok")},
+		{Name: "IsKeyboardFocusable", Value: stringPtrOrNil(strconv.FormatBool(e.IsKeyboardFocusable)), Status: status("IsKeyboardFocusable", "ok")},
+		{Name: "ItemType", Value: stringPtrOrNil(e.ItemType), Status: status("ItemType", statusFromValue(e.ItemType))},
+		{Name: "ProcessId", Value: stringPtrOrNil(processID), Status: status("ProcessId", statusFromValue(processID))},
+		{Name: "IsEnabled", Value: stringPtrOrNil(strconv.FormatBool(e.IsEnabled)), Status: status("IsEnabled", "ok")},
+		{Name: "IsPassword", Value: stringPtrOrNil(strconv.FormatBool(e.IsPassword)), Status: status("IsPassword", "ok")},
+		{Name: "IsOffscreen", Value: stringPtrOrNil(strconv.FormatBool(e.IsOffscreen)), Status: status("IsOffscreen", "ok")},
+		{Name: "FrameworkId", Value: stringPtrOrNil(e.FrameworkID), Status: status("FrameworkId", statusFromValue(e.FrameworkID))},
+		{Name: "IsRequiredForForm", Value: stringPtrOrNil(strconv.FormatBool(e.IsRequiredForForm)), Status: status("IsRequiredForForm", "ok")},
+		{Name: "ItemStatus", Value: stringPtrOrNil(e.ItemStatus), Status: status("ItemStatus", statusFromValue(e.ItemStatus))},
+		{Name: "LabeledBy", Value: stringPtrOrNil(e.LabeledBy), Status: status("LabeledBy", statusFromValue(e.LabeledBy))},
 	}
 
 	return mapPropertyTableRows(props)

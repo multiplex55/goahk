@@ -141,7 +141,13 @@ func TestPropertyRowsFallbackToElementWhenPropertiesEmpty(t *testing.T) {
 			ControlType:          "50004",
 			LocalizedControlType: "edit",
 			AutomationID:         "auto-id",
+			LabeledBy:            "label-source",
 			Bounds:               &inspect.Rect{Left: 1, Top: 2, Width: 3, Height: 4},
+			PropertyStates: map[string]string{
+				"Value":             "unsupported",
+				"BoundingRectangle": "unsupported",
+				"LabeledBy":         "ok",
+			},
 		},
 		WindowInfo: inspect.WindowInfoDTO{Class: "Edit", PID: 314},
 	}
@@ -153,10 +159,10 @@ func TestPropertyRowsFallbackToElementWhenPropertiesEmpty(t *testing.T) {
 	if rows[2].Value != "Fallback Name" || rows[2].Status != "ok" {
 		t.Fatalf("expected Name fallback row populated, got %#v", rows[2])
 	}
-	if rows[3].Value != "Fallback Value" {
+	if rows[3].Value != "Fallback Value" || rows[3].Status != "unsupported" {
 		t.Fatalf("expected Value fallback row populated, got %#v", rows[3])
 	}
-	if rows[5].Value != "x:1 y:2 w:3 h:4 | l:1 t:2 r:4 b:6" {
+	if rows[5].Value != "x:1 y:2 w:3 h:4 | l:1 t:2 r:4 b:6" || rows[5].Status != "unsupported" {
 		t.Fatalf("expected BoundingRectangle fallback formatting, got %#v", rows[5])
 	}
 	if rows[6].Value != "Edit" {
@@ -164,5 +170,8 @@ func TestPropertyRowsFallbackToElementWhenPropertiesEmpty(t *testing.T) {
 	}
 	if rows[13].Value != "314" {
 		t.Fatalf("expected ProcessId fallback from WindowInfo, got %#v", rows[13])
+	}
+	if rows[20].Value != "label-source" || rows[20].Status != "ok" {
+		t.Fatalf("expected LabeledBy row populated, got %#v", rows[20])
 	}
 }
