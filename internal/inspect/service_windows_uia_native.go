@@ -254,7 +254,7 @@ func (d *nativeUIADeps) tryRefreshAfterStale(el *uiaBridgeElement, err error) *u
 
 func (d *nativeUIADeps) cacheKeyForElement(el *uiaElement) string {
 	if rid := strings.TrimSpace(el.RuntimeID); rid != "" {
-		return "rid:" + rid
+		return rid
 	}
 	return "hwnd:" + strings.TrimSpace(el.HWND)
 }
