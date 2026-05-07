@@ -173,6 +173,34 @@ func TestProviderAdapter_PropertyMappingAndNormalization(t *testing.T) {
 	}
 }
 
+func TestProviderAdapter_InspectElementPreservesPropertyStateGranularity(t *testing.T) {
+	label := "Main form"
+	el := &uiaElement{
+		RuntimeID:   "rid:1.2.3",
+		ControlType: "Edit", LocalizedControlType: "edit", Name: "Document",
+		PropertyStates: map[string]string{
+			"Value":             propertyStatusUnsupported,
+			"HelpText":          propertyStatusEmpty,
+			"BoundingRectangle": propertyStatusUnavailable,
+			"LabeledBy":         propertyStatusStale,
+		},
+		LabeledBy: &label,
+	}
+	mapped := toInspectElement("node:id", "", el)
+	if got := mapped.PropertyStates["Value"]; got != propertyStatusUnsupported {
+		t.Fatalf("Value status=%q", got)
+	}
+	if got := mapped.PropertyStates["HelpText"]; got != propertyStatusEmpty {
+		t.Fatalf("HelpText status=%q", got)
+	}
+	if got := mapped.PropertyStates["BoundingRectangle"]; got != propertyStatusUnavailable {
+		t.Fatalf("BoundingRectangle status=%q", got)
+	}
+	if got := mapped.PropertyStates["LabeledBy"]; got != propertyStatusStale {
+		t.Fatalf("LabeledBy status=%q", got)
+	}
+}
+
 func TestProviderAdapter_NormalizationSemanticStates(t *testing.T) {
 	t.Run("string normalization states", func(t *testing.T) {
 		cases := []struct {
