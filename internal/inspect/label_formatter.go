@@ -5,13 +5,36 @@ import "strings"
 func formatDisplayLabel(name, localizedControlType, controlType string) string {
 	control := strings.TrimSpace(localizedControlType)
 	if control == "" {
-		control = strings.TrimSpace(controlType)
+		control = fallbackControlTypeLabel(controlType)
 	}
 	if control == "" {
 		control = "element"
 	}
 	escapedName := strings.ReplaceAll(name, `"`, `\"`)
 	return control + ` "` + escapedName + `"`
+}
+
+func fallbackControlTypeLabel(controlType string) string {
+	trimmed := strings.TrimSpace(controlType)
+	if trimmed == "" {
+		return ""
+	}
+	lower := strings.ToLower(trimmed)
+	if mapped, ok := uiaControlTypeFallbackLabels[lower]; ok {
+		return mapped
+	}
+	return trimmed
+}
+
+var uiaControlTypeFallbackLabels = map[string]string{
+	"button":             "button",
+	"edit":               "edit",
+	"pane":               "pane",
+	"window":             "window",
+	"controltype.pane":   "pane",
+	"controltype.button": "button",
+	"controltype.edit":   "edit",
+	"controltype.window": "window",
 }
 
 func buildDebugMeta(el *uiaElement) DebugMetaDTO {

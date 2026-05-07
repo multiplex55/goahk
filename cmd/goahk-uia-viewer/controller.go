@@ -70,6 +70,12 @@ type StatusUpdate struct {
 	LastACCPathCopied bool
 }
 
+type TreeExpandResult struct {
+	ParentID string
+	Children []inspect.TreeNodeDTO
+	Err      error
+}
+
 func NewController(ctx context.Context, svc inspect.Service) *Controller {
 	c := &Controller{ctx: ctx, service: svc, followInterval: 120 * time.Millisecond, nodesByID: map[string]inspect.TreeNodeDTO{}, nodeChildren: map[string][]string{}, nodeExpanded: map[string]bool{}, nodeLoadFailed: map[string]error{}, statusText: "Click here to enable Acc path capturing (can't be used with UIA!)"}
 	c.mode = inspect.InspectModeAuto
@@ -334,7 +340,7 @@ func (c *Controller) ExpandNode(nodeID string) (inspect.GetNodeChildrenResponse,
 	return resp, nil
 }
 
-func (c *Controller) ExpandTreeDepth(rootID string, maxDepth int) error {
+func (c *Controller) ExpandTreeDepth(rootID string, maxDepth int) []TreeExpandResult {
 	if strings.TrimSpace(rootID) == "" || maxDepth <= 0 {
 		return nil
 	}
@@ -344,6 +350,7 @@ func (c *Controller) ExpandTreeDepth(rootID string, maxDepth int) error {
 	}
 	queue := []depthNode{{id: rootID, depth: 0}}
 	seen := map[string]bool{}
+	results := make([]TreeExpandResult, 0)
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
@@ -353,14 +360,16 @@ func (c *Controller) ExpandTreeDepth(rootID string, maxDepth int) error {
 		seen[current.id] = true
 		children, err := c.ExpandNode(current.id)
 		if err != nil {
-			return err
+			results = append(results, TreeExpandResult{ParentID: current.id, Err: err})
+			continue
 		}
+		results = append(results, TreeExpandResult{ParentID: current.id, Children: children.Children})
 		nextDepth := current.depth + 1
 		for _, child := range children.Children {
 			queue = append(queue, depthNode{id: child.NodeID, depth: nextDepth})
 		}
 	}
-	return nil
+	return results
 }
 
 func (c *Controller) ExpandedNodeIDs() []string {

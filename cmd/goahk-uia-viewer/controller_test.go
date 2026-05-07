@@ -187,8 +187,9 @@ func TestController_ExpandTreeDepth_ExpandsBreadthFirstToDepth(t *testing.T) {
 		"b":    {{NodeID: "b1"}},
 	}}
 	c := NewController(context.Background(), svc)
-	if err := c.ExpandTreeDepth("root", 2); err != nil {
-		t.Fatal(err)
+	results := c.ExpandTreeDepth("root", 2)
+	if len(results) == 0 {
+		t.Fatal("expected expansion results")
 	}
 	if len(svc.nodeChildrenReqs) < 3 {
 		t.Fatalf("expected depth expansion calls, got %d", len(svc.nodeChildrenReqs))
