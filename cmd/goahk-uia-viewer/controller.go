@@ -71,6 +71,7 @@ type StatusUpdate struct {
 
 func NewController(ctx context.Context, svc inspect.Service) *Controller {
 	c := &Controller{ctx: ctx, service: svc, followInterval: 120 * time.Millisecond, nodesByID: map[string]inspect.TreeNodeDTO{}, nodeChildren: map[string][]string{}, nodeExpanded: map[string]bool{}, nodeLoadFailed: map[string]error{}, statusText: "Click here to enable Acc path capturing (can't be used with UIA!)"}
+	c.mode = inspect.InspectModeAuto
 	c.followTicker = func() <-chan time.Time {
 		t := time.NewTicker(c.followInterval)
 		out := make(chan time.Time)
@@ -96,9 +97,9 @@ func (c *Controller) SetClipboard(cb Clipboard)              { c.clipboard = cb 
 func (c *Controller) SetDialogs(d Dialogs)                   { c.dialogs = d }
 func (c *Controller) SetMode(mode inspect.InspectMode) {
 	switch mode {
-	case inspect.InspectModeUIATree, inspect.InspectModeWindowTree, inspect.InspectModeHWNDTree:
+	case inspect.InspectModeAuto, inspect.InspectModeUIATree, inspect.InspectModeUIAOnly, inspect.InspectModeWindowTree, inspect.InspectModeHWNDTree:
 	default:
-		mode = inspect.InspectModeUIATree
+		mode = inspect.InspectModeAuto
 	}
 	c.mu.Lock()
 	c.mode = mode
@@ -338,6 +339,18 @@ func (c *Controller) ExpandTreeDepth(rootID string, maxDepth int) error {
 		}
 	}
 	return nil
+}
+
+func (c *Controller) ExpandedNodeIDs() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ids := make([]string, 0, len(c.nodeExpanded))
+	for id, expanded := range c.nodeExpanded {
+		if expanded {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 func (c *Controller) SelectNode(nodeID string) error {
 	if _, err := c.service.SelectNode(c.runtimeContext(), inspect.SelectNodeRequest{NodeID: nodeID}); err != nil {

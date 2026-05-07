@@ -60,7 +60,7 @@ func mapWindowInfoRows(details *inspect.GetNodeDetailsResponse) []infoTableRow {
 	if strings.TrimSpace(process) == "" && pid > 0 {
 		process = fmt.Sprintf("pid:%d", pid)
 	}
-	return []infoTableRow{
+	rows := []infoTableRow{
 		{Property: "Title", Value: fallback(coalesce(window.Title, element.Name))},
 		{Property: "Text", Value: fallback(coalesce(window.Text, element.Value))},
 		{Property: "Hwnd", Value: formatAHKID(window.HWND, element.HWND)},
@@ -71,8 +71,12 @@ func mapWindowInfoRows(details *inspect.GetNodeDetailsResponse) []infoTableRow {
 		{Property: "PID", Value: intOrNA(pid)},
 		{Property: "Provider", Value: fallback(details.Source.Provider)},
 		{Property: "Mode", Value: fallback(string(details.Source.Mode))},
-		{Property: "Fallback", Value: yesNo(details.Source.Mode != "" && details.Source.Mode != inspect.InspectModeUIATree)},
+		{Property: "Fallback", Value: yesNo(details.Source.Mode != "" && details.Source.Mode != inspect.InspectModeUIATree && details.Source.Mode != inspect.InspectModeUIAOnly)},
 	}
+	if details.Source.Mode == inspect.InspectModeHWNDTree {
+		rows = append(rows, infoTableRow{Property: "Warning", Value: "HWND fallback is degraded; AHK parity is not expected"})
+	}
+	return rows
 }
 
 func yesNo(v bool) string {

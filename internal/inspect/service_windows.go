@@ -104,7 +104,7 @@ func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRe
 	var diagnostics *InspectDiagnostics
 	if state.FallbackUsed {
 		state.FailureStage = "ResolveWindowRoot"
-		state.GuidanceText = "UIA tree is unavailable. Switch to ACC/MSAA mode to continue inspecting this window."
+		state.GuidanceText = fallbackGuidanceText(resolvedMode)
 		diagnostics = &InspectDiagnostics{
 			Stage:        state.FailureStage,
 			Message:      state.GuidanceText,
@@ -131,7 +131,7 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 	state := InspectModeState{RequestedMode: mode, ActiveMode: resolvedMode, SatisfiedMode: resolvedMode, FallbackUsed: mode != resolvedMode}
 	if state.FallbackUsed {
 		state.FailureStage = "ResolveWindowRoot"
-		state.GuidanceText = "UIA tree is unavailable. Switch to ACC/MSAA mode to continue inspecting this window."
+		state.GuidanceText = fallbackGuidanceText(resolvedMode)
 	}
 	var diagnostics *InspectDiagnostics
 	if state.FallbackUsed {
@@ -802,7 +802,7 @@ func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode
 		return root, mode, nil
 	}
 	log.Printf("inspect.resolve_root_err hwnd=%s mode=%s provider=%s err=%v", hwnd, mode, sourceMetadataForMode(mode).Provider, err)
-	if mode != InspectModeUIATree || !shouldFallbackFromUIAToAlternateTree(err) {
+	if (mode != InspectModeUIATree && mode != InspectModeAuto) || !shouldFallbackFromUIAToAlternateTree(err) {
 		return TreeNodeDTO{}, mode, err
 	}
 	log.Printf("inspect.fallback_attempt hwnd=%s mode=%s provider=acc", hwnd, mode)
@@ -824,7 +824,7 @@ func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode
 
 func (p *windowsProvider) resolveRequestedRootWithRetry(ctx context.Context, hwnd string, mode InspectMode, refresh bool) (TreeNodeDTO, error) {
 	core := p.coreForMode(mode)
-	if mode != InspectModeUIATree {
+	if mode != InspectModeUIATree && mode != InspectModeAuto && mode != InspectModeUIAOnly {
 		return core.treeRoot(ctx, hwnd, refresh)
 	}
 	return treeRootWithTransientRetry(ctx, core, hwnd, refresh)
@@ -877,10 +877,10 @@ func shouldFallbackFromUIAToAlternateTree(err error) bool {
 
 func normalizeInspectMode(mode InspectMode) InspectMode {
 	switch mode {
-	case InspectModeWindowTree, InspectModeHWNDTree:
+	case InspectModeAuto, InspectModeUIATree, InspectModeUIAOnly, InspectModeWindowTree, InspectModeHWNDTree:
 		return mode
 	}
-	return InspectModeUIATree
+	return InspectModeAuto
 }
 
 func (p *windowsProvider) coreForMode(mode InspectMode) *providerCore {
@@ -891,6 +891,13 @@ func (p *windowsProvider) coreForMode(mode InspectMode) *providerCore {
 		return p.windowCore
 	}
 	return p.uiaCore
+}
+
+func fallbackGuidanceText(activeMode InspectMode) string {
+	if activeMode == InspectModeHWNDTree {
+		return "HWND fallback mode is active (degraded): AHK parity is not expected."
+	}
+	return "Fallback mode is active (degraded): AHK parity is not expected."
 }
 
 func (p *windowsProvider) activeCore() *providerCore {
@@ -918,6 +925,8 @@ func sourceMetadataForMode(mode InspectMode) ProviderSourceDTO {
 		return ProviderSourceDTO{Provider: "acc", Source: "msaa", Mode: InspectModeWindowTree}
 	case InspectModeHWNDTree:
 		return ProviderSourceDTO{Provider: "hwnd", Source: "win32", Mode: InspectModeHWNDTree}
+	case InspectModeUIAOnly:
+		return ProviderSourceDTO{Provider: "uia", Source: "uia", Mode: InspectModeUIAOnly}
 	default:
 		return ProviderSourceDTO{Provider: "uia", Source: "uia", Mode: InspectModeUIATree}
 	}

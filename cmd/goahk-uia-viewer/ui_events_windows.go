@@ -13,12 +13,15 @@ import (
 
 func inspectModeFromComboIndex(idx int) inspect.InspectMode {
 	if idx == 1 {
-		return inspect.InspectModeWindowTree
+		return inspect.InspectModeUIAOnly
 	}
 	if idx == 2 {
+		return inspect.InspectModeWindowTree
+	}
+	if idx == 3 {
 		return inspect.InspectModeHWNDTree
 	}
-	return inspect.InspectModeUIATree
+	return inspect.InspectModeAuto
 }
 
 func (ui *viewerUI) executePatternAction(action string) {

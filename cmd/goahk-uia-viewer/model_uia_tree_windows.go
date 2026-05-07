@@ -21,6 +21,9 @@ type uiaTreeNode struct {
 }
 
 func (n *uiaTreeNode) Text() string {
+	if n != nil && n.placeholder {
+		return "Loading..."
+	}
 	return uiaNodeLabel(n.NodeID, n.DisplayLabel, n.LocalizedControlType, n.ControlType, n.Name)
 }
 func (n *uiaTreeNode) Parent() walk.TreeItem {

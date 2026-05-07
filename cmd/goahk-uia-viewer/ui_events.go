@@ -50,6 +50,9 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 	a.view.SetStatus("retrying transient root resolution...")
 	go func() {
 		result, err := a.controller.SelectWindow(hwnd, activate)
+		if err == nil {
+			_ = a.controller.ExpandTreeDepth(result.Root.Root.NodeID, 3)
+		}
 		if err != nil {
 			log.Printf("uia.viewer on_window_selected_err hwnd=%s activate=%t err=%v", hwnd, activate, err)
 			a.ui.Queue(func() {
@@ -78,8 +81,8 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 				a.view.UpdateNodeChildren(rootID, result.Children)
 				a.view.ExpandTreeNode(rootID)
 			}
-			if err := a.controller.ExpandTreeDepth(rootID, 2); err == nil {
-				a.view.ExpandTreeNode(rootID)
+			for _, expandedID := range a.controller.ExpandedNodeIDs() {
+				a.view.ExpandTreeNode(expandedID)
 			}
 
 			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("GetTreeRoot", hwnd), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
