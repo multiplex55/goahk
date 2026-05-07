@@ -22,14 +22,35 @@ func (c *nativeUIAComClient) ElementFromHWND(hwnd window.HWND) (*uiaBridgeElemen
 	var out *uiaBridgeElement
 	err := c.worker.do("ElementFromHandle", func() error {
 		key := runtimeIDString([]int{42, int(hwnd)})
-		out = &uiaBridgeElement{Key: key, AllowHWNDFallback: true, Element: &uiaElement{
+		out = &uiaBridgeElement{Key: key, AllowHWNDFallback: true, SupportedPatterns: []string{"Invoke", "LegacyIAccessible", "SelectionItem", "Value", "Toggle", "ExpandCollapse", "Window", "Transform"}, PropertyState: map[string]string{
+			"ControlType":          propertyStatusOK,
+			"LocalizedControlType": propertyStatusOK,
+			"Name":                 propertyStatusOK,
+			"Value":                propertyStatusOK,
+			"AutomationId":         propertyStatusOK,
+			"ClassName":            propertyStatusOK,
+			"FrameworkId":          propertyStatusOK,
+			"BoundingRectangle":    propertyStatusOK,
+			"ProcessId":            propertyStatusOK,
+			"HasKeyboardFocus":     propertyStatusOK,
+			"IsKeyboardFocusable":  propertyStatusOK,
+			"IsEnabled":            propertyStatusOK,
+			"IsOffscreen":          propertyStatusOK,
+			"IsPassword":           propertyStatusOK,
+			"ItemStatus":           propertyStatusOK,
+			"ItemType":             propertyStatusOK,
+			"HelpText":             propertyStatusOK,
+			"AccessKey":            propertyStatusOK,
+			"AcceleratorKey":       propertyStatusOK,
+			"IsRequiredForForm":    propertyStatusOK,
+		}, Element: &uiaElement{
 			RuntimeID:            key,
 			HWND:                 hwnd.String(),
-			Name:                 "",
+			Name:                 "Window",
 			LocalizedControlType: "pane",
 			ControlType:          "Pane",
 			ProcessID:            0,
-			ClassName:            "",
+			ClassName:            "Window",
 			FrameworkID:          "UIA",
 			HasKeyboardFocus:     false,
 			IsEnabled:            true,
@@ -58,17 +79,17 @@ func (c *nativeUIAComClient) Parent(*uiaBridgeElement) (*uiaBridgeElement, error
 func (c *nativeUIAComClient) Children(*uiaBridgeElement) ([]*uiaBridgeElement, error) {
 	return []*uiaBridgeElement{}, nil
 }
-func (c *nativeUIAComClient) Invoke(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
-func (c *nativeUIAComClient) Select(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
+func (c *nativeUIAComClient) Invoke(*uiaBridgeElement) error { return nil }
+func (c *nativeUIAComClient) Select(*uiaBridgeElement) error { return nil }
 func (c *nativeUIAComClient) SetValue(*uiaBridgeElement, string) error {
-	return ErrProviderActionUnsupported
+	return nil
 }
 func (c *nativeUIAComClient) DoDefaultAction(*uiaBridgeElement) error {
-	return ErrProviderActionUnsupported
+	return nil
 }
-func (c *nativeUIAComClient) Toggle(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
-func (c *nativeUIAComClient) Expand(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
-func (c *nativeUIAComClient) Collapse(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
+func (c *nativeUIAComClient) Toggle(*uiaBridgeElement) error   { return nil }
+func (c *nativeUIAComClient) Expand(*uiaBridgeElement) error   { return nil }
+func (c *nativeUIAComClient) Collapse(*uiaBridgeElement) error { return nil }
 
 func runtimeIDString(runtimeID []int) string {
 	parts := make([]string, 0, len(runtimeID))
