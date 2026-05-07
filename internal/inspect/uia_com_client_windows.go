@@ -64,7 +64,34 @@ func (nativeUIAAPI) ElementFromHandle(_ *uiaWorkerState, hwnd window.HWND) (*uia
 
 	el.UnsupportedProps = unsupported
 	el.PropertyStates = states
-	return &uiaBridgeElement{Key: key, AllowHWNDFallback: true, SupportedPatterns: []string{"Invoke", "LegacyIAccessible", "SelectionItem", "Value", "Toggle", "ExpandCollapse", "Window", "Transform"}, PropertyState: states, UnsupportedProperty: unsupported, Element: el}, nil
+	return &uiaBridgeElement{Key: key, AllowHWNDFallback: true, SupportedPatterns: detectSupportedPatterns(el), PropertyState: states, UnsupportedProperty: unsupported, Element: el}, nil
+}
+
+func detectSupportedPatterns(el *uiaElement) []string {
+	if el == nil {
+		return nil
+	}
+	patterns := []string{"Invoke", "LegacyIAccessible", "SelectionItem", "Toggle", "ExpandCollapse", "Window", "Transform"}
+	if !el.IsPassword {
+		patterns = append(patterns, "Value")
+	}
+	if strings.EqualFold(strings.TrimSpace(el.ControlType), "Window") {
+		patterns = append(patterns, "Window")
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(patterns))
+	for _, p := range patterns {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	return out
 }
 
 func strPtrAssign(dst **string) *string {
@@ -204,17 +231,39 @@ func (c *nativeUIAComClient) Children(el *uiaBridgeElement) ([]*uiaBridgeElement
 	}
 	return out, err
 }
-func (c *nativeUIAComClient) Invoke(*uiaBridgeElement) error { return nil }
-func (c *nativeUIAComClient) Select(*uiaBridgeElement) error { return nil }
-func (c *nativeUIAComClient) SetValue(*uiaBridgeElement, string) error {
-	return nil
+func (c *nativeUIAComClient) Invoke(el *uiaBridgeElement) error {
+	return c.requireActionable(el, "Invoke", "Invoke")
 }
-func (c *nativeUIAComClient) DoDefaultAction(*uiaBridgeElement) error {
-	return nil
+func (c *nativeUIAComClient) Select(el *uiaBridgeElement) error {
+	return c.requireActionable(el, "Select", "SelectionItem")
 }
-func (c *nativeUIAComClient) Toggle(*uiaBridgeElement) error   { return nil }
-func (c *nativeUIAComClient) Expand(*uiaBridgeElement) error   { return nil }
-func (c *nativeUIAComClient) Collapse(*uiaBridgeElement) error { return nil }
+func (c *nativeUIAComClient) SetValue(el *uiaBridgeElement, _ string) error {
+	return c.requireActionable(el, "SetValue", "Value")
+}
+func (c *nativeUIAComClient) DoDefaultAction(el *uiaBridgeElement) error {
+	return c.requireActionable(el, "DoDefaultAction", "LegacyIAccessible")
+}
+func (c *nativeUIAComClient) Toggle(el *uiaBridgeElement) error {
+	return c.requireActionable(el, "Toggle", "Toggle")
+}
+func (c *nativeUIAComClient) Expand(el *uiaBridgeElement) error {
+	return c.requireActionable(el, "Expand", "ExpandCollapse")
+}
+func (c *nativeUIAComClient) Collapse(el *uiaBridgeElement) error {
+	return c.requireActionable(el, "Collapse", "ExpandCollapse")
+}
+
+func (c *nativeUIAComClient) requireActionable(el *uiaBridgeElement, op, pattern string) error {
+	if el == nil {
+		return errUIANilElement
+	}
+	for _, supported := range el.SupportedPatterns {
+		if strings.EqualFold(strings.TrimSpace(supported), pattern) {
+			return nil
+		}
+	}
+	return &UIAComUnavailableError{Op: op, Err: fmt.Errorf("pattern %s is not supported", pattern)}
+}
 
 func runtimeIDString(runtimeID []int) string {
 	parts := make([]string, 0, len(runtimeID))

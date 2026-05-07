@@ -822,23 +822,29 @@ func patternActionsForElement(el *uiaElement) []PatternAction {
 	base := []PreconditionStatus{{Name: "enabled", Satisfied: enabled}}
 	m := map[string][]PatternAction{
 		"Invoke": {
-			{Pattern: "Invoke", Action: "invoke", DisplayName: "Invoke", Supported: true, Enabled: enabled, Preconditions: append([]PreconditionStatus(nil), base...)},
+			{Pattern: "Invoke", Action: "invoke", DisplayName: "Invoke()", Supported: true, Enabled: enabled, Preconditions: append([]PreconditionStatus(nil), base...)},
 		},
 		"LegacyIAccessible": {
-			{Pattern: "LegacyIAccessible", Action: "doDefaultAction", DisplayName: "Default Action", Supported: true, Enabled: enabled, Preconditions: append([]PreconditionStatus(nil), base...)},
+			{Pattern: "LegacyIAccessible", Action: "doDefaultAction", DisplayName: "DoDefaultAction()", Supported: true, Enabled: enabled, Preconditions: append([]PreconditionStatus(nil), base...)},
 		},
 		"ExpandCollapse": {
-			{Pattern: "ExpandCollapse", Action: "expand", DisplayName: "Expand", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "expandCollapseState", Satisfied: true, Reason: stateReason("state", expandCollapseState)})},
-			{Pattern: "ExpandCollapse", Action: "collapse", DisplayName: "Collapse", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "expandCollapseState", Satisfied: true, Reason: stateReason("state", expandCollapseState)})},
+			{Pattern: "ExpandCollapse", Action: "expand", DisplayName: "Expand()", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "expandCollapseState", Satisfied: true, Reason: stateReason("state", expandCollapseState)})},
+			{Pattern: "ExpandCollapse", Action: "collapse", DisplayName: "Collapse()", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "expandCollapseState", Satisfied: true, Reason: stateReason("state", expandCollapseState)})},
 		},
 		"SelectionItem": {
-			{Pattern: "SelectionItem", Action: "select", DisplayName: "Select", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "selectionHint", Satisfied: true, Reason: stateReason("selection", selectionHint)})},
+			{Pattern: "SelectionItem", Action: "select", DisplayName: "Select()", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "selectionHint", Satisfied: true, Reason: stateReason("selection", selectionHint)})},
 		},
 		"Value": {
-			{Pattern: "Value", Action: "setValue", DisplayName: "Set Value", PayloadSchema: `{"type":"object","required":["value"]}`, RequiredArgs: []string{"value"}, Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "valueState", Satisfied: true, Reason: stateReason("value", valueState)}, PreconditionStatus{Name: "input:value", Satisfied: true, Reason: "requires payload.value"})},
+			{Pattern: "Value", Action: "setValue", DisplayName: "SetValue()", PayloadSchema: `{"type":"object","required":["value"]}`, RequiredArgs: []string{"value"}, Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "valueState", Satisfied: true, Reason: stateReason("value", valueState)}, PreconditionStatus{Name: "input:value", Satisfied: true, Reason: "requires payload.value"})},
 		},
 		"Toggle": {
-			{Pattern: "Toggle", Action: "toggle", DisplayName: "Toggle", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "toggleState", Satisfied: true, Reason: stateReason("state", toggleState)})},
+			{Pattern: "Toggle", Action: "toggle", DisplayName: "Toggle()", Supported: true, Enabled: enabled, Preconditions: append(append([]PreconditionStatus(nil), base...), PreconditionStatus{Name: "toggleState", Satisfied: true, Reason: stateReason("state", toggleState)})},
+		},
+		"Window": {
+			{Pattern: "Window", Action: "invoke", DisplayName: "Invoke()", Supported: true, Enabled: enabled, Preconditions: append([]PreconditionStatus(nil), base...)},
+		},
+		"Transform": {
+			{Pattern: "Transform", Action: "invoke", DisplayName: "Invoke()", Supported: true, Enabled: enabled, Preconditions: append([]PreconditionStatus(nil), base...)},
 		},
 	}
 	seen := map[string]bool{}

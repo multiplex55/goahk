@@ -16,6 +16,7 @@ type patternTreeNode struct {
 	id       string
 	label    string
 	actionID ActionID
+	enabled  bool
 	parent   *patternTreeNode
 	children []patternTreeNode
 }
@@ -41,7 +42,7 @@ func (n *patternTreeNode) IsActionableLeaf() bool {
 	if n == nil {
 		return false
 	}
-	return len(n.children) == 0 && isSupportedPatternAction(string(n.actionID))
+	return len(n.children) == 0 && n.enabled && isSupportedPatternAction(string(n.actionID))
 }
 
 type patternTreeModel struct {
@@ -79,7 +80,7 @@ func (m *patternTreeModel) SetRoots(roots []patternTreeNode) {
 }
 
 func (m *patternTreeModel) cloneAndIndex(parent *patternTreeNode, src *patternTreeNode) *patternTreeNode {
-	n := &patternTreeNode{id: src.id, label: src.label, actionID: src.actionID, parent: parent}
+	n := &patternTreeNode{id: src.id, label: src.label, actionID: src.actionID, enabled: src.enabled, parent: parent}
 	m.nodes[n.id] = n
 	for i := range src.children {
 		child := m.cloneAndIndex(n, &src.children[i])
@@ -110,7 +111,11 @@ func mapPatternTree(actions []inspect.PatternActionDTO) []patternTreeNode {
 		if label == "" {
 			label = callableActionLabel(action)
 		}
-		groups[pat] = append(groups[pat], patternTreeNode{id: childID, label: label, actionID: ActionID(action)})
+		enabled := true
+		if a.Supported || a.Enabled {
+			enabled = a.Supported && a.Enabled
+		}
+		groups[pat] = append(groups[pat], patternTreeNode{id: childID, label: label, actionID: ActionID(action), enabled: enabled})
 	}
 	sort.Strings(order)
 	out := make([]patternTreeNode, 0, len(order))
