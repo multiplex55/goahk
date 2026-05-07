@@ -15,12 +15,16 @@ import (
 type nativeUIAComClient struct{ worker *uiaCOMWorker }
 
 func newNativeUIAComClient() (uiaAutomationClient, error) {
-	return &nativeUIAComClient{worker: newUIACOMWorker()}, nil
+	worker, err := newUIACOMWorker()
+	if err != nil {
+		return nil, err
+	}
+	return &nativeUIAComClient{worker: worker}, nil
 }
 
 func (c *nativeUIAComClient) ElementFromHWND(hwnd window.HWND) (*uiaBridgeElement, error) {
 	var out *uiaBridgeElement
-	err := c.worker.do("ElementFromHandle", func() error {
+	err := c.worker.Do("ElementFromHandle", func(*uiaWorkerState) error {
 		key := runtimeIDString([]int{42, int(hwnd)})
 		out = &uiaBridgeElement{Key: key, AllowHWNDFallback: true, SupportedPatterns: []string{"Invoke", "LegacyIAccessible", "SelectionItem", "Value", "Toggle", "ExpandCollapse", "Window", "Transform"}, PropertyState: map[string]string{
 			"ControlType":          propertyStatusOK,

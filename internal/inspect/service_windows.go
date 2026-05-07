@@ -935,9 +935,9 @@ func sourceMetadataForMode(mode InspectMode) ProviderSourceDTO {
 	case InspectModeHWNDTree:
 		return ProviderSourceDTO{Provider: "hwnd", Source: "win32", Backend: string(SourceBackendUnavailable), Mode: InspectModeHWNDTree}
 	case InspectModeUIAOnly:
-		return ProviderSourceDTO{Provider: "uia", Source: "uia", Backend: string(SourceBackendNativeCOM), Mode: InspectModeUIAOnly}
+		return ProviderSourceDTO{Provider: "uia", Source: "uia", Backend: string(uiaBackendKind()), Mode: InspectModeUIAOnly}
 	default:
-		return ProviderSourceDTO{Provider: "uia", Source: "uia", Backend: string(SourceBackendNativeCOM), Mode: InspectModeUIATree}
+		return ProviderSourceDTO{Provider: "uia", Source: "uia", Backend: string(uiaBackendKind()), Mode: InspectModeUIATree}
 	}
 }
 
@@ -1084,4 +1084,11 @@ func (unsupportedUIAAdapter) Expand(ctx context.Context, ref string) error {
 }
 func (unsupportedUIAAdapter) Collapse(ctx context.Context, ref string) error {
 	return unsupportedUIADeps{}.Collapse(ctx, ref)
+}
+
+func uiaBackendKind() SourceBackendKind {
+	if uiaNativeCOMReady.Load() {
+		return SourceBackendNativeCOM
+	}
+	return SourceBackendUnavailable
 }

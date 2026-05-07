@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"unsafe"
 
 	"goahk/internal/window"
@@ -59,13 +60,18 @@ type win32UIAComBridge struct {
 	initErr error
 }
 
-var newUIAComClient = newNativeUIAComClient
+var (
+	newUIAComClient   = newNativeUIAComClient
+	uiaNativeCOMReady atomic.Bool
+)
 
 func newWin32UIABridge() nativeUIABridge {
 	client, err := newUIAComClient()
 	if err != nil {
+		uiaNativeCOMReady.Store(false)
 		return &win32UIAComBridge{client: newUnavailableUIAClient(err), initErr: err}
 	}
+	uiaNativeCOMReady.Store(true)
 	return &win32UIAComBridge{client: client}
 }
 
