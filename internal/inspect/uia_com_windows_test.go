@@ -5,6 +5,7 @@ package inspect
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"goahk/internal/window"
@@ -144,6 +145,41 @@ func TestNativeUIAComClient_ErrorPathsSurface(t *testing.T) {
 	}
 	if _, err := client.Children(&uiaBridgeElement{Key: "rid:1", Element: &uiaElement{RuntimeID: "rid:1"}}); err == nil || err.Error() != "FindAll failure" {
 		t.Fatalf("unexpected err %v", err)
+	}
+}
+
+func TestNativeUIAComClient_ChildrenReturnsPartialWithDiagnostic(t *testing.T) {
+	orig := uiaNativeAPI
+	defer func() { uiaNativeAPI = orig }()
+	uiaNativeAPI = fakeUiaNativeAPI{
+		elementFromHandle: func(_ *uiaWorkerState, _ window.HWND) (*uiaBridgeElement, error) { return nil, nil },
+		findChildren: func(_ *uiaWorkerState, _ *uiaBridgeElement) ([]*uiaBridgeElement, error) {
+			return []*uiaBridgeElement{{Key: "rid:ok", Element: &uiaElement{Name: "ok"}}}, errors.New("child[1]: wrap failed")
+		},
+		focusedElement:   func(_ *uiaWorkerState) (*uiaBridgeElement, error) { return nil, nil },
+		elementFromPoint: func(_ *uiaWorkerState, _, _ int) (*uiaBridgeElement, error) { return nil, nil },
+		getParent:        func(_ *uiaWorkerState, _ *uiaBridgeElement) (*uiaBridgeElement, error) { return nil, nil },
+	}
+	clientAny, err := newNativeUIAComClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := clientAny.(*nativeUIAComClient)
+	t.Cleanup(func() { _ = client.worker.Close() })
+
+	children, gotErr := client.Children(&uiaBridgeElement{Key: "rid:parent", NativePtr: 0x1, Element: &uiaElement{Name: "parent"}})
+	if len(children) != 1 || children[0].Key != "rid:ok" {
+		t.Fatalf("expected partial child success, got %+v", children)
+	}
+	if gotErr == nil || !strings.Contains(gotErr.Error(), "wrap failed") {
+		t.Fatalf("expected diagnostic error, got %v", gotErr)
+	}
+}
+
+func TestFallbackPathKey_RuntimeIDMissingUsesSiblingIndex(t *testing.T) {
+	key := fallbackPathKey("rid:1", 3, &uiaElement{LocalizedControlType: "button", Name: "OK"})
+	if key != "path:rid:1/3/button/OK" {
+		t.Fatalf("unexpected fallback key: %q", key)
 	}
 }
 

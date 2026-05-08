@@ -198,6 +198,8 @@ func uiaArrayGet(arr uintptr, idx int32) (uintptr, error) {
 	var el uintptr
 	vt := *(*uintptr)(unsafe.Pointer(arr))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementArrayGetElement), arr, uintptr(idx), uintptr(unsafe.Pointer(&el)))
+	// COM contract for IUIAutomationElementArray.GetElement returns an interface
+	// reference with ownership transferred to the caller (already AddRef'd).
 	return el, hresultErr("IUIAutomationElementArray.GetElement", hr)
 }
 

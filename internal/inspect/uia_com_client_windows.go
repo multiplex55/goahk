@@ -67,7 +67,12 @@ var (
 	collapsePatternCall        = uiaExpandCollapsePatternCollapse
 )
 
-func wrapNativeElement(ptr uintptr, hwnd window.HWND, parentKey string, siblingIndex int) (*uiaBridgeElement, error) {
+func wrapNativeElementBorrowed(ptr uintptr, hwnd window.HWND, parentKey string, siblingIndex int) (*uiaBridgeElement, error) {
+	comAddRef(ptr)
+	return wrapNativeElementOwned(ptr, hwnd, parentKey, siblingIndex)
+}
+
+func wrapNativeElementOwned(ptr uintptr, hwnd window.HWND, parentKey string, siblingIndex int) (*uiaBridgeElement, error) {
 	if ptr == 0 {
 		return nil, &UIAComUnavailableError{Op: "WrapElement", Err: errors.New("nil COM element")}
 	}
@@ -76,18 +81,12 @@ func wrapNativeElement(ptr uintptr, hwnd window.HWND, parentKey string, siblingI
 		return nil, err
 	}
 	key := canonicalUIAKey(rid, true)
-	comAddRef(ptr)
 	el := &uiaElement{RuntimeID: strings.TrimPrefix(key, "rid:"), HWND: hwnd.String()}
 	b := &uiaBridgeElement{Key: key, RuntimeID: key, AllowHWNDFallback: hwnd != 0, SupportedPatterns: nil, PropertyState: map[string]string{}, UnsupportedProperty: map[string]bool{}, NativePtr: ptr, Element: el}
 	populateElementProperties(b)
 	if b.Key == "" {
-		parent := canonicalUIAKey(parentKey, false)
-		if parent != "" && siblingIndex >= 0 {
-			controlType := strings.TrimSpace(b.Element.ControlType)
-			if controlType == "" {
-				controlType = strings.TrimSpace(b.Element.LocalizedControlType)
-			}
-			b.Key = fmt.Sprintf("path:%s/%d/%s/%s", parent, siblingIndex, controlType, strings.TrimSpace(b.Element.Name))
+		if parentKey != "" && siblingIndex >= 0 {
+			b.Key = fallbackPathKey(parentKey, siblingIndex, b.Element)
 		} else {
 			b.Key = fmt.Sprintf("ptr:%x", ptr)
 		}
@@ -204,7 +203,7 @@ func (nativeUIAAPI) ElementFromHandle(state *uiaWorkerState, hwnd window.HWND) (
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElement(ptr, hwnd, "", -1)
+	return wrapNativeElementBorrowed(ptr, hwnd, "", -1)
 }
 
 func (nativeUIAAPI) FocusedElement(state *uiaWorkerState) (*uiaBridgeElement, error) {
@@ -212,7 +211,7 @@ func (nativeUIAAPI) FocusedElement(state *uiaWorkerState) (*uiaBridgeElement, er
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElement(ptr, 0, "", -1)
+	return wrapNativeElementBorrowed(ptr, 0, "", -1)
 }
 
 func (nativeUIAAPI) ElementFromPoint(state *uiaWorkerState, x, y int) (*uiaBridgeElement, error) {
@@ -220,7 +219,7 @@ func (nativeUIAAPI) ElementFromPoint(state *uiaWorkerState, x, y int) (*uiaBridg
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElement(ptr, 0, "", -1)
+	return wrapNativeElementBorrowed(ptr, 0, "", -1)
 }
 
 func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement) ([]*uiaBridgeElement, error) {
@@ -238,20 +237,23 @@ func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement
 	}
 	log.Printf("inspect.uia.native.find_children checkpoint=\"FindAll array length\" length=%d", n)
 	out := make([]*uiaBridgeElement, 0, n)
+	var diag error
 	for i := int32(0); i < n; i++ {
 		ptr, getErr := uiaArrayGet(arr, i)
 		if getErr != nil {
 			return nil, getErr
 		}
-		child, wrapErr := wrapNativeElement(ptr, 0, parent.Key, int(i))
+		child, wrapErr := wrapNativeElementOwned(ptr, 0, parent.Key, int(i))
 		if wrapErr != nil {
-			return nil, wrapErr
+			log.Printf("inspect.uia.native.find_children checkpoint=\"wrap child failed\" index=%d err=%v", i, wrapErr)
+			diag = errors.Join(diag, fmt.Errorf("child[%d]: %w", i, wrapErr))
+			continue
 		}
 		child.Element.ParentRef = parent.Key
 		child.ParentKey = parent.Key
 		out = append(out, child)
 	}
-	return out, nil
+	return out, diag
 }
 
 func (nativeUIAAPI) GetParent(state *uiaWorkerState, el *uiaBridgeElement) (*uiaBridgeElement, error) {
@@ -262,7 +264,24 @@ func (nativeUIAAPI) GetParent(state *uiaWorkerState, el *uiaBridgeElement) (*uia
 	if err != nil || parent == 0 {
 		return nil, err
 	}
-	return wrapNativeElement(parent, 0, "", -1)
+	return wrapNativeElementBorrowed(parent, 0, "", -1)
+}
+
+func fallbackPathKey(parentKey string, siblingIndex int, el *uiaElement) string {
+	parent := canonicalUIAKey(parentKey, false)
+	if parent == "" {
+		return ""
+	}
+	controlType := ""
+	name := ""
+	if el != nil {
+		controlType = strings.TrimSpace(el.ControlType)
+		if controlType == "" {
+			controlType = strings.TrimSpace(el.LocalizedControlType)
+		}
+		name = strings.TrimSpace(el.Name)
+	}
+	return fmt.Sprintf("path:%s/%d/%s/%s", parent, siblingIndex, controlType, name)
 }
 
 func newNativeUIAComClient() (uiaAutomationClient, error) {
