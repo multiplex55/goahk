@@ -249,3 +249,64 @@ func TestNativeUIADeps_BridgePropertyAbsenceStateTranslation(t *testing.T) {
 		t.Fatalf("explicit false must not be marked unsupported")
 	}
 }
+
+func TestNativeUIADeps_ChildRefCanBeExpanded(t *testing.T) {
+	bridge := newBridgeFixture()
+	bridge.resolveRoot = func(h window.HWND) (*uiaBridgeElement, error) { return bridgeEl("rid:root", h.String(), "root"), nil }
+	bridge.children = func(el *uiaBridgeElement) ([]*uiaBridgeElement, error) {
+		if el.Key == "rid:root" {
+			return []*uiaBridgeElement{{Key: "rid:child", ParentKey: "rid:root", Element: &uiaElement{RuntimeID: "child", Name: "child"}}}, nil
+		}
+		if el.Key == "rid:child" {
+			return []*uiaBridgeElement{{Key: "rid:grand", ParentKey: "rid:child", Element: &uiaElement{RuntimeID: "grand", Name: "grand"}}}, nil
+		}
+		return nil, nil
+	}
+	deps := &nativeUIADeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*cachedBridgeElement{}, keyToRef: map[string]string{}}
+	root, _ := deps.ResolveWindowRoot(context.Background(), "0x1")
+	children, err := deps.GetChildren(context.Background(), root.Ref)
+	if err != nil || len(children) != 1 {
+		t.Fatalf("children err=%v children=%+v", err, children)
+	}
+	grand, err := deps.GetChildren(context.Background(), children[0].Ref)
+	if err != nil || len(grand) != 1 || grand[0].Name != "grand" {
+		t.Fatalf("grandchildren err=%v children=%+v", err, grand)
+	}
+}
+
+func TestNativeUIADeps_GetElementByRefAcrossRefreshCycles(t *testing.T) {
+	bridge := newBridgeFixture()
+	calls := 0
+	bridge.byKey = func(key string) (*uiaBridgeElement, error) {
+		calls++
+		return bridgeEl("rid:stable", "0x2", "n"), nil
+	}
+	deps := &nativeUIADeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*cachedBridgeElement{}, keyToRef: map[string]string{}}
+	root := deps.registerBridgeElement(bridgeEl("rid:stable", "0x2", "n"))
+	if _, err := deps.GetElementByRef(context.Background(), root.Ref); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := deps.GetElementByRef(context.Background(), root.Ref); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 lookups, got %d", calls)
+	}
+}
+
+func TestNativeUIADeps_StaleChildrenReturnsStaleError(t *testing.T) {
+	bridge := newBridgeFixture()
+	bridge.children = func(*uiaBridgeElement) ([]*uiaBridgeElement, error) {
+		return nil, &UIAElementStaleError{Op: "FindAll", Err: errors.New("stale")}
+	}
+	deps := &nativeUIADeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*cachedBridgeElement{}, keyToRef: map[string]string{}}
+	root := deps.registerBridgeElement(bridgeEl("rid:r", "0x2", "r"))
+	if _, err := deps.GetChildren(context.Background(), root.Ref); err == nil {
+		t.Fatal("expected stale error")
+	} else {
+		var stale *UIAElementStaleError
+		if !errors.As(err, &stale) {
+			t.Fatalf("expected stale classification, got %v", err)
+		}
+	}
+}

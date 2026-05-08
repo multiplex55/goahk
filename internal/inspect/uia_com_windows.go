@@ -16,6 +16,8 @@ import (
 type uiaBridgeElement struct {
 	Element             *uiaElement
 	Key                 string
+	RuntimeID           string
+	ParentKey           string
 	NativePtr           uintptr
 	AllowHWNDFallback   bool
 	SupportedPatterns   []string
