@@ -221,8 +221,8 @@ func (d *nativeACCDeps) registerElement(el *accBridgeElement) *uiaElement {
 		LocalizedControlType: strings.ToLower(strings.TrimSpace(el.Role)),
 		ClassName:            strings.TrimSpace(el.ClassName),
 		FrameworkID:          strings.TrimSpace(el.Framework),
-		HelpText:             derefString(el.Description),
-		ItemStatus:           derefString(el.State),
+		HelpText:             el.Description,
+		ItemStatus:           el.State,
 		Value:                el.Value,
 		BoundingRect:         toUIARect(el.Rect),
 		IsEnabled:            true,
@@ -397,7 +397,7 @@ func buildACCElement(acc uintptr, childID int32, hwnd window.HWND) (*accBridgeEl
 	}
 	return &accBridgeElement{
 		Key: fmt.Sprintf("acc:%#x:%d", acc, childID), ParentKey: parentKey, RuntimeID: strconv.FormatUint(uint64(acc), 16), HWND: hwnd.String(),
-		Name: name, Role: role, Value: value, Rect: rect, Description: desc, State: state, DefaultAction: defAction, NativeObj: acc, NativeChildID: childID, PathSegment: strings.TrimSpace(name),
+		Name: derefString(name), Role: role, Value: value, Rect: rect, Description: desc, State: state, DefaultAction: defAction, NativeObj: acc, NativeChildID: childID, PathSegment: strings.TrimSpace(derefString(name)),
 	}, nil
 }
 
