@@ -50,12 +50,14 @@ const (
 )
 
 const (
-	vtEmpty   = 0
-	vtI4      = 3
-	vtR8      = 5
-	vtBool    = 11
-	vtBSTR    = 8
-	vtUnknown = 13
+	vtEmpty    = 0
+	vtI4       = 3
+	vtR8       = 5
+	vtBool     = 11
+	vtBSTR     = 8
+	vtDispatch = 9
+	vtUnknown  = 13
+	vtArray    = 0x2000
 )
 
 const (
@@ -258,6 +260,63 @@ func uiaGetCurrentPropertyValue(el uintptr, propertyID int32) (comVariant, error
 	return v, hresultErr("GetCurrentPropertyValue", hr)
 }
 
+func clearVariant(v *comVariant) {
+	if v == nil {
+		return
+	}
+	_, _, _ = syscall.SyscallN(procVariantClear.Addr(), uintptr(unsafe.Pointer(v)))
+}
+
+func safeArrayInts(arr uintptr) ([]int, error) {
+	lb, ub := int32(0), int32(0)
+	if hr, _, _ := syscall.SyscallN(procSafeArrayGetLBound.Addr(), arr, 1, uintptr(unsafe.Pointer(&lb))); int32(hr) < 0 {
+		return nil, hresultErr("SafeArrayGetLBound", hr)
+	}
+	if hr, _, _ := syscall.SyscallN(procSafeArrayGetUBound.Addr(), arr, 1, uintptr(unsafe.Pointer(&ub))); int32(hr) < 0 {
+		return nil, hresultErr("SafeArrayGetUBound", hr)
+	}
+	capN := int(ub - lb + 1)
+	if capN < 0 {
+		capN = 0
+	}
+	out := make([]int, 0, capN)
+	for i := lb; i <= ub; i++ {
+		var v int32
+		idx := i
+		hr, _, _ := syscall.SyscallN(procSafeArrayGetElement.Addr(), arr, uintptr(unsafe.Pointer(&idx)), uintptr(unsafe.Pointer(&v)))
+		if int32(hr) < 0 {
+			return nil, hresultErr("SafeArrayGetElement", hr)
+		}
+		out = append(out, int(v))
+	}
+	return out, nil
+}
+
+func safeArrayFloat64s(arr uintptr) ([]float64, error) {
+	lb, ub := int32(0), int32(0)
+	if hr, _, _ := syscall.SyscallN(procSafeArrayGetLBound.Addr(), arr, 1, uintptr(unsafe.Pointer(&lb))); int32(hr) < 0 {
+		return nil, hresultErr("SafeArrayGetLBound", hr)
+	}
+	if hr, _, _ := syscall.SyscallN(procSafeArrayGetUBound.Addr(), arr, 1, uintptr(unsafe.Pointer(&ub))); int32(hr) < 0 {
+		return nil, hresultErr("SafeArrayGetUBound", hr)
+	}
+	capN := int(ub - lb + 1)
+	if capN < 0 {
+		capN = 0
+	}
+	out := make([]float64, 0, capN)
+	for i := lb; i <= ub; i++ {
+		var v float64
+		idx := i
+		hr, _, _ := syscall.SyscallN(procSafeArrayGetElement.Addr(), arr, uintptr(unsafe.Pointer(&idx)), uintptr(unsafe.Pointer(&v)))
+		if int32(hr) < 0 {
+			return nil, hresultErr("SafeArrayGetElement", hr)
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
 func uiaGetCurrentPattern(el uintptr, patternID int32) (bool, error) {
 	var p uintptr
 	vt := *(*uintptr)(unsafe.Pointer(el))
@@ -305,7 +364,38 @@ func decodeVariant(v comVariant) uiaPropRead {
 			return uiaPropRead{Status: propertyStatusEmpty}
 		}
 		return uiaPropRead{Status: propertyStatusOK, S: fmt.Sprintf("0x%x", uintptr(v.Val))}
+	case vtDispatch:
+		if v.Val == 0 {
+			return uiaPropRead{Status: propertyStatusEmpty}
+		}
+		return uiaPropRead{Status: propertyStatusOK, S: fmt.Sprintf("0x%x", uintptr(v.Val))}
+	case vtArray | vtI4:
+		return decodeSafeArrayInt(v.Val)
+	case vtArray | vtR8:
+		return decodeSafeArrayFloat(v.Val)
 	default:
 		return uiaPropRead{Status: propertyStatusUnsupported}
 	}
+}
+
+func decodeSafeArrayInt(ptr int64) uiaPropRead {
+	if ptr == 0 {
+		return uiaPropRead{Status: propertyStatusEmpty}
+	}
+	vals, err := safeArrayInts(uintptr(ptr))
+	if err != nil || len(vals) == 0 {
+		return uiaPropRead{Status: propertyStatusEmpty}
+	}
+	return uiaPropRead{Status: propertyStatusOK, I: vals[0], S: fmt.Sprintf("%v", vals)}
+}
+
+func decodeSafeArrayFloat(ptr int64) uiaPropRead {
+	if ptr == 0 {
+		return uiaPropRead{Status: propertyStatusEmpty}
+	}
+	vals, err := safeArrayFloat64s(uintptr(ptr))
+	if err != nil || len(vals) == 0 {
+		return uiaPropRead{Status: propertyStatusEmpty}
+	}
+	return uiaPropRead{Status: propertyStatusOK, I: int(vals[0]), S: fmt.Sprintf("%v", vals)}
 }

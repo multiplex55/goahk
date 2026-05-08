@@ -23,6 +23,7 @@ var (
 	procSafeArrayGetLBound  = modOleAut32.NewProc("SafeArrayGetLBound")
 	procSafeArrayGetUBound  = modOleAut32.NewProc("SafeArrayGetUBound")
 	procSafeArrayGetElement = modOleAut32.NewProc("SafeArrayGetElement")
+	procVariantClear        = modOleAut32.NewProc("VariantClear")
 	clsidCUIAutomation      = syscall.GUID{Data1: 0xff48dba4, Data2: 0x60ef, Data3: 0x4201, Data4: [8]byte{0xaa, 0x87, 0x54, 0x10, 0x3e, 0xef, 0x59, 0x4e}}
 	iidIUIAutomation        = syscall.GUID{Data1: 0x30cbe57d, Data2: 0xd9d0, Data3: 0x452a, Data4: [8]byte{0xab, 0x13, 0x7a, 0xc5, 0xac, 0x48, 0x25, 0xee}}
 )

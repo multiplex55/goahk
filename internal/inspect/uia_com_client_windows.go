@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -105,6 +104,7 @@ func populateElementProperties(el *uiaBridgeElement) {
 			markPropertyErr(el, name, err)
 			return
 		}
+		defer clearVariant(&v)
 		r := decodeVariant(v)
 		el.PropertyState[name] = r.Status
 		if r.Status == propertyStatusUnsupported {
@@ -119,6 +119,7 @@ func populateElementProperties(el *uiaBridgeElement) {
 			markPropertyErr(el, name, err)
 			return
 		}
+		defer clearVariant(&v)
 		r := decodeVariant(v)
 		el.PropertyState[name] = r.Status
 		s := strings.TrimSpace(r.S)
@@ -134,6 +135,7 @@ func populateElementProperties(el *uiaBridgeElement) {
 			markPropertyErr(el, name, err)
 			return
 		}
+		defer clearVariant(&v)
 		r := decodeVariant(v)
 		el.PropertyState[name] = r.Status
 		*dst = r.B
@@ -144,11 +146,23 @@ func populateElementProperties(el *uiaBridgeElement) {
 			markPropertyErr(el, name, err)
 			return
 		}
+		defer clearVariant(&v)
 		r := decodeVariant(v)
 		el.PropertyState[name] = r.Status
 		*dst = r.I
 	}
-	setStr("ControlType", uiaPropertyControlType, &el.Element.ControlType)
+	setControlType := func() {
+		v, err := uiaGetCurrentPropertyValue(el.NativePtr, uiaPropertyControlType)
+		if err != nil {
+			markPropertyErr(el, "ControlType", err)
+			return
+		}
+		defer clearVariant(&v)
+		r := decodeVariant(v)
+		el.PropertyState["ControlType"] = r.Status
+		el.Element.ControlType = controlTypeNameForID(r.I)
+	}
+	setControlType()
 	setStr("LocalizedControlType", uiaPropertyLocalizedCtl, &el.Element.LocalizedControlType)
 	setStr("Name", uiaPropertyName, &el.Element.Name)
 	setOptStr("Value", 30045, &el.Element.Value)
@@ -164,10 +178,44 @@ func populateElementProperties(el *uiaBridgeElement) {
 	setBool("IsEnabled", uiaPropertyIsEnabled, &el.Element.IsEnabled)
 	setBool("IsPassword", uiaPropertyIsPassword, &el.Element.IsPassword)
 	setBool("IsOffscreen", uiaPropertyIsOffscreen, &el.Element.IsOffscreen)
+	setBool("IsControlElement", uiaPropertyIsCtrlElem, &el.Element.IsControlElement)
+	setBool("IsContentElement", uiaPropertyIsContent, &el.Element.IsContentElement)
+	setInt("NativeWindowHandle", uiaPropertyNativeHWND, new(int))
 	setStr("FrameworkId", uiaPropertyFrameworkID, &el.Element.FrameworkID)
 	setBool("IsRequiredForForm", uiaPropertyIsRequired, &el.Element.IsRequiredForForm)
 	setOptStr("ItemStatus", uiaPropertyItemStatus, &el.Element.ItemStatus)
 	setOptStr("LabeledBy", uiaPropertyLabeledBy, &el.Element.LabeledBy)
+	v, err := uiaGetCurrentPropertyValue(el.NativePtr, uiaPropertyBoundingRect)
+	if err == nil {
+		defer clearVariant(&v)
+		r := decodeVariant(v)
+		el.PropertyState["BoundingRectangle"] = r.Status
+		el.Element.BoundingRect = r.Rect
+	} else {
+		markPropertyErr(el, "BoundingRectangle", err)
+	}
+}
+
+func controlTypeNameForID(id int) string {
+	if n, ok := knownControlTypeIDs[id]; ok {
+		return n
+	}
+	if id <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("ControlType(%d)", id)
+}
+
+var knownControlTypeIDs = map[int]string{
+	50000: "Button", 50001: "Calendar", 50002: "CheckBox", 50003: "ComboBox", 50004: "Edit",
+	50005: "Hyperlink", 50006: "Image", 50007: "ListItem", 50008: "List", 50009: "Menu",
+	50010: "MenuBar", 50011: "MenuItem", 50012: "ProgressBar", 50013: "RadioButton", 50014: "ScrollBar",
+	50015: "Slider", 50016: "Spinner", 50017: "StatusBar", 50018: "Tab", 50019: "TabItem",
+	50020: "Text", 50021: "ToolBar", 50022: "ToolTip", 50023: "Tree", 50024: "TreeItem",
+	50025: "Custom", 50026: "Group", 50027: "Thumb", 50028: "DataGrid", 50029: "DataItem",
+	50030: "Document", 50031: "SplitButton", 50032: "Window", 50033: "Pane", 50034: "Header",
+	50035: "HeaderItem", 50036: "Table", 50037: "TitleBar", 50038: "Separator", 50039: "SemanticZoom",
+	50040: "AppBar",
 }
 
 func markPropertyErr(el *uiaBridgeElement, name string, err error) {
