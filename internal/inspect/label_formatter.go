@@ -10,7 +10,7 @@ func formatDisplayLabel(name, localizedControlType, controlType string) string {
 	if control == "" {
 		control = "element"
 	}
-	escapedName := strings.ReplaceAll(name, `"`, `\"`)
+	escapedName := strings.ReplaceAll(strings.TrimSpace(name), `"`, `\"`)
 	return control + ` "` + escapedName + `"`
 }
 
