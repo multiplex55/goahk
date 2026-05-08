@@ -334,3 +334,81 @@ func TestNativeUIADeps_ChildTraversalPreservesGrandchildDepth(t *testing.T) {
 		t.Fatalf("expected grandchild traversal with parent link, grand=%+v err=%v", grand, err)
 	}
 }
+
+func TestNativeUIADeps_RegisterBridgeElementPreservesNativePtr(t *testing.T) {
+	deps := &nativeUIADeps{sessionID: "sess", refToElement: map[string]*cachedBridgeElement{}, keyToRef: map[string]string{}}
+	el := deps.registerBridgeElement(&uiaBridgeElement{
+		Key:               "rid:native",
+		RuntimeID:         "rid:native",
+		ParentKey:         "rid:parent",
+		NativePtr:         42,
+		AllowHWNDFallback: true,
+		SupportedPatterns: []string{"invoke"},
+		UnsupportedProperty: map[string]bool{
+			"HelpText": true,
+		},
+		PropertyState: map[string]string{"Name": propertyStatusUnavailable},
+		Element:       &uiaElement{RuntimeID: "rid:native", HWND: "0x1", Name: "native"},
+	})
+	cached, err := deps.lookupByRef(el.Ref)
+	if err != nil {
+		t.Fatalf("lookupByRef: %v", err)
+	}
+	if cached.bridge.NativePtr != 42 {
+		t.Fatalf("expected native ptr preserved, got %d", cached.bridge.NativePtr)
+	}
+}
+
+func TestNativeUIADeps_GetChildrenResolvesLiveBridgeByKey(t *testing.T) {
+	bridge := newBridgeFixture()
+	bridge.byKey = func(key string) (*uiaBridgeElement, error) {
+		return &uiaBridgeElement{Key: key, NativePtr: 7, Element: &uiaElement{RuntimeID: key, HWND: "0x10", Name: "live"}}, nil
+	}
+	bridge.children = func(el *uiaBridgeElement) ([]*uiaBridgeElement, error) {
+		if el.NativePtr == 0 {
+			return nil, errors.New("missing native ptr")
+		}
+		return []*uiaBridgeElement{bridgeEl("rid:c", "0x11", "c")}, nil
+	}
+	deps := &nativeUIADeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*cachedBridgeElement{}, keyToRef: map[string]string{}}
+	root := deps.registerBridgeElement(&uiaBridgeElement{Key: "rid:root", Element: &uiaElement{RuntimeID: "rid:root", Name: "root"}})
+	if _, err := deps.GetChildren(context.Background(), root.Ref); err != nil {
+		t.Fatalf("GetChildren: %v", err)
+	}
+}
+
+func TestNativeUIADeps_GetParentResolvesLiveBridgeByKey(t *testing.T) {
+	bridge := newBridgeFixture()
+	bridge.byKey = func(key string) (*uiaBridgeElement, error) {
+		return &uiaBridgeElement{Key: key, NativePtr: 11, Element: &uiaElement{RuntimeID: key, HWND: "0x10", Name: "live"}}, nil
+	}
+	bridge.parent = func(el *uiaBridgeElement) (*uiaBridgeElement, error) {
+		if el.NativePtr == 0 {
+			return nil, errors.New("missing native ptr")
+		}
+		return bridgeEl("rid:parent-live", "0x20", "parent"), nil
+	}
+	deps := &nativeUIADeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*cachedBridgeElement{}, keyToRef: map[string]string{}}
+	root := deps.registerBridgeElement(&uiaBridgeElement{Key: "rid:root", Element: &uiaElement{RuntimeID: "rid:root", Name: "root"}})
+	if _, err := deps.GetParent(context.Background(), root.Ref); err != nil {
+		t.Fatalf("GetParent: %v", err)
+	}
+}
+
+func TestNativeUIADeps_ActionResolvesLiveBridgeByKey(t *testing.T) {
+	bridge := newBridgeFixture()
+	bridge.byKey = func(key string) (*uiaBridgeElement, error) {
+		return &uiaBridgeElement{Key: key, NativePtr: 99, Element: &uiaElement{RuntimeID: key, HWND: "0x10", Name: "live"}}, nil
+	}
+	bridge.invoke = func(el *uiaBridgeElement) error {
+		if el.NativePtr == 0 {
+			return errors.New("missing native ptr")
+		}
+		return nil
+	}
+	deps := &nativeUIADeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*cachedBridgeElement{}, keyToRef: map[string]string{}}
+	root := deps.registerBridgeElement(&uiaBridgeElement{Key: "rid:root", Element: &uiaElement{RuntimeID: "rid:root", Name: "root"}})
+	if err := deps.Invoke(context.Background(), root.Ref); err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+}

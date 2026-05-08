@@ -76,28 +76,19 @@ func (d *nativeUIADeps) ElementFromPoint(_ context.Context, x, y int) (*uiaEleme
 }
 
 func (d *nativeUIADeps) GetElementByRef(_ context.Context, ref string) (*uiaElement, error) {
-	cached, err := d.lookupByRef(ref)
-	if err != nil {
-		return nil, errUIANilElement
-	}
-	latest, err := d.bridge.ElementByKey(cached.bridge.Key)
-	if err != nil {
-		if retry := d.tryRefreshAfterStale(cached.bridge, err); retry != nil {
-			latest, err = retry, nil
-		}
-	}
+	resolved, err := d.resolveBridgeByRef(ref)
 	if err != nil {
 		return nil, err
 	}
-	return d.registerBridgeElement(latest), nil
+	return d.registerBridgeElement(resolved), nil
 }
 
 func (d *nativeUIADeps) GetParent(_ context.Context, ref string) (*uiaElement, error) {
-	cached, err := d.lookupByRef(ref)
+	resolved, err := d.resolveBridgeByRef(ref)
 	if err != nil {
-		return nil, errUIANilElement
+		return nil, err
 	}
-	parent, err := d.bridge.Parent(cloneBridgeElement(cached.bridge))
+	parent, err := d.bridge.Parent(cloneBridgeElement(resolved))
 	if err != nil {
 		return nil, err
 	}
@@ -108,21 +99,21 @@ func (d *nativeUIADeps) GetParent(_ context.Context, ref string) (*uiaElement, e
 }
 
 func (d *nativeUIADeps) GetChildren(_ context.Context, ref string) ([]*uiaElement, error) {
-	cached, err := d.lookupByRef(ref)
+	resolved, err := d.resolveBridgeByRef(ref)
 	if err != nil {
-		return nil, errUIANilElement
+		return nil, err
 	}
 	log.Printf(
 		"inspect.uia.get_children_call ref=%s key=%s runtime_id=%s parent_key=%s native_ptr_present=%t element_runtime_id=%s element_hwnd=%s",
 		ref,
-		cached.bridge.Key,
-		cached.bridge.RuntimeID,
-		cached.bridge.ParentKey,
-		cached.bridge.NativePtr != 0,
-		cached.bridge.Element.RuntimeID,
-		cached.bridge.Element.HWND,
+		resolved.Key,
+		resolved.RuntimeID,
+		resolved.ParentKey,
+		resolved.NativePtr != 0,
+		resolved.Element.RuntimeID,
+		resolved.Element.HWND,
 	)
-	children, err := d.bridge.Children(cloneBridgeElement(cached.bridge))
+	children, err := d.bridge.Children(cloneBridgeElement(resolved))
 	if err != nil {
 		return nil, err
 	}
@@ -169,11 +160,31 @@ func (d *nativeUIADeps) Collapse(_ context.Context, ref string) error {
 }
 
 func (d *nativeUIADeps) withBridgeElement(ref string, fn func(*uiaBridgeElement) error) error {
+	resolved, err := d.resolveBridgeByRef(ref)
+	if err != nil {
+		return err
+	}
+	return fn(cloneBridgeElement(resolved))
+}
+
+func (d *nativeUIADeps) resolveBridgeByRef(ref string) (*uiaBridgeElement, error) {
 	cached, err := d.lookupByRef(ref)
 	if err != nil {
-		return errUIANilElement
+		return nil, errUIANilElement
 	}
-	return fn(cloneBridgeElement(cached.bridge))
+	latest, err := d.bridge.ElementByKey(cached.bridge.Key)
+	if err != nil {
+		if retry := d.tryRefreshAfterStale(cached.bridge, err); retry != nil {
+			latest, err = retry, nil
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if latest == nil || latest.Element == nil {
+		return nil, errUIAElementNotAvailable
+	}
+	return d.storedBridgeFromNative(latest, cloneUIAElement(latest.Element), strings.TrimSpace(latest.Key)), nil
 }
 
 func (d *nativeUIADeps) lookupByRef(ref string) (*cachedBridgeElement, error) {
@@ -228,16 +239,27 @@ func (d *nativeUIADeps) registerBridgeElement(be *uiaBridgeElement) *uiaElement 
 	defer d.mu.Unlock()
 	if existingRef, ok := d.keyToRef[key]; ok {
 		el.Ref = existingRef
-		d.refToElement[existingRef] = &cachedBridgeElement{bridge: cloneBridgeElement(&uiaBridgeElement{Element: el, Key: key, AllowHWNDFallback: be.AllowHWNDFallback, SupportedPatterns: el.SupportedPatterns, UnsupportedProperty: el.UnsupportedProps, PropertyState: el.PropertyStates}), elem: cloneUIAElement(el)}
+		storedBridge := d.storedBridgeFromNative(be, el, key)
+		d.refToElement[existingRef] = &cachedBridgeElement{bridge: storedBridge, elem: cloneUIAElement(el)}
 		return el
 	}
 	d.nextID++
 	ref := makeUIANodeRef(d.sessionID, strconv.FormatUint(d.nextID, 36))
 	el.Ref = ref
-	storedBridge := cloneBridgeElement(&uiaBridgeElement{Element: cloneUIAElement(el), Key: key, AllowHWNDFallback: be.AllowHWNDFallback, SupportedPatterns: el.SupportedPatterns, UnsupportedProperty: el.UnsupportedProps, PropertyState: el.PropertyStates})
+	storedBridge := d.storedBridgeFromNative(be, el, key)
 	d.keyToRef[key] = ref
 	d.refToElement[ref] = &cachedBridgeElement{bridge: storedBridge, elem: cloneUIAElement(el)}
 	return el
+}
+
+func (d *nativeUIADeps) storedBridgeFromNative(be *uiaBridgeElement, el *uiaElement, key string) *uiaBridgeElement {
+	if be == nil {
+		return nil
+	}
+	stored := cloneBridgeElement(be)
+	stored.Element = cloneUIAElement(el)
+	stored.Key = key
+	return stored
 }
 
 func (d *nativeUIADeps) tryRefreshAfterStale(el *uiaBridgeElement, err error) *uiaBridgeElement {
