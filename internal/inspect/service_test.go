@@ -101,6 +101,9 @@ func (p *contractProvider) RefreshNodeDetails(context.Context, RefreshNodeDetail
 func (p *contractProvider) GetDiagnostics(context.Context, GetDiagnosticsRequest) (GetDiagnosticsResponse, error) {
 	return GetDiagnosticsResponse{}, p.err
 }
+func (p *contractProvider) DumpTree(context.Context, DumpTreeRequest) (DumpTreeResponse, error) {
+	return DumpTreeResponse{}, p.err
+}
 
 func TestService_MethodContracts(t *testing.T) {
 	t.Parallel()

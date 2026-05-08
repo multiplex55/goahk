@@ -310,3 +310,27 @@ func TestNativeUIADeps_StaleChildrenReturnsStaleError(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeUIADeps_ChildTraversalPreservesGrandchildDepth(t *testing.T) {
+	bridge := newBridgeFixture()
+	bridge.resolveRoot = func(h window.HWND) (*uiaBridgeElement, error) {
+		return bridgeEl("rid:root-depth", h.String(), "root"), nil
+	}
+	bridge.children = func(el *uiaBridgeElement) ([]*uiaBridgeElement, error) {
+		switch el.Key {
+		case "rid:root-depth":
+			return []*uiaBridgeElement{{Key: "rid:child-depth", ParentKey: "rid:root-depth", Element: &uiaElement{RuntimeID: "child", Name: "child"}}}, nil
+		case "rid:child-depth":
+			return []*uiaBridgeElement{{Key: "rid:grand-depth", ParentKey: "rid:child-depth", Element: &uiaElement{RuntimeID: "grand", Name: "grand"}}}, nil
+		default:
+			return nil, nil
+		}
+	}
+	deps := &nativeUIADeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*cachedBridgeElement{}, keyToRef: map[string]string{}}
+	root, _ := deps.ResolveWindowRoot(context.Background(), "0x77")
+	children, _ := deps.GetChildren(context.Background(), root.Ref)
+	grand, err := deps.GetChildren(context.Background(), children[0].Ref)
+	if err != nil || len(grand) != 1 || grand[0].ParentRef != children[0].Ref {
+		t.Fatalf("expected grandchild traversal with parent link, grand=%+v err=%v", grand, err)
+	}
+}

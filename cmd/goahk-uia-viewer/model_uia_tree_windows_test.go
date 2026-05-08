@@ -238,3 +238,17 @@ func TestUIATreeSetChildren_PlaceholderOnlyForPotentialChildren(t *testing.T) {
 		t.Fatalf("known leaf should not have placeholder, got %d", leaf.ChildCount())
 	}
 }
+
+func TestUIATreeSetChildren_GrandchildrenRemainVisibleAfterParentExpansion(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "p"}})
+	m.SetExpanded("p", true)
+	m.SetChildren("p", []inspect.TreeNodeDTO{{NodeID: "c"}})
+	m.SetExpanded("c", true)
+	m.SetChildren("c", []inspect.TreeNodeDTO{{NodeID: "g"}})
+	c, _ := m.ItemByID("c")
+	if c.ChildCount() != 1 || c.ChildAt(0).(*uiaTreeNode).NodeID != "g" {
+		t.Fatalf("expected expanded node to show deeper child, got count=%d", c.ChildCount())
+	}
+}

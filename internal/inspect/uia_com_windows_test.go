@@ -216,3 +216,28 @@ func TestNativeUIAComClient_PatternActions_StaleElementClassification(t *testing
 		t.Fatalf("expected UIAElementStaleError, got %T (%v)", err, err)
 	}
 }
+
+func TestNativeUIAComClient_ParentReconstructionReturnsDirectParent(t *testing.T) {
+	orig := uiaNativeAPI
+	defer func() { uiaNativeAPI = orig }()
+	uiaNativeAPI = fakeUiaNativeAPI{
+		elementFromHandle: func(_ *uiaWorkerState, _ window.HWND) (*uiaBridgeElement, error) {
+			return &uiaBridgeElement{Key: "rid:root", Element: &uiaElement{Name: "root"}}, nil
+		},
+		findChildren:     func(_ *uiaWorkerState, _ *uiaBridgeElement) ([]*uiaBridgeElement, error) { return nil, nil },
+		focusedElement:   func(_ *uiaWorkerState) (*uiaBridgeElement, error) { return nil, nil },
+		elementFromPoint: func(_ *uiaWorkerState, _, _ int) (*uiaBridgeElement, error) { return nil, nil },
+		getParent: func(_ *uiaWorkerState, _ *uiaBridgeElement) (*uiaBridgeElement, error) {
+			return &uiaBridgeElement{Key: "rid:parent", Element: &uiaElement{Name: "parent"}}, nil
+		},
+	}
+	client, err := newNativeUIAComClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.(*nativeUIAComClient).worker.Close() })
+	p, err := client.Parent(&uiaBridgeElement{Key: "rid:child", Element: &uiaElement{Name: "child"}})
+	if err != nil || p.Key != "rid:parent" {
+		t.Fatalf("expected direct parent, got parent=%+v err=%v", p, err)
+	}
+}
