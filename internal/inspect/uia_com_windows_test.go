@@ -146,3 +146,73 @@ func TestNativeUIAComClient_ErrorPathsSurface(t *testing.T) {
 		t.Fatalf("unexpected err %v", err)
 	}
 }
+
+func TestNativeUIAComClient_PatternActions_InvokeSupportedExecutesOnce(t *testing.T) {
+	clientAny, err := newNativeUIAComClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := clientAny.(*nativeUIAComClient)
+	t.Cleanup(func() { _ = client.worker.Close() })
+
+	el := &uiaBridgeElement{Key: "rid:101", NativePtr: 0x1234, SupportedPatterns: []string{"Invoke"}, Element: &uiaElement{RuntimeID: "101"}}
+	client.cacheBridgeElement(el)
+
+	orig := invokePatternCall
+	defer func() { invokePatternCall = orig }()
+	calls := 0
+	invokePatternCall = func(ptr uintptr) error {
+		calls++
+		if ptr != el.NativePtr {
+			t.Fatalf("unexpected ptr: got %x want %x", ptr, el.NativePtr)
+		}
+		return nil
+	}
+
+	if err := client.Invoke(el); err != nil {
+		t.Fatalf("Invoke returned error: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("expected 1 invoke call, got %d", calls)
+	}
+}
+
+func TestNativeUIAComClient_PatternActions_UnsupportedPatternReturnsCapabilityError(t *testing.T) {
+	clientAny, err := newNativeUIAComClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := clientAny.(*nativeUIAComClient)
+	t.Cleanup(func() { _ = client.worker.Close() })
+
+	el := &uiaBridgeElement{Key: "rid:102", NativePtr: 0x4321, SupportedPatterns: []string{"Invoke"}, Element: &uiaElement{RuntimeID: "102"}}
+	client.cacheBridgeElement(el)
+
+	err = client.Toggle(el)
+	if err == nil {
+		t.Fatal("expected unsupported pattern error")
+	}
+	var unavailable *UIAComUnavailableError
+	if !errors.As(err, &unavailable) {
+		t.Fatalf("expected UIAComUnavailableError, got %T (%v)", err, err)
+	}
+}
+
+func TestNativeUIAComClient_PatternActions_StaleElementClassification(t *testing.T) {
+	clientAny, err := newNativeUIAComClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := clientAny.(*nativeUIAComClient)
+	t.Cleanup(func() { _ = client.worker.Close() })
+
+	el := &uiaBridgeElement{Key: "rid:does-not-exist", NativePtr: 0x1111, SupportedPatterns: []string{"Value"}, Element: &uiaElement{RuntimeID: "does-not-exist"}}
+	err = client.SetValue(el, "")
+	if err == nil {
+		t.Fatal("expected stale error")
+	}
+	var stale *UIAElementStaleError
+	if !errors.As(err, &stale) {
+		t.Fatalf("expected UIAElementStaleError, got %T (%v)", err, err)
+	}
+}
