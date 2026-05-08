@@ -15,9 +15,11 @@ import (
 
 var (
 	modOle32             = syscall.NewLazyDLL("ole32.dll")
+	modOleAut32          = syscall.NewLazyDLL("oleaut32.dll")
 	procCoInitializeEx   = modOle32.NewProc("CoInitializeEx")
 	procCoUninitialize   = modOle32.NewProc("CoUninitialize")
 	procCoCreateInstance = modOle32.NewProc("CoCreateInstance")
+	procSafeArrayDestroy = modOleAut32.NewProc("SafeArrayDestroy")
 	clsidCUIAutomation   = syscall.GUID{Data1: 0xff48dba4, Data2: 0x60ef, Data3: 0x4201, Data4: [8]byte{0xaa, 0x87, 0x54, 0x10, 0x3e, 0xef, 0x59, 0x4e}}
 	iidIUIAutomation     = syscall.GUID{Data1: 0x30cbe57d, Data2: 0xd9d0, Data3: 0x452a, Data4: [8]byte{0xab, 0x13, 0x7a, 0xc5, 0xac, 0x48, 0x25, 0xee}}
 )
@@ -128,6 +130,21 @@ func workerCOMInit(state *uiaWorkerState) error {
 		return fmt.Errorf("CoCreateInstance(IUIAutomation) failed: hr=0x%x", hr)
 	}
 	state.automation = automation
+	trueCond, err := uiaCreateTrueCondition(automation)
+	if err != nil {
+		comRelease(automation)
+		procCoUninitialize.Call()
+		return err
+	}
+	treeWalker, err := uiaGetRawViewWalker(automation)
+	if err != nil {
+		comRelease(trueCond)
+		comRelease(automation)
+		procCoUninitialize.Call()
+		return err
+	}
+	state.trueCond = trueCond
+	state.treeWalker = treeWalker
 	return nil
 }
 
@@ -135,6 +152,8 @@ func releaseWorkerState(state *uiaWorkerState) {
 	if state == nil {
 		return
 	}
-	// Reserved for COM interface Release calls once full native wrappers are wired.
+	comRelease(state.treeWalker)
+	comRelease(state.trueCond)
+	comRelease(state.automation)
 	procCoUninitialize.Call()
 }

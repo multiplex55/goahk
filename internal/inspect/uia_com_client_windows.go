@@ -21,6 +21,8 @@ type nativeUIAComClient struct {
 
 type uiaNativeAutomationAPI interface {
 	ElementFromHandle(*uiaWorkerState, window.HWND) (*uiaBridgeElement, error)
+	FocusedElement(*uiaWorkerState) (*uiaBridgeElement, error)
+	ElementFromPoint(*uiaWorkerState, int, int) (*uiaBridgeElement, error)
 	FindChildren(*uiaWorkerState, *uiaBridgeElement) ([]*uiaBridgeElement, error)
 	GetParent(*uiaWorkerState, *uiaBridgeElement) (*uiaBridgeElement, error)
 }
@@ -29,42 +31,40 @@ var uiaNativeAPI uiaNativeAutomationAPI = nativeUIAAPI{}
 
 type nativeUIAAPI struct{}
 
-func (nativeUIAAPI) ElementFromHandle(_ *uiaWorkerState, hwnd window.HWND) (*uiaBridgeElement, error) {
+func wrapNativeElement(ptr uintptr, hwnd window.HWND) (*uiaBridgeElement, error) {
+	if ptr == 0 {
+		return nil, &UIAComUnavailableError{Op: "WrapElement", Err: errors.New("nil COM element")}
+	}
+	key := fmt.Sprintf("ptr:%x", ptr)
+	el := &uiaElement{RuntimeID: key, HWND: hwnd.String()}
+	return &uiaBridgeElement{Key: key, AllowHWNDFallback: hwnd != 0, SupportedPatterns: detectSupportedPatterns(el), PropertyState: map[string]string{}, UnsupportedProperty: map[string]bool{}, NativePtr: ptr, Element: el}, nil
+}
+
+func (nativeUIAAPI) ElementFromHandle(state *uiaWorkerState, hwnd window.HWND) (*uiaBridgeElement, error) {
 	if hwnd == 0 {
 		return nil, &UIAComUnavailableError{Op: "ElementFromHandle", Err: errors.New("invalid hwnd")}
 	}
-	key := runtimeIDString([]int{42, int(hwnd)})
-	el := &uiaElement{RuntimeID: key, HWND: hwnd.String()}
-	unsupported := map[string]bool{}
-	states := map[string]string{}
+	ptr, err := uiaElementFromHandle(state.automation, hwnd)
+	if err != nil {
+		return nil, err
+	}
+	return wrapNativeElement(ptr, hwnd)
+}
 
-	readStringProperty("ControlType", "Pane", &el.ControlType, unsupported, states)
-	readStringProperty("LocalizedControlType", "pane", &el.LocalizedControlType, unsupported, states)
-	readStringProperty("Name", "Window", &el.Name, unsupported, states)
-	readStringProperty("Value", "", strPtrAssign(&el.Value), unsupported, states)
-	readStringProperty("AutomationId", "", &el.AutomationID, unsupported, states)
-	readStringProperty("ClassName", "Window", &el.ClassName, unsupported, states)
-	readStringProperty("FrameworkId", "UIA", &el.FrameworkID, unsupported, states)
-	readIntProperty("ProcessId", 0, &el.ProcessID, unsupported, states)
-	readRectProperty("BoundingRectangle", nil, &el.BoundingRect, unsupported, states)
-	readBoolProperty("HasKeyboardFocus", false, &el.HasKeyboardFocus, unsupported, states)
-	readBoolProperty("IsEnabled", false, &el.IsEnabled, unsupported, states)
-	readBoolProperty("IsOffscreen", false, &el.IsOffscreen, unsupported, states)
-	readBoolProperty("IsPassword", false, &el.IsPassword, unsupported, states)
-	readBoolProperty("IsKeyboardFocusable", false, &el.IsKeyboardFocusable, unsupported, states)
-	readBoolProperty("IsContentElement", false, &el.IsContentElement, unsupported, states)
-	readBoolProperty("IsControlElement", false, &el.IsControlElement, unsupported, states)
-	readBoolProperty("IsRequiredForForm", false, &el.IsRequiredForForm, unsupported, states)
-	readStringProperty("HelpText", "", strPtrAssign(&el.HelpText), unsupported, states)
-	readStringProperty("AccessKey", "", strPtrAssign(&el.AccessKey), unsupported, states)
-	readStringProperty("AcceleratorKey", "", strPtrAssign(&el.AcceleratorKey), unsupported, states)
-	readStringProperty("ItemType", "", strPtrAssign(&el.ItemType), unsupported, states)
-	readStringProperty("ItemStatus", "", strPtrAssign(&el.ItemStatus), unsupported, states)
-	readStringProperty("LabeledBy", "", strPtrAssign(&el.LabeledBy), unsupported, states)
+func (nativeUIAAPI) FocusedElement(state *uiaWorkerState) (*uiaBridgeElement, error) {
+	ptr, err := uiaGetFocusedElement(state.automation)
+	if err != nil {
+		return nil, err
+	}
+	return wrapNativeElement(ptr, 0)
+}
 
-	el.UnsupportedProps = unsupported
-	el.PropertyStates = states
-	return &uiaBridgeElement{Key: key, AllowHWNDFallback: true, SupportedPatterns: detectSupportedPatterns(el), PropertyState: states, UnsupportedProperty: unsupported, Element: el}, nil
+func (nativeUIAAPI) ElementFromPoint(state *uiaWorkerState, x, y int) (*uiaBridgeElement, error) {
+	ptr, err := uiaElementFromPoint(state.automation, x, y)
+	if err != nil {
+		return nil, err
+	}
+	return wrapNativeElement(ptr, 0)
 }
 
 func detectSupportedPatterns(el *uiaElement) []string {
@@ -155,12 +155,44 @@ func readRectProperty(name string, raw *uiaRect, dst **uiaRect, unsupported map[
 	}
 }
 
-func (nativeUIAAPI) FindChildren(_ *uiaWorkerState, _ *uiaBridgeElement) ([]*uiaBridgeElement, error) {
-	return []*uiaBridgeElement{}, nil
+func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement) ([]*uiaBridgeElement, error) {
+	if parent == nil || parent.NativePtr == 0 {
+		return nil, &UIAElementStaleError{Op: "FindAll", Err: errors.New("parent element is stale")}
+	}
+	arr, err := uiaFindAllChildren(parent.NativePtr, state.trueCond)
+	if err != nil {
+		return nil, err
+	}
+	defer comRelease(arr)
+	n, err := uiaArrayLength(arr)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*uiaBridgeElement, 0, n)
+	for i := int32(0); i < n; i++ {
+		ptr, getErr := uiaArrayGet(arr, i)
+		if getErr != nil {
+			return nil, getErr
+		}
+		child, wrapErr := wrapNativeElement(ptr, 0)
+		if wrapErr != nil {
+			return nil, wrapErr
+		}
+		child.Element.ParentRef = parent.Key
+		out = append(out, child)
+	}
+	return out, nil
 }
 
-func (nativeUIAAPI) GetParent(_ *uiaWorkerState, _ *uiaBridgeElement) (*uiaBridgeElement, error) {
-	return nil, nil
+func (nativeUIAAPI) GetParent(state *uiaWorkerState, el *uiaBridgeElement) (*uiaBridgeElement, error) {
+	if el == nil || el.NativePtr == 0 {
+		return nil, &UIAElementStaleError{Op: "GetParentElement", Err: errors.New("element is stale")}
+	}
+	parent, err := uiaGetParentElement(state.treeWalker, el.NativePtr)
+	if err != nil || parent == 0 {
+		return nil, err
+	}
+	return wrapNativeElement(parent, 0)
 }
 
 func newNativeUIAComClient() (uiaAutomationClient, error) {
@@ -185,10 +217,20 @@ func (c *nativeUIAComClient) ElementFromHWND(hwnd window.HWND) (*uiaBridgeElemen
 	return out, err
 }
 func (c *nativeUIAComClient) FocusedElement() (*uiaBridgeElement, error) {
-	return nil, &UIAComUnavailableError{Op: "GetFocusedElement", Err: errors.New("not implemented")}
+	var out *uiaBridgeElement
+	err := c.worker.Do("GetFocusedElement", func(state *uiaWorkerState) error { var e error; out, e = uiaNativeAPI.FocusedElement(state); return e })
+	c.cacheBridgeElement(out)
+	return out, err
 }
-func (c *nativeUIAComClient) ElementFromPoint(int, int) (*uiaBridgeElement, error) {
-	return nil, &UIAComUnavailableError{Op: "ElementFromPoint", Err: errors.New("not implemented")}
+func (c *nativeUIAComClient) ElementFromPoint(x, y int) (*uiaBridgeElement, error) {
+	var out *uiaBridgeElement
+	err := c.worker.Do("ElementFromPoint", func(state *uiaWorkerState) error {
+		var e error
+		out, e = uiaNativeAPI.ElementFromPoint(state, x, y)
+		return e
+	})
+	c.cacheBridgeElement(out)
+	return out, err
 }
 func (c *nativeUIAComClient) ElementByRuntimeID(runtimeID string) (*uiaBridgeElement, error) {
 	id := canonicalRuntimeID(runtimeID)
