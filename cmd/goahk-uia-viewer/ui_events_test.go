@@ -259,6 +259,41 @@ func TestOnWindowSelectedStillShowsDetailsWhenChildrenFail(t *testing.T) {
 	if len(view.fatal) != 0 {
 		t.Fatalf("child load error should be non-fatal, got %v", view.fatal)
 	}
+	if len(view.status) == 0 || !strings.Contains(view.status[len(view.status)-1], "UIA root loaded, but child traversal failed:") {
+		t.Fatalf("expected prominent child traversal status, got %v", view.status)
+	}
+	if strings.Contains(strings.ToLower(view.status[len(view.status)-1]), "loaded with warning") {
+		t.Fatalf("child traversal error should not be masked as generic loaded warning, got %q", view.status[len(view.status)-1])
+	}
+}
+
+func TestOnWindowSelectedUIAOnlyChildFailureIsExplicitFailureState(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root"}},
+		root:               inspect.TreeNodeDTO{NodeID: "root"},
+		nodeChildrenErr:    context.DeadlineExceeded,
+		rootState: inspect.InspectModeState{
+			RequestedMode: inspect.InspectModeUIAOnly,
+			ActiveMode:    inspect.InspectModeUIAOnly,
+		},
+	}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if len(view.status) == 0 {
+		t.Fatal("expected status updates")
+	}
+	last := view.status[len(view.status)-1]
+	if !strings.Contains(last, "ERROR UIA root loaded, but child traversal failed:") {
+		t.Fatalf("expected explicit failure state for UIA_ONLY child traversal error, got %q", last)
+	}
+	if !strings.Contains(last, "UIA-only failure: child traversal failed") {
+		t.Fatalf("expected explicit UIA-only failure suffix, got %q", last)
+	}
 }
 
 func TestViewerEventAdapter_TreeExpandStatusSet(t *testing.T) {

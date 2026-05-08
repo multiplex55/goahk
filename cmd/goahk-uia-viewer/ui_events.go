@@ -108,13 +108,21 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			if result.HighlightErr != nil {
 				warnings = append(warnings, formatWarning("HighlightNode", rootID, result.HighlightErr.Error()))
 			}
+			isUIAOnly := result.Root.State.RequestedMode == inspect.InspectModeUIAOnly
 			if len(warnings) > 0 {
 				status = "loaded with warning: " + strings.Join(warnings, "; ")
+			}
+			if result.ChildLoadErr != nil {
+				status = "UIA root loaded, but child traversal failed: " + result.ChildLoadErr.Error()
+				if isUIAOnly {
+					status = "ERROR " + status
+				}
 			}
 			if result.DetailsErr != nil && result.Details.StatusText != "" {
 				status = status + "; " + result.Details.StatusText
 			}
-			if result.Root.State.FallbackUsed {
+			didFallbackSwitch := result.Root.State.RequestedMode != result.Root.State.ActiveMode
+			if result.Root.State.FallbackUsed && didFallbackSwitch {
 				status = status + "; fallback mode active: degraded HWND/compatibility tree, selector parity may differ (" + modeSummary + ")"
 			} else {
 				status = status + "; mode: " + modeSummary
@@ -129,7 +137,10 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			case "unavailable":
 				status += "; source: fallback to HWND/ACC"
 			}
-			if result.Root.State.RequestedMode == inspect.InspectModeUIAOnly && result.Root.State.ActiveMode != inspect.InspectModeUIAOnly {
+			if isUIAOnly && result.ChildLoadErr != nil {
+				status += "; UIA-only failure: child traversal failed"
+			}
+			if isUIAOnly && result.Root.State.ActiveMode != inspect.InspectModeUIAOnly {
 				status += "; UIA-only failure: fallback disabled"
 			}
 			if shallowTreeWarning(result) != "" {
