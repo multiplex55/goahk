@@ -201,6 +201,24 @@ func TestProviderAdapter_InspectElementPreservesPropertyStateGranularity(t *test
 	}
 }
 
+func TestProviderAdapter_EmptyAutomationIDIsEmptyNotUnsupported(t *testing.T) {
+	el := &uiaElement{AutomationID: "   ", PropertyStates: map[string]string{"AutomationId": propertyStatusEmpty}}
+	mapped := toInspectElement("node:id", "", el)
+	if got := mapped.PropertyStates["AutomationId"]; got != propertyStatusEmpty {
+		t.Fatalf("AutomationId status=%q", got)
+	}
+	if mapped.UnsupportedProps["AutomationId"] {
+		t.Fatalf("AutomationId should not be unsupported when empty")
+	}
+}
+
+func TestProviderAdapter_PatternActionsReflectExplicitSupportOnly(t *testing.T) {
+	actions := patternActionsForElement(&uiaElement{SupportedPatterns: []string{"Invoke"}, PropertyStates: map[string]string{"Value": propertyStatusOK}, IsEnabled: true})
+	if len(actions) != 1 || actions[0].Pattern != "Invoke" {
+		t.Fatalf("unexpected inferred actions: %+v", actions)
+	}
+}
+
 func TestProviderAdapter_NormalizationSemanticStates(t *testing.T) {
 	t.Run("string normalization states", func(t *testing.T) {
 		cases := []struct {
