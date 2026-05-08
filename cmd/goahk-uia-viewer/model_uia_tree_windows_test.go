@@ -197,3 +197,44 @@ func TestUIATreeFakeNotepadTree_ConfiguredAutoExpandMarksExpandedNodes(t *testin
 		t.Fatalf("leaf nodes should not be auto-expanded by default")
 	}
 }
+
+func TestUIATreeSetChildren_NoPlaceholderForKnownLeaf(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	zero := 0
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "leaf", HasChildren: true, ChildCount: &zero}})
+
+	leaf, ok := m.ItemByID("leaf")
+	if !ok {
+		t.Fatal("expected leaf node")
+	}
+	if leaf.ChildCount() != 0 {
+		t.Fatalf("expected known leaf to have no placeholder child, got %d", leaf.ChildCount())
+	}
+}
+
+func TestUIATreeSetChildren_PlaceholderOnlyForPotentialChildren(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	one := 1
+	m.SetChildren("root", []inspect.TreeNodeDTO{
+		{NodeID: "unknown"},                        // no child count info
+		{NodeID: "known-parent", ChildCount: &one}, // explicit children available
+		{NodeID: "known-leaf", HasChildren: false}, // explicit leaf by flag
+	})
+
+	unknown, _ := m.ItemByID("unknown")
+	if unknown.ChildCount() != 1 || !unknown.ChildAt(0).(*uiaTreeNode).placeholder {
+		t.Fatalf("unknown node should keep lazy placeholder, got count=%d", unknown.ChildCount())
+	}
+
+	parent, _ := m.ItemByID("known-parent")
+	if parent.ChildCount() != 1 || !parent.ChildAt(0).(*uiaTreeNode).placeholder {
+		t.Fatalf("known parent should have placeholder child, got count=%d", parent.ChildCount())
+	}
+
+	leaf, _ := m.ItemByID("known-leaf")
+	if leaf.ChildCount() != 0 {
+		t.Fatalf("known leaf should not have placeholder, got %d", leaf.ChildCount())
+	}
+}

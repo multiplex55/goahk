@@ -126,9 +126,11 @@ func (m *uiaTreeModel) SetChildren(nodeID string, children []inspect.TreeNodeDTO
 		child.TreeNodeDTO = ch
 		child.parent = parent
 		child.placeholder = false
-		child.maybeHasChildren = true
-		if !m.AreChildrenLoaded(ch.NodeID) {
+		child.maybeHasChildren = maybeHasChildren(ch)
+		if child.maybeHasChildren && !m.AreChildrenLoaded(ch.NodeID) {
 			m.attachPlaceholder(child)
+		} else {
+			child.children = filterOutPlaceholders(child.children)
 		}
 		parent.children = append(parent.children, child)
 	}
@@ -190,6 +192,14 @@ func (m *uiaTreeModel) attachPlaceholder(parent *uiaTreeNode) {
 	}
 	placeholder := &uiaTreeNode{id: NodeID(parent.NodeID + "#placeholder"), parent: parent, placeholder: true}
 	parent.children = append(parent.children, placeholder)
+}
+
+func maybeHasChildren(node inspect.TreeNodeDTO) bool {
+	if node.ChildCount != nil {
+		return *node.ChildCount > 0
+	}
+	// Unknown child count keeps lazy-loading possible for discovered nodes.
+	return true
 }
 
 func (m *uiaTreeModel) NodeByID(nodeID string) (inspect.TreeNodeDTO, bool) {

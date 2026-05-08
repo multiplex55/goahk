@@ -15,14 +15,15 @@ type queueMarshaller struct{ ch chan func() }
 func (m *queueMarshaller) Queue(fn func()) { m.ch <- fn }
 
 type guardedView struct {
-	mu       sync.Mutex
-	queued   bool
-	busy     []bool
-	status   []string
-	updates  int
-	expanded []string
-	selected []string
-	fatal    []string
+	mu              sync.Mutex
+	queued          bool
+	busy            []bool
+	status          []string
+	updates         int
+	expanded        []string
+	childrenUpdated []string
+	selected        []string
+	fatal           []string
 }
 
 func (v *guardedView) enterQueue()                                        { v.mu.Lock(); v.queued = true; v.mu.Unlock() }
@@ -33,9 +34,12 @@ func (v *guardedView) ShowFatal(s string)                                 { v.mu
 func (v *guardedView) UpdateWindowDetails(inspect.GetNodeDetailsResponse) { v.updates++ }
 func (v *guardedView) UpdateNodeDetails(inspect.GetNodeDetailsResponse)   { v.updates++ }
 func (v *guardedView) UpdateTreeRoot(inspect.TreeNodeDTO)                 { v.updates++ }
-func (v *guardedView) UpdateNodeChildren(string, []inspect.TreeNodeDTO)   { v.updates++ }
-func (v *guardedView) ExpandTreeNode(nodeID string)                       { v.expanded = append(v.expanded, nodeID) }
-func (v *guardedView) SelectTreeNode(nodeID string)                       { v.selected = append(v.selected, nodeID) }
+func (v *guardedView) UpdateNodeChildren(nodeID string, _ []inspect.TreeNodeDTO) {
+	v.updates++
+	v.childrenUpdated = append(v.childrenUpdated, nodeID)
+}
+func (v *guardedView) ExpandTreeNode(nodeID string) { v.expanded = append(v.expanded, nodeID) }
+func (v *guardedView) SelectTreeNode(nodeID string) { v.selected = append(v.selected, nodeID) }
 
 func TestViewerEventAdapter_WindowSelectionPipeline(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
@@ -382,5 +386,37 @@ func TestOnWindowSelectedShowsFallbackStatus(t *testing.T) {
 	status := view.status[len(view.status)-1]
 	if !strings.Contains(status, "partial load") || !strings.Contains(status, "GetNodeDetails") {
 		t.Fatalf("expected partial fallback status, got %q", status)
+	}
+}
+
+func TestOnWindowSelectedUpdatesChildrenForEveryAutoExpandLevel(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{
+			childrenByNode: map[string][]inspect.TreeNodeDTO{
+				"root": {{NodeID: "a"}, {NodeID: "b"}},
+				"a":    {{NodeID: "a1"}},
+				"b":    {},
+			},
+		},
+		root: inspect.TreeNodeDTO{NodeID: "root"},
+	}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.autoExpandDepth = func() int { return 2 }
+
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+
+	want := []string{"root", "root", "child-1"}
+	if len(view.childrenUpdated) != len(want) {
+		t.Fatalf("expected UpdateNodeChildren calls for every expanded level %v, got %v", want, view.childrenUpdated)
+	}
+	for i := range want {
+		if view.childrenUpdated[i] != want[i] {
+			t.Fatalf("expected UpdateNodeChildren order %v, got %v", want, view.childrenUpdated)
+		}
 	}
 }
