@@ -104,6 +104,21 @@ func populateElementProperties(el *uiaBridgeElement) {
 		}
 		*dst = strings.TrimSpace(r.S)
 	}
+	setOptStr := func(name string, prop int32, dst **string) {
+		v, err := uiaGetCurrentPropertyValue(el.NativePtr, prop)
+		if err != nil {
+			markPropertyErr(el, name, err)
+			return
+		}
+		r := decodeVariant(v)
+		el.PropertyState[name] = r.Status
+		s := strings.TrimSpace(r.S)
+		if s == "" {
+			*dst = nil
+			return
+		}
+		*dst = &s
+	}
 	setBool := func(name string, prop int32, dst *bool) {
 		v, err := uiaGetCurrentPropertyValue(el.NativePtr, prop)
 		if err != nil {
@@ -127,23 +142,23 @@ func populateElementProperties(el *uiaBridgeElement) {
 	setStr("ControlType", uiaPropertyControlType, &el.Element.ControlType)
 	setStr("LocalizedControlType", uiaPropertyLocalizedCtl, &el.Element.LocalizedControlType)
 	setStr("Name", uiaPropertyName, &el.Element.Name)
-	setStr("Value", 30045, strPtrAssign(&el.Element.Value))
+	setOptStr("Value", 30045, &el.Element.Value)
 	setStr("AutomationId", uiaPropertyAutomationID, &el.Element.AutomationID)
 	setStr("ClassName", uiaPropertyClassName, &el.Element.ClassName)
-	setStr("HelpText", uiaPropertyHelpText, strPtrAssign(&el.Element.HelpText))
-	setStr("AccessKey", uiaPropertyAccessKey, strPtrAssign(&el.Element.AccessKey))
-	setStr("AcceleratorKey", uiaPropertyAccelerator, strPtrAssign(&el.Element.AcceleratorKey))
+	setOptStr("HelpText", uiaPropertyHelpText, &el.Element.HelpText)
+	setOptStr("AccessKey", uiaPropertyAccessKey, &el.Element.AccessKey)
+	setOptStr("AcceleratorKey", uiaPropertyAccelerator, &el.Element.AcceleratorKey)
 	setBool("HasKeyboardFocus", uiaPropertyHasFocus, &el.Element.HasKeyboardFocus)
 	setBool("IsKeyboardFocusable", uiaPropertyIsFocusable, &el.Element.IsKeyboardFocusable)
-	setStr("ItemType", uiaPropertyItemType, strPtrAssign(&el.Element.ItemType))
+	setOptStr("ItemType", uiaPropertyItemType, &el.Element.ItemType)
 	setInt("ProcessId", uiaPropertyProcessID, &el.Element.ProcessID)
 	setBool("IsEnabled", uiaPropertyIsEnabled, &el.Element.IsEnabled)
 	setBool("IsPassword", uiaPropertyIsPassword, &el.Element.IsPassword)
 	setBool("IsOffscreen", uiaPropertyIsOffscreen, &el.Element.IsOffscreen)
 	setStr("FrameworkId", uiaPropertyFrameworkID, &el.Element.FrameworkID)
 	setBool("IsRequiredForForm", uiaPropertyIsRequired, &el.Element.IsRequiredForForm)
-	setStr("ItemStatus", uiaPropertyItemStatus, strPtrAssign(&el.Element.ItemStatus))
-	setStr("LabeledBy", uiaPropertyLabeledBy, strPtrAssign(&el.Element.LabeledBy))
+	setOptStr("ItemStatus", uiaPropertyItemStatus, &el.Element.ItemStatus)
+	setOptStr("LabeledBy", uiaPropertyLabeledBy, &el.Element.LabeledBy)
 }
 
 func markPropertyErr(el *uiaBridgeElement, name string, err error) {

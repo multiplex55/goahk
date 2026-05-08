@@ -160,3 +160,24 @@ func TestACCTraversalAndPropertyMapping(t *testing.T) {
 		t.Fatalf("expected stable copyable distinct path, got first=%q second=%q", details.ACCPath, details2.ACCPath)
 	}
 }
+
+func TestACCDetailsPropertyStatus_EmptyVsUnsupported(t *testing.T) {
+	bridge := &fakeACCBridge{
+		root:  &accBridgeElement{Key: "root", RuntimeID: "root", HWND: "0x1", Name: "Window", Role: "Window"},
+		byKey: map[string]*accBridgeElement{"root": {Key: "root", RuntimeID: "root", HWND: "0x1", Name: "Window", Role: "Window"}},
+	}
+	deps := &nativeACCDeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*accBridgeElement{}, keyToRef: map[string]string{}}
+	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(deps), newUIAAdapter(deps), newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	rootResp, _ := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeWindowTree})
+	details, err := provider.GetNodeDetails(context.Background(), GetNodeDetailsRequest{NodeID: rootResp.Root.NodeID})
+	if err != nil {
+		t.Fatalf("details err: %v", err)
+	}
+	status := map[string]string{}
+	for _, p := range details.Properties {
+		status[p.Name] = p.Status
+	}
+	if status["Value"] != "empty" || status["HelpText"] != "unsupported" {
+		t.Fatalf("expected Value=empty and HelpText=unsupported, got %#v", status)
+	}
+}

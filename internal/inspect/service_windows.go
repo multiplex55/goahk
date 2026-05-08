@@ -243,8 +243,10 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 		source.Fallback = "none"
 	}
 	source.NodeCount = len(path)
-	if selected.ChildCount != nil {
-		source.ChildCount = *selected.ChildCount
+	if len(path) > 0 {
+		if leafChildren := path[len(path)-1].ChildCount; leafChildren != nil {
+			source.ChildCount = *leafChildren
+		}
 	}
 	return GetNodeDetailsResponse{
 		WindowInfo:   windowInfo,

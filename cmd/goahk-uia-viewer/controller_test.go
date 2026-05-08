@@ -128,6 +128,9 @@ func (f *fakeInspectService) RefreshNodeDetails(context.Context, inspect.Refresh
 func (f *fakeInspectService) GetDiagnostics(context.Context, inspect.GetDiagnosticsRequest) (inspect.GetDiagnosticsResponse, error) {
 	return inspect.GetDiagnosticsResponse{}, nil
 }
+func (f *fakeInspectService) DumpTree(context.Context, inspect.DumpTreeRequest) (inspect.DumpTreeResponse, error) {
+	return inspect.DumpTreeResponse{}, nil
+}
 
 type fakeClipboard struct{ copied []string }
 

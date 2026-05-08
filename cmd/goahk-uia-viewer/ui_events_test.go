@@ -420,3 +420,17 @@ func TestOnWindowSelectedUpdatesChildrenForEveryAutoExpandLevel(t *testing.T) {
 		}
 	}
 }
+
+func TestOnWindowSelectedAutoExpandsLoadedRootChildren(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{"root": {{NodeID: "child"}}}}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if len(view.expanded) == 0 || view.expanded[0] != "root" {
+		t.Fatalf("expected root auto expansion, got %v", view.expanded)
+	}
+}

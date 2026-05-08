@@ -98,3 +98,7 @@ func (unsupportedProvider) RefreshNodeDetails(context.Context, RefreshNodeDetail
 func (unsupportedProvider) GetDiagnostics(context.Context, GetDiagnosticsRequest) (GetDiagnosticsResponse, error) {
 	return GetDiagnosticsResponse{}, ErrProviderActionUnsupported
 }
+
+func (unsupportedProvider) DumpTree(context.Context, DumpTreeRequest) (DumpTreeResponse, error) {
+	return DumpTreeResponse{}, ErrProviderActionUnsupported
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -42,6 +43,7 @@ type Service interface {
 	RefreshNodeChildren(context.Context, RefreshNodeChildrenRequest) (RefreshNodeChildrenResponse, error)
 	RefreshNodeDetails(context.Context, RefreshNodeDetailsRequest) (RefreshNodeDetailsResponse, error)
 	GetDiagnostics(context.Context, GetDiagnosticsRequest) (GetDiagnosticsResponse, error)
+	DumpTree(context.Context, DumpTreeRequest) (DumpTreeResponse, error)
 }
 
 type WindowsProvider interface {
@@ -69,6 +71,20 @@ type WindowsProvider interface {
 	RefreshNodeChildren(context.Context, RefreshNodeChildrenRequest) (RefreshNodeChildrenResponse, error)
 	RefreshNodeDetails(context.Context, RefreshNodeDetailsRequest) (RefreshNodeDetailsResponse, error)
 	GetDiagnostics(context.Context, GetDiagnosticsRequest) (GetDiagnosticsResponse, error)
+}
+
+type DumpTreeRequest struct {
+	HWND    string      `json:"hwnd,omitempty"`
+	NodeID  string      `json:"nodeID,omitempty"`
+	Mode    InspectMode `json:"mode,omitempty"`
+	Depth   int         `json:"depth,omitempty"`
+	Refresh bool        `json:"refresh,omitempty"`
+}
+
+type DumpTreeResponse struct {
+	RootNodeID string `json:"rootNodeID"`
+	Depth      int    `json:"depth"`
+	Text       string `json:"text"`
 }
 
 type service struct {
@@ -639,6 +655,64 @@ func (s service) RefreshNodeDetails(ctx context.Context, req RefreshNodeDetailsR
 func (s service) GetDiagnostics(ctx context.Context, req GetDiagnosticsRequest) (GetDiagnosticsResponse, error) {
 	resp, err := s.provider.GetDiagnostics(ctx, req)
 	return resp, mapProviderError(err)
+}
+
+func (s service) DumpTree(ctx context.Context, req DumpTreeRequest) (DumpTreeResponse, error) {
+	depth := req.Depth
+	if depth <= 0 {
+		depth = 3
+	}
+	rootID := req.NodeID
+	if rootID == "" {
+		if req.HWND == "" {
+			return DumpTreeResponse{}, ErrInvalidNodeID
+		}
+		root, err := s.GetTreeRoot(ctx, GetTreeRootRequest{HWND: req.HWND, Refresh: req.Refresh, Mode: req.Mode})
+		if err != nil {
+			return DumpTreeResponse{}, err
+		}
+		rootID = root.Root.NodeID
+	}
+	node, err := s.GetNodeDetails(ctx, GetNodeDetailsRequest{NodeID: rootID})
+	if err != nil {
+		return DumpTreeResponse{}, err
+	}
+	lines := []string{formatDumpNodeLine(node.Element.ControlType, node.Element.LocalizedControlType, node.Element.Name)}
+	if depth > 1 {
+		if err := s.dumpNodeChildren(ctx, rootID, 1, depth, &lines); err != nil {
+			return DumpTreeResponse{}, err
+		}
+	}
+	return DumpTreeResponse{RootNodeID: rootID, Depth: depth, Text: strings.Join(lines, "\n")}, nil
+}
+
+func (s service) dumpNodeChildren(ctx context.Context, parentID string, level, maxDepth int, lines *[]string) error {
+	if level >= maxDepth {
+		return nil
+	}
+	children, err := s.GetNodeChildren(ctx, GetNodeChildrenRequest{NodeID: parentID})
+	if err != nil {
+		return err
+	}
+	for _, child := range children.Children {
+		indent := strings.Repeat("  ", level)
+		*lines = append(*lines, indent+formatDumpNodeLine(child.ControlType, child.LocalizedControlType, child.Name))
+		if err := s.dumpNodeChildren(ctx, child.NodeID, level+1, maxDepth, lines); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func formatDumpNodeLine(controlType, localizedControlType, name string) string {
+	typ := strings.TrimSpace(controlType)
+	if strings.TrimSpace(localizedControlType) != "" {
+		typ = strings.TrimSpace(localizedControlType)
+	}
+	if typ == "" {
+		typ = "unknown"
+	}
+	return fmt.Sprintf("%s \"%s\"", typ, strings.TrimSpace(name))
 }
 
 func mapProviderError(err error) error {

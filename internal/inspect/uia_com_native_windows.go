@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"goahk/internal/window"
+	"golang.org/x/sys/windows"
 )
 
 const (
@@ -244,7 +245,7 @@ func decodeVariant(v comVariant) uiaPropRead {
 		if v.Val == 0 {
 			return uiaPropRead{Status: propertyStatusEmpty}
 		}
-		s := syscall.UTF16PtrToString((*uint16)(unsafe.Pointer(uintptr(v.Val))))
+		s := windows.UTF16PtrToString((*uint16)(unsafe.Pointer(uintptr(v.Val))))
 		if s == "" {
 			return uiaPropRead{Status: propertyStatusEmpty}
 		}
