@@ -72,7 +72,10 @@ func mapWindowInfoRows(details *inspect.GetNodeDetailsResponse) []infoTableRow {
 		{Property: "Provider", Value: fallback(details.Source.Provider)},
 		{Property: "Backend", Value: fallback(details.Source.Backend)},
 		{Property: "Mode", Value: fallback(string(details.Source.Mode))},
-		{Property: "Fallback", Value: yesNo(details.Source.Mode != "" && details.Source.Mode != inspect.InspectModeUIATree && details.Source.Mode != inspect.InspectModeUIAOnly)},
+		{Property: "Traversal", Value: fallback(details.Source.Traversal)},
+		{Property: "Fallback", Value: fallback(details.Source.Fallback)},
+		{Property: "Node Count", Value: intOrNA(details.Source.NodeCount)},
+		{Property: "Children Count", Value: intOrNA(details.Source.ChildCount)},
 	}
 	if details.Source.Mode == inspect.InspectModeHWNDTree {
 		rows = append(rows, infoTableRow{Property: "Warning", Value: "HWND fallback is degraded; AHK parity is not expected"})

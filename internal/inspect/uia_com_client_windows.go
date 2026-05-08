@@ -20,6 +20,30 @@ type nativeUIAComClient struct {
 	mu                  sync.RWMutex
 }
 
+type uiaTraversalStrategy string
+
+const (
+	uiaTraversalRawTrueCondition uiaTraversalStrategy = "raw-true-condition"
+	uiaTraversalControlView      uiaTraversalStrategy = "control-view"
+	uiaTraversalContentView      uiaTraversalStrategy = "content-view"
+)
+
+type uiaTraversalOptions struct {
+	Strategy uiaTraversalStrategy
+}
+
+func normalizeTraversalOptions(opts *uiaTraversalOptions) uiaTraversalOptions {
+	if opts == nil {
+		return uiaTraversalOptions{Strategy: uiaTraversalRawTrueCondition}
+	}
+	switch opts.Strategy {
+	case uiaTraversalControlView, uiaTraversalContentView, uiaTraversalRawTrueCondition:
+		return *opts
+	default:
+		return uiaTraversalOptions{Strategy: uiaTraversalRawTrueCondition}
+	}
+}
+
 type uiaNativeAutomationAPI interface {
 	ElementFromHandle(*uiaWorkerState, window.HWND) (*uiaBridgeElement, error)
 	FocusedElement(*uiaWorkerState) (*uiaBridgeElement, error)

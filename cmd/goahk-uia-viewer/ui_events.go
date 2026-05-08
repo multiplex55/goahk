@@ -122,8 +122,10 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			switch strings.ToLower(strings.TrimSpace(result.Root.Source.Backend)) {
 			case "native-com":
 				status += "; source: native-com UIA success"
-			case "synthetic":
-				status += "; source: synthetic UIA/compatibility tree"
+			case "native-msaa":
+				status += "; source: native-msaa compatibility tree"
+			case "hwnd":
+				status += "; source: HWND compatibility tree"
 			case "unavailable":
 				status += "; source: fallback to HWND/ACC"
 			}

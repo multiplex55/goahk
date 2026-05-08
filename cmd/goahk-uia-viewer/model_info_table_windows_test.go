@@ -25,7 +25,7 @@ func TestInfoRowsPrimaryPathUsesWindowInfo(t *testing.T) {
 			Process: "notepad.exe",
 			PID:     1337,
 		},
-		Source: inspect.ProviderSourceDTO{Provider: "uia", Mode: inspect.InspectModeUIATree},
+		Source: inspect.ProviderSourceDTO{Provider: "uia", Mode: inspect.InspectModeUIATree, Traversal: "raw-true-condition", Fallback: "none", NodeCount: 4, ChildCount: 2},
 	}
 
 	rows := mapWindowInfoRows(details)
@@ -39,7 +39,10 @@ func TestInfoRowsPrimaryPathUsesWindowInfo(t *testing.T) {
 	assertInfoRowValue(t, rows, "PID", "1337")
 	assertInfoRowValue(t, rows, "Provider", "uia")
 	assertInfoRowValue(t, rows, "Mode", "UIA_TREE")
-	assertInfoRowValue(t, rows, "Fallback", "No")
+	assertInfoRowValue(t, rows, "Traversal", "raw-true-condition")
+	assertInfoRowValue(t, rows, "Fallback", "none")
+	assertInfoRowValue(t, rows, "Node Count", "4")
+	assertInfoRowValue(t, rows, "Children Count", "2")
 }
 
 func TestInfoRowsFallbackToElementWhenWindowInfoEmpty(t *testing.T) {
@@ -58,7 +61,7 @@ func TestInfoRowsFallbackToElementWhenWindowInfoEmpty(t *testing.T) {
 			{Name: "ProcessName", Value: &processName, Status: "ok"},
 			{Name: "ProcessId", Value: &processID, Status: "ok"},
 		},
-		Source: inspect.ProviderSourceDTO{Provider: "acc", Mode: inspect.InspectModeWindowTree},
+		Source: inspect.ProviderSourceDTO{Provider: "acc", Mode: inspect.InspectModeWindowTree, Traversal: "control-view", Fallback: "active", NodeCount: 3, ChildCount: 1},
 	}
 
 	rows := mapWindowInfoRows(details)
@@ -72,7 +75,10 @@ func TestInfoRowsFallbackToElementWhenWindowInfoEmpty(t *testing.T) {
 	assertInfoRowValue(t, rows, "PID", "99")
 	assertInfoRowValue(t, rows, "Provider", "acc")
 	assertInfoRowValue(t, rows, "Mode", "WINDOW_TREE")
-	assertInfoRowValue(t, rows, "Fallback", "Yes")
+	assertInfoRowValue(t, rows, "Traversal", "control-view")
+	assertInfoRowValue(t, rows, "Fallback", "active")
+	assertInfoRowValue(t, rows, "Node Count", "3")
+	assertInfoRowValue(t, rows, "Children Count", "1")
 }
 
 func TestPropertyValueFromList_ExactNameHit(t *testing.T) {

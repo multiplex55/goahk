@@ -95,10 +95,14 @@ type InspectModeState struct {
 }
 
 type ProviderSourceDTO struct {
-	Provider string      `json:"provider,omitempty"`
-	Source   string      `json:"source,omitempty"`
-	Backend  string      `json:"backend,omitempty"`
-	Mode     InspectMode `json:"mode,omitempty"`
+	Provider   string      `json:"provider,omitempty"`
+	Source     string      `json:"source,omitempty"`
+	Backend    string      `json:"backend,omitempty"`
+	Mode       InspectMode `json:"mode,omitempty"`
+	Traversal  string      `json:"traversal,omitempty"`
+	Fallback   string      `json:"fallback,omitempty"`
+	NodeCount  int         `json:"nodeCount,omitempty"`
+	ChildCount int         `json:"childCount,omitempty"`
 }
 
 type InspectDiagnostics struct {

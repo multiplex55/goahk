@@ -1241,3 +1241,27 @@ func TestGetTreeRoot_UsesHWNDFallbackOnlyWhenUIAFails(t *testing.T) {
 		t.Fatalf("expected HWND source, got %+v", resp.Source)
 	}
 }
+
+func TestSourceMetadataForMode_BackendTraversalLabels(t *testing.T) {
+	t.Run("uia tree defaults to raw true condition", func(t *testing.T) {
+		got := sourceMetadataForMode(InspectModeUIATree)
+		if got.Provider != "uia" || got.Traversal != "raw-true-condition" {
+			t.Fatalf("unexpected UIA metadata: %+v", got)
+		}
+		if got.Backend != "native-com" && got.Backend != "unavailable" {
+			t.Fatalf("unexpected UIA backend: %+v", got)
+		}
+	})
+	t.Run("window tree uses msaa control view labels", func(t *testing.T) {
+		got := sourceMetadataForMode(InspectModeWindowTree)
+		if got.Provider != "acc" || got.Backend != "native-msaa" || got.Traversal != "control-view" {
+			t.Fatalf("unexpected WINDOW_TREE metadata: %+v", got)
+		}
+	})
+	t.Run("hwnd tree uses hwnd content view labels", func(t *testing.T) {
+		got := sourceMetadataForMode(InspectModeHWNDTree)
+		if got.Provider != "hwnd" || got.Backend != "hwnd" || got.Traversal != "content-view" {
+			t.Fatalf("unexpected HWND_TREE metadata: %+v", got)
+		}
+	})
+}
