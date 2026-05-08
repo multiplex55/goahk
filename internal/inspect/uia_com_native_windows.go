@@ -30,6 +30,14 @@ func comRelease(ptr uintptr) {
 	_, _, _ = syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 2*unsafe.Sizeof(uintptr(0)))), ptr)
 }
 
+func comAddRef(ptr uintptr) {
+	if ptr == 0 {
+		return
+	}
+	vt := *(*uintptr)(unsafe.Pointer(ptr))
+	_, _, _ = syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 1*unsafe.Sizeof(uintptr(0)))), ptr)
+}
+
 func hresultErr(op string, hr uintptr) error {
 	if int32(hr) >= 0 {
 		return nil
@@ -126,6 +134,28 @@ func uiaElementRuntimeID(el uintptr) (string, error) {
 		return "", nil
 	}
 	defer syscall.SyscallN(procSafeArrayDestroy.Addr(), arr)
-	// lightweight fallback key; detailed SAFEARRAY parsing can be added later.
-	return fmt.Sprintf("ptr:%x", el), nil
+	lb, ub := int32(0), int32(0)
+	if hr, _, _ := syscall.SyscallN(procSafeArrayGetLBound.Addr(), arr, 1, uintptr(unsafe.Pointer(&lb))); int32(hr) < 0 {
+		return "", hresultErr("SafeArrayGetLBound(RuntimeID)", hr)
+	}
+	if hr, _, _ := syscall.SyscallN(procSafeArrayGetUBound.Addr(), arr, 1, uintptr(unsafe.Pointer(&ub))); int32(hr) < 0 {
+		return "", hresultErr("SafeArrayGetUBound(RuntimeID)", hr)
+	}
+	if ub < lb {
+		return "", nil
+	}
+	runtimeID := make([]int, 0, ub-lb+1)
+	for i := lb; i <= ub; i++ {
+		v := int32(0)
+		iCopy := i
+		hr, _, _ := syscall.SyscallN(procSafeArrayGetElement.Addr(), arr, uintptr(unsafe.Pointer(&iCopy)), uintptr(unsafe.Pointer(&v)))
+		if int32(hr) < 0 {
+			return "", hresultErr("SafeArrayGetElement(RuntimeID)", hr)
+		}
+		runtimeID = append(runtimeID, int(v))
+	}
+	if len(runtimeID) == 0 {
+		return "", nil
+	}
+	return runtimeIDString(runtimeID), nil
 }
