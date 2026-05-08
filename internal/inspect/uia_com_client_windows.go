@@ -32,6 +32,16 @@ var uiaNativeAPI uiaNativeAutomationAPI = nativeUIAAPI{}
 
 type nativeUIAAPI struct{}
 
+var (
+	invokePatternCall          = uiaInvokePatternInvoke
+	selectPatternCall          = uiaSelectionItemPatternSelect
+	setValuePatternCall        = uiaValuePatternSetValue
+	doDefaultActionPatternCall = uiaLegacyIAccessiblePatternDoDefaultAction
+	togglePatternCall          = uiaTogglePatternToggle
+	expandPatternCall          = uiaExpandCollapsePatternExpand
+	collapsePatternCall        = uiaExpandCollapsePatternCollapse
+)
+
 func wrapNativeElement(ptr uintptr, hwnd window.HWND) (*uiaBridgeElement, error) {
 	if ptr == 0 {
 		return nil, &UIAComUnavailableError{Op: "WrapElement", Err: errors.New("nil COM element")}
@@ -288,33 +298,57 @@ func (c *nativeUIAComClient) Children(el *uiaBridgeElement) ([]*uiaBridgeElement
 	return out, err
 }
 func (c *nativeUIAComClient) Invoke(el *uiaBridgeElement) error {
-	return c.requireActionable(el, "Invoke", "Invoke")
+	return c.executePatternAction(el, "Invoke", "Invoke", func(ptr uintptr) error { return invokePatternCall(ptr) })
 }
 func (c *nativeUIAComClient) Select(el *uiaBridgeElement) error {
-	return c.requireActionable(el, "Select", "SelectionItem")
+	return c.executePatternAction(el, "Select", "SelectionItem", func(ptr uintptr) error { return selectPatternCall(ptr) })
 }
-func (c *nativeUIAComClient) SetValue(el *uiaBridgeElement, _ string) error {
-	return c.requireActionable(el, "SetValue", "Value")
-}
-func (c *nativeUIAComClient) DoDefaultAction(el *uiaBridgeElement) error {
-	return c.requireActionable(el, "DoDefaultAction", "LegacyIAccessible")
-}
-func (c *nativeUIAComClient) Toggle(el *uiaBridgeElement) error {
-	return c.requireActionable(el, "Toggle", "Toggle")
-}
-func (c *nativeUIAComClient) Expand(el *uiaBridgeElement) error {
-	return c.requireActionable(el, "Expand", "ExpandCollapse")
-}
-func (c *nativeUIAComClient) Collapse(el *uiaBridgeElement) error {
-	return c.requireActionable(el, "Collapse", "ExpandCollapse")
-}
-
-func (c *nativeUIAComClient) requireActionable(el *uiaBridgeElement, op, pattern string) error {
+func (c *nativeUIAComClient) SetValue(el *uiaBridgeElement, value string) error {
 	if el == nil {
 		return errUIANilElement
 	}
-	for _, supported := range el.SupportedPatterns {
+	if strings.TrimSpace(el.Key) == "" {
+		return &UIAElementStaleError{Op: "SetValue", Err: errors.New("element reference is stale")}
+	}
+	return c.executePatternAction(el, "SetValue", "Value", func(ptr uintptr) error { return setValuePatternCall(ptr, value) })
+}
+func (c *nativeUIAComClient) DoDefaultAction(el *uiaBridgeElement) error {
+	return c.executePatternAction(el, "DoDefaultAction", "LegacyIAccessible", func(ptr uintptr) error { return doDefaultActionPatternCall(ptr) })
+}
+func (c *nativeUIAComClient) Toggle(el *uiaBridgeElement) error {
+	return c.executePatternAction(el, "Toggle", "Toggle", func(ptr uintptr) error { return togglePatternCall(ptr) })
+}
+func (c *nativeUIAComClient) Expand(el *uiaBridgeElement) error {
+	return c.executePatternAction(el, "Expand", "ExpandCollapse", func(ptr uintptr) error { return expandPatternCall(ptr) })
+}
+func (c *nativeUIAComClient) Collapse(el *uiaBridgeElement) error {
+	return c.executePatternAction(el, "Collapse", "ExpandCollapse", func(ptr uintptr) error { return collapsePatternCall(ptr) })
+}
+
+func (c *nativeUIAComClient) executePatternAction(el *uiaBridgeElement, op, pattern string, call func(uintptr) error) error {
+	if el == nil {
+		return errUIANilElement
+	}
+	resolved, err := c.ElementByRuntimeID(el.Key)
+	if err != nil {
+		return err
+	}
+	for _, supported := range resolved.SupportedPatterns {
 		if strings.EqualFold(strings.TrimSpace(supported), pattern) {
+			var actionErr error
+			err := c.worker.Do(op, func(*uiaWorkerState) error {
+				if resolved.NativePtr == 0 {
+					return &UIAElementStaleError{Op: op, Err: errors.New("element pointer is stale")}
+				}
+				actionErr = call(resolved.NativePtr)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+			if actionErr != nil {
+				return actionErr
+			}
 			return nil
 		}
 	}
