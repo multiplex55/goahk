@@ -15,10 +15,10 @@ import (
 )
 
 type nativeUIAComClient struct {
-	worker              *uiaCOMWorker
-	elementsByRuntimeID map[string]*uiaBridgeElement
-	elementsByFallback  map[string]*uiaBridgeElement
-	mu                  sync.RWMutex
+	worker             *uiaCOMWorker
+	elementsByKey      map[string]*uiaBridgeElement
+	elementsByFallback map[string]*uiaBridgeElement
+	mu                 sync.RWMutex
 }
 
 type uiaTraversalStrategy string
@@ -67,7 +67,7 @@ var (
 	collapsePatternCall        = uiaExpandCollapsePatternCollapse
 )
 
-func wrapNativeElement(ptr uintptr, hwnd window.HWND) (*uiaBridgeElement, error) {
+func wrapNativeElement(ptr uintptr, hwnd window.HWND, parentKey string, siblingIndex int) (*uiaBridgeElement, error) {
 	if ptr == 0 {
 		return nil, &UIAComUnavailableError{Op: "WrapElement", Err: errors.New("nil COM element")}
 	}
@@ -75,14 +75,23 @@ func wrapNativeElement(ptr uintptr, hwnd window.HWND) (*uiaBridgeElement, error)
 	if err != nil {
 		return nil, err
 	}
-	key := canonicalRuntimeID(rid)
-	if key == "" {
-		key = fmt.Sprintf("ptr:%x", ptr)
-	}
+	key := canonicalUIAKey(rid, true)
 	comAddRef(ptr)
 	el := &uiaElement{RuntimeID: strings.TrimPrefix(key, "rid:"), HWND: hwnd.String()}
 	b := &uiaBridgeElement{Key: key, RuntimeID: key, AllowHWNDFallback: hwnd != 0, SupportedPatterns: nil, PropertyState: map[string]string{}, UnsupportedProperty: map[string]bool{}, NativePtr: ptr, Element: el}
 	populateElementProperties(b)
+	if b.Key == "" {
+		parent := canonicalUIAKey(parentKey, false)
+		if parent != "" && siblingIndex >= 0 {
+			controlType := strings.TrimSpace(b.Element.ControlType)
+			if controlType == "" {
+				controlType = strings.TrimSpace(b.Element.LocalizedControlType)
+			}
+			b.Key = fmt.Sprintf("path:%s/%d/%s/%s", parent, siblingIndex, controlType, strings.TrimSpace(b.Element.Name))
+		} else {
+			b.Key = fmt.Sprintf("ptr:%x", ptr)
+		}
+	}
 	populateSupportedPatterns(b)
 	return b, nil
 }
@@ -195,7 +204,7 @@ func (nativeUIAAPI) ElementFromHandle(state *uiaWorkerState, hwnd window.HWND) (
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElement(ptr, hwnd)
+	return wrapNativeElement(ptr, hwnd, "", -1)
 }
 
 func (nativeUIAAPI) FocusedElement(state *uiaWorkerState) (*uiaBridgeElement, error) {
@@ -203,7 +212,7 @@ func (nativeUIAAPI) FocusedElement(state *uiaWorkerState) (*uiaBridgeElement, er
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElement(ptr, 0)
+	return wrapNativeElement(ptr, 0, "", -1)
 }
 
 func (nativeUIAAPI) ElementFromPoint(state *uiaWorkerState, x, y int) (*uiaBridgeElement, error) {
@@ -211,7 +220,7 @@ func (nativeUIAAPI) ElementFromPoint(state *uiaWorkerState, x, y int) (*uiaBridg
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElement(ptr, 0)
+	return wrapNativeElement(ptr, 0, "", -1)
 }
 
 func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement) ([]*uiaBridgeElement, error) {
@@ -234,7 +243,7 @@ func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement
 		if getErr != nil {
 			return nil, getErr
 		}
-		child, wrapErr := wrapNativeElement(ptr, 0)
+		child, wrapErr := wrapNativeElement(ptr, 0, parent.Key, int(i))
 		if wrapErr != nil {
 			return nil, wrapErr
 		}
@@ -253,7 +262,7 @@ func (nativeUIAAPI) GetParent(state *uiaWorkerState, el *uiaBridgeElement) (*uia
 	if err != nil || parent == 0 {
 		return nil, err
 	}
-	return wrapNativeElement(parent, 0)
+	return wrapNativeElement(parent, 0, "", -1)
 }
 
 func newNativeUIAComClient() (uiaAutomationClient, error) {
@@ -262,9 +271,9 @@ func newNativeUIAComClient() (uiaAutomationClient, error) {
 		return nil, err
 	}
 	return &nativeUIAComClient{
-		worker:              worker,
-		elementsByRuntimeID: map[string]*uiaBridgeElement{},
-		elementsByFallback:  map[string]*uiaBridgeElement{},
+		worker:             worker,
+		elementsByKey:      map[string]*uiaBridgeElement{},
+		elementsByFallback: map[string]*uiaBridgeElement{},
 	}, nil
 }
 
@@ -294,19 +303,19 @@ func (c *nativeUIAComClient) ElementFromPoint(x, y int) (*uiaBridgeElement, erro
 	c.cacheBridgeElement(out)
 	return out, err
 }
-func (c *nativeUIAComClient) ElementByRuntimeID(runtimeID string) (*uiaBridgeElement, error) {
-	id := canonicalRuntimeID(runtimeID)
+func (c *nativeUIAComClient) ElementByKey(key string) (*uiaBridgeElement, error) {
+	id := canonicalUIAKey(key, false)
 	if id == "" {
-		return nil, &UIAElementStaleError{Op: "ElementByRuntimeID", Err: errors.New("runtime id is stale or unavailable")}
+		return nil, &UIAElementStaleError{Op: "ElementByKey", Err: errors.New("key is stale or unavailable")}
 	}
 	c.mu.RLock()
-	el, ok := c.elementsByRuntimeID[id]
+	el, ok := c.elementsByKey[id]
 	c.mu.RUnlock()
 	if !ok || el == nil {
 		if fallback, ok := c.elementsByFallback[id]; ok && fallback != nil {
 			return cloneBridgeElement(fallback), nil
 		}
-		return nil, &UIAElementStaleError{Op: "ElementByRuntimeID", Err: fmt.Errorf("runtime id %q is stale or unavailable", id)}
+		return nil, &UIAElementStaleError{Op: "ElementByKey", Err: fmt.Errorf("key %q is stale or unavailable", id)}
 	}
 	return cloneBridgeElement(el), nil
 }
@@ -371,7 +380,7 @@ func (c *nativeUIAComClient) executePatternAction(el *uiaBridgeElement, op, patt
 	if el == nil {
 		return errUIANilElement
 	}
-	resolved, err := c.ElementByRuntimeID(el.Key)
+	resolved, err := c.ElementByKey(el.Key)
 	if err != nil {
 		return err
 	}
@@ -405,30 +414,43 @@ func runtimeIDString(runtimeID []int) string {
 	return fmt.Sprintf("rid:%s", strings.Join(parts, "."))
 }
 
-func canonicalRuntimeID(raw string) string {
-	rid := strings.TrimSpace(raw)
-	if rid == "" {
+func canonicalUIAKey(raw string, isRuntimeID bool) string {
+	key := strings.TrimSpace(raw)
+	if key == "" {
 		return ""
 	}
-	if strings.HasPrefix(rid, "rid:") {
-		return rid
+	for _, prefix := range []string{"rid:", "ptr:", "path:", "fallback:"} {
+		if strings.HasPrefix(key, prefix) {
+			return key
+		}
 	}
-	return "rid:" + rid
+	if isRuntimeID {
+		return "rid:" + key
+	}
+	return key
 }
 
 func (c *nativeUIAComClient) cacheBridgeElement(el *uiaBridgeElement) {
 	if el == nil {
 		return
 	}
-	id := canonicalRuntimeID(el.Key)
+	id := canonicalUIAKey(el.Key, false)
 	if id == "" && el.Element != nil {
-		id = canonicalRuntimeID(el.Element.RuntimeID)
+		id = canonicalUIAKey(el.Element.RuntimeID, true)
 	}
-	if id == "" && el.ParentKey != "" && el.Element != nil {
-		id = canonicalRuntimeID(el.ParentKey) + "/idx:" + strings.TrimSpace(el.Element.Name)
+	if id == "" && el.ParentKey != "" && el.Element != nil && el.ParentKey != "" {
+		siblingID := strings.TrimSpace(el.Element.RuntimeID)
+		if siblingID == "" {
+			siblingID = strings.TrimSpace(el.Element.Name)
+		}
+		controlType := strings.TrimSpace(el.Element.ControlType)
+		if controlType == "" {
+			controlType = strings.TrimSpace(el.Element.LocalizedControlType)
+		}
+		id = "path:" + canonicalUIAKey(el.ParentKey, false) + "/" + siblingID + "/" + controlType + "/" + strings.TrimSpace(el.Element.Name)
 	}
 	if id == "" {
-		id = fmt.Sprintf("best:%x", el.NativePtr)
+		id = fmt.Sprintf("ptr:%x", el.NativePtr)
 	}
 	if el.Key == "" {
 		el.Key = id
@@ -438,17 +460,17 @@ func (c *nativeUIAComClient) cacheBridgeElement(el *uiaBridgeElement) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if existing, ok := c.elementsByRuntimeID[id]; ok && existing != nil && existing.NativePtr != el.NativePtr {
+	if existing, ok := c.elementsByKey[id]; ok && existing != nil && existing.NativePtr != el.NativePtr {
 		c.elementsByFallback[id] = cloneBridgeElement(el)
 		return
 	}
-	c.elementsByRuntimeID[id] = cloneBridgeElement(el)
+	c.elementsByKey[id] = cloneBridgeElement(el)
 }
 
 func (c *nativeUIAComClient) releaseCachedElements() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, el := range c.elementsByRuntimeID {
+	for _, el := range c.elementsByKey {
 		if el != nil {
 			comRelease(el.NativePtr)
 		}
@@ -458,6 +480,6 @@ func (c *nativeUIAComClient) releaseCachedElements() {
 			comRelease(el.NativePtr)
 		}
 	}
-	c.elementsByRuntimeID = map[string]*uiaBridgeElement{}
+	c.elementsByKey = map[string]*uiaBridgeElement{}
 	c.elementsByFallback = map[string]*uiaBridgeElement{}
 }

@@ -46,7 +46,7 @@ type uiaAutomationClient interface {
 	ElementFromHWND(window.HWND) (*uiaBridgeElement, error)
 	FocusedElement() (*uiaBridgeElement, error)
 	ElementFromPoint(x, y int) (*uiaBridgeElement, error)
-	ElementByRuntimeID(runtimeID string) (*uiaBridgeElement, error)
+	ElementByKey(key string) (*uiaBridgeElement, error)
 	Parent(*uiaBridgeElement) (*uiaBridgeElement, error)
 	Children(*uiaBridgeElement) ([]*uiaBridgeElement, error)
 	Invoke(*uiaBridgeElement) error
@@ -94,7 +94,7 @@ func (b *win32UIAComBridge) ElementByKey(key string) (*uiaBridgeElement, error) 
 	if strings.TrimSpace(key) == "" {
 		return nil, errUIANilElement
 	}
-	return b.client.ElementByRuntimeID(key)
+	return b.client.ElementByKey(key)
 }
 
 func (b *win32UIAComBridge) Parent(el *uiaBridgeElement) (*uiaBridgeElement, error) {
@@ -147,8 +147,8 @@ func (c unavailableUIAClient) FocusedElement() (*uiaBridgeElement, error) {
 func (c unavailableUIAClient) ElementFromPoint(int, int) (*uiaBridgeElement, error) {
 	return nil, c.wrap("ElementFromPoint")
 }
-func (unavailableUIAClient) ElementByRuntimeID(string) (*uiaBridgeElement, error) {
-	return nil, &UIAElementStaleError{Op: "ElementByRuntimeID", Err: errors.New("runtime id is stale or unavailable")}
+func (unavailableUIAClient) ElementByKey(string) (*uiaBridgeElement, error) {
+	return nil, &UIAElementStaleError{Op: "ElementByKey", Err: errors.New("key is stale or unavailable")}
 }
 func (unavailableUIAClient) Parent(*uiaBridgeElement) (*uiaBridgeElement, error) {
 	return nil, &UIAElementStaleError{Op: "GetParentElement", Err: errors.New("element is stale")}
