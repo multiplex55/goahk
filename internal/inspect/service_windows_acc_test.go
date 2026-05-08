@@ -114,9 +114,12 @@ func TestACCTraversalAndPropertyMapping(t *testing.T) {
 			"child": {Key: "child", ParentKey: "root", RuntimeID: "child", HWND: "0x1", Name: "OK", Role: "PushButton", ClassName: "Button", Framework: "MSAA", Rect: childRect, Value: &value},
 		},
 		children: map[string][]*accBridgeElement{
-			"root": {{Key: "child", ParentKey: "root", RuntimeID: "child", HWND: "0x1", Name: "OK", Role: "PushButton", ClassName: "Button", Framework: "MSAA", Rect: childRect, Value: &value}},
+			"root": {
+				{Key: "child", ParentKey: "root", RuntimeID: "child", HWND: "0x1", Name: "OK", Role: "PushButton", ClassName: "Button", Framework: "MSAA", Rect: childRect, Value: &value, NativeObj: 0x200, NativeChildID: 0, PathSegment: "PushButton[1]"},
+				{Key: "childid:1", ParentKey: "root", RuntimeID: "childid:1", HWND: "0x1", Name: "", Role: "StaticText", ClassName: "Static", Framework: "MSAA", Rect: &Rect{Left: 41, Top: 90, Width: 80, Height: 20}, NativeObj: 0x200, NativeChildID: 1, PathSegment: "StaticText[1]"},
+			},
 		},
-		point: &accBridgeElement{Key: "child", ParentKey: "root", RuntimeID: "child", HWND: "0x1", Name: "OK", Role: "PushButton", ClassName: "Button", Framework: "MSAA", Rect: childRect, Value: &value},
+		point: &accBridgeElement{Key: "child", ParentKey: "root", RuntimeID: "child", HWND: "0x1", Name: "OK", Role: "PushButton", ClassName: "Button", Framework: "MSAA", Rect: childRect, Value: &value, NativeObj: 0x200, NativeChildID: 0, PathSegment: "PushButton[1]"},
 	}
 	deps := &nativeACCDeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*accBridgeElement{}, keyToRef: map[string]string{}}
 	provider := newWindowsProviderWithModeAdapters(newUIAAdapter(&fakeAdapter{root: &uiaElement{Ref: "uia", RuntimeID: "1", Name: "UIA"}}), newUIAAdapter(deps), newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
@@ -129,8 +132,8 @@ func TestACCTraversalAndPropertyMapping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetNodeChildren: %v", err)
 	}
-	if len(childrenResp.Children) != 1 {
-		t.Fatalf("expected one child, got %d", len(childrenResp.Children))
+	if len(childrenResp.Children) != 2 {
+		t.Fatalf("expected two children (object + childID), got %d", len(childrenResp.Children))
 	}
 	if got := childrenResp.Children[0].NodeID; len(got) < len("node:acc:") || got[:len("node:acc:")] != "node:acc:" {
 		t.Fatalf("expected ACC node namespace, got %q", got)
@@ -148,5 +151,12 @@ func TestACCTraversalAndPropertyMapping(t *testing.T) {
 	}
 	if details.ACCPath == "" {
 		t.Fatalf("expected generated ACC path")
+	}
+	details2, err := provider.GetNodeDetails(context.Background(), GetNodeDetailsRequest{NodeID: childrenResp.Children[1].NodeID})
+	if err != nil {
+		t.Fatalf("GetNodeDetails second: %v", err)
+	}
+	if details2.ACCPath == "" || details2.ACCPath == details.ACCPath {
+		t.Fatalf("expected stable copyable distinct path, got first=%q second=%q", details.ACCPath, details2.ACCPath)
 	}
 }
