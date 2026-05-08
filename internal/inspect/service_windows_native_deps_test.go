@@ -148,7 +148,7 @@ func TestNativeUIADeps_StaleRetryRequiresFallbackMarker(t *testing.T) {
 	bridge.byKey = func(key string) (*uiaBridgeElement, error) {
 		calls++
 		if calls == 1 {
-			return nil, &UIAElementStaleError{Op: "ElementByRuntimeID", Err: errors.New("stale")}
+			return nil, &UIAElementStaleError{Op: "ElementByKey", Err: errors.New("stale")}
 		}
 		return bridgeEl("rid:stale", "0x2a", "fresh"), nil
 	}
@@ -169,7 +169,7 @@ func TestNativeUIADeps_StaleRetryRequiresFallbackMarker(t *testing.T) {
 	calls = 0
 	bridge.byKey = func(string) (*uiaBridgeElement, error) {
 		calls++
-		return nil, &UIAElementStaleError{Op: "ElementByRuntimeID", Err: errors.New("stale")}
+		return nil, &UIAElementStaleError{Op: "ElementByKey", Err: errors.New("stale")}
 	}
 	registered, _ = deps.ResolveWindowRoot(context.Background(), "0x2b")
 	if _, err := deps.GetElementByRef(context.Background(), registered.Ref); err == nil || !strings.Contains(err.Error(), "stale") {

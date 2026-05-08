@@ -15,7 +15,7 @@ type fakeUIAClient struct{}
 func (fakeUIAClient) ElementFromHWND(window.HWND) (*uiaBridgeElement, error)  { return nil, nil }
 func (fakeUIAClient) FocusedElement() (*uiaBridgeElement, error)              { return nil, nil }
 func (fakeUIAClient) ElementFromPoint(int, int) (*uiaBridgeElement, error)    { return nil, nil }
-func (fakeUIAClient) ElementByRuntimeID(string) (*uiaBridgeElement, error)    { return nil, nil }
+func (fakeUIAClient) ElementByKey(string) (*uiaBridgeElement, error)          { return nil, nil }
 func (fakeUIAClient) Parent(*uiaBridgeElement) (*uiaBridgeElement, error)     { return nil, nil }
 func (fakeUIAClient) Children(*uiaBridgeElement) ([]*uiaBridgeElement, error) { return nil, nil }
 func (fakeUIAClient) Invoke(*uiaBridgeElement) error                          { return nil }
@@ -239,5 +239,47 @@ func TestNativeUIAComClient_ParentReconstructionReturnsDirectParent(t *testing.T
 	p, err := client.Parent(&uiaBridgeElement{Key: "rid:child", Element: &uiaElement{Name: "child"}})
 	if err != nil || p.Key != "rid:parent" {
 		t.Fatalf("expected direct parent, got parent=%+v err=%v", p, err)
+	}
+}
+
+func TestCanonicalUIAKey(t *testing.T) {
+	cases := []struct {
+		raw         string
+		isRuntimeID bool
+		want        string
+	}{
+		{raw: "rid:1.2", isRuntimeID: true, want: "rid:1.2"},
+		{raw: "ptr:abc", isRuntimeID: true, want: "ptr:abc"},
+		{raw: "path:root/0/Button/OK", isRuntimeID: false, want: "path:root/0/Button/OK"},
+		{raw: "fallback:root", isRuntimeID: false, want: "fallback:root"},
+		{raw: "1.2.3", isRuntimeID: true, want: "rid:1.2.3"},
+		{raw: "1.2.3", isRuntimeID: false, want: "1.2.3"},
+	}
+	for _, tc := range cases {
+		if got := canonicalUIAKey(tc.raw, tc.isRuntimeID); got != tc.want {
+			t.Fatalf("canonicalUIAKey(%q, %t) = %q, want %q", tc.raw, tc.isRuntimeID, got, tc.want)
+		}
+	}
+}
+
+func TestNativeUIAComClient_ElementByKey_Lookup(t *testing.T) {
+	clientAny, err := newNativeUIAComClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := clientAny.(*nativeUIAComClient)
+	t.Cleanup(func() { _ = client.worker.Close() })
+
+	client.cacheBridgeElement(&uiaBridgeElement{Key: "rid:100", NativePtr: 0x10, Element: &uiaElement{Name: "rid-node"}})
+	client.cacheBridgeElement(&uiaBridgeElement{Key: "path:rid:100/0/Button/Save", NativePtr: 0x11, Element: &uiaElement{Name: "save"}})
+
+	if _, err := client.ElementByKey("100"); err == nil {
+		t.Fatalf("expected stale lookup for non-key runtime-id input")
+	}
+	if got, err := client.ElementByKey("rid:100"); err != nil || got.Element.Name != "rid-node" {
+		t.Fatalf("expected rid lookup success, got=%+v err=%v", got, err)
+	}
+	if got, err := client.ElementByKey("path:rid:100/0/Button/Save"); err != nil || got.Element.Name != "save" {
+		t.Fatalf("expected path lookup success, got=%+v err=%v", got, err)
 	}
 }
