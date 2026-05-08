@@ -142,7 +142,17 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 		}
 		p.setDiagnostics(diagnostics)
 	}
-	return GetTreeRootResponse{Root: root, State: state, Diagnostics: diagnostics, Source: sourceMetadataForMode(resolvedMode)}, nil
+	source := sourceMetadataForMode(resolvedMode)
+	if state.FallbackUsed {
+		source.Fallback = "active"
+	} else {
+		source.Fallback = "none"
+	}
+	source.NodeCount = 1
+	if root.ChildCount != nil {
+		source.ChildCount = *root.ChildCount
+	}
+	return GetTreeRootResponse{Root: root, State: state, Diagnostics: diagnostics, Source: source}, nil
 }
 
 func (p *windowsProvider) GetNodeChildren(ctx context.Context, req GetNodeChildrenRequest) (GetNodeChildrenResponse, error) {
@@ -226,6 +236,16 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 			statusText += " (" + strings.TrimSpace(diag.Message) + ")"
 		}
 	}
+	source := sourceMetadataForMode(p.activeModeForRead())
+	if source.Mode == InspectModeWindowTree || source.Mode == InspectModeHWNDTree {
+		source.Fallback = "active"
+	} else {
+		source.Fallback = "none"
+	}
+	source.NodeCount = len(path)
+	if selected.ChildCount != nil {
+		source.ChildCount = *selected.ChildCount
+	}
 	return GetNodeDetailsResponse{
 		WindowInfo:   windowInfo,
 		Element:      element,
@@ -241,7 +261,7 @@ func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetails
 		},
 		SelectorOptions: selectorResolution(selected.SelectorSuggestions),
 		ACCPath:         accPathFromElement(selected),
-		Source:          sourceMetadataForMode(p.activeModeForRead()),
+		Source:          source,
 	}, nil
 }
 
@@ -928,16 +948,22 @@ func (p *windowsProvider) activeModeForRead() InspectMode {
 	return normalizeInspectMode(p.activeMode)
 }
 
+const (
+	traversalRawTrueCondition = "raw-true-condition"
+	traversalControlView      = "control-view"
+	traversalContentView      = "content-view"
+)
+
 func sourceMetadataForMode(mode InspectMode) ProviderSourceDTO {
 	switch mode {
 	case InspectModeWindowTree:
-		return ProviderSourceDTO{Provider: "acc", Source: "msaa", Backend: string(SourceBackendSynthetic), Mode: InspectModeWindowTree}
+		return ProviderSourceDTO{Provider: "acc", Source: "msaa", Backend: string(SourceBackendNativeMSAA), Mode: InspectModeWindowTree, Traversal: traversalControlView}
 	case InspectModeHWNDTree:
-		return ProviderSourceDTO{Provider: "hwnd", Source: "win32", Backend: string(SourceBackendUnavailable), Mode: InspectModeHWNDTree}
+		return ProviderSourceDTO{Provider: "hwnd", Source: "win32", Backend: string(SourceBackendHWND), Mode: InspectModeHWNDTree, Traversal: traversalContentView}
 	case InspectModeUIAOnly:
-		return ProviderSourceDTO{Provider: "uia", Source: "uia", Backend: string(uiaBackendKind()), Mode: InspectModeUIAOnly}
+		return ProviderSourceDTO{Provider: "uia", Source: "uia", Backend: string(uiaBackendKind()), Mode: InspectModeUIAOnly, Traversal: traversalRawTrueCondition}
 	default:
-		return ProviderSourceDTO{Provider: "uia", Source: "uia", Backend: string(uiaBackendKind()), Mode: InspectModeUIATree}
+		return ProviderSourceDTO{Provider: "uia", Source: "uia", Backend: string(uiaBackendKind()), Mode: InspectModeUIATree, Traversal: traversalRawTrueCondition}
 	}
 }
 

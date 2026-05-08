@@ -171,7 +171,8 @@ type SourceBackendKind string
 
 const (
 	SourceBackendNativeCOM   SourceBackendKind = "native-com"
-	SourceBackendSynthetic   SourceBackendKind = "synthetic"
+	SourceBackendNativeMSAA  SourceBackendKind = "native-msaa"
+	SourceBackendHWND        SourceBackendKind = "hwnd"
 	SourceBackendUnavailable SourceBackendKind = "unavailable"
 )
 
