@@ -46,7 +46,95 @@ func wrapNativeElement(ptr uintptr, hwnd window.HWND) (*uiaBridgeElement, error)
 	}
 	comAddRef(ptr)
 	el := &uiaElement{RuntimeID: strings.TrimPrefix(key, "rid:"), HWND: hwnd.String()}
-	return &uiaBridgeElement{Key: key, RuntimeID: key, AllowHWNDFallback: hwnd != 0, SupportedPatterns: detectSupportedPatterns(el), PropertyState: map[string]string{}, UnsupportedProperty: map[string]bool{}, NativePtr: ptr, Element: el}, nil
+	b := &uiaBridgeElement{Key: key, RuntimeID: key, AllowHWNDFallback: hwnd != 0, SupportedPatterns: nil, PropertyState: map[string]string{}, UnsupportedProperty: map[string]bool{}, NativePtr: ptr, Element: el}
+	populateElementProperties(b)
+	populateSupportedPatterns(b)
+	return b, nil
+}
+
+func populateElementProperties(el *uiaBridgeElement) {
+	if el == nil || el.NativePtr == 0 || el.Element == nil {
+		return
+	}
+	setStr := func(name string, prop int32, dst *string) {
+		v, err := uiaGetCurrentPropertyValue(el.NativePtr, prop)
+		if err != nil {
+			markPropertyErr(el, name, err)
+			return
+		}
+		r := decodeVariant(v)
+		el.PropertyState[name] = r.Status
+		if r.Status == propertyStatusUnsupported {
+			el.UnsupportedProperty[name] = true
+			return
+		}
+		*dst = strings.TrimSpace(r.S)
+	}
+	setBool := func(name string, prop int32, dst *bool) {
+		v, err := uiaGetCurrentPropertyValue(el.NativePtr, prop)
+		if err != nil {
+			markPropertyErr(el, name, err)
+			return
+		}
+		r := decodeVariant(v)
+		el.PropertyState[name] = r.Status
+		*dst = r.B
+	}
+	setInt := func(name string, prop int32, dst *int) {
+		v, err := uiaGetCurrentPropertyValue(el.NativePtr, prop)
+		if err != nil {
+			markPropertyErr(el, name, err)
+			return
+		}
+		r := decodeVariant(v)
+		el.PropertyState[name] = r.Status
+		*dst = r.I
+	}
+	setStr("ControlType", uiaPropertyControlType, &el.Element.ControlType)
+	setStr("LocalizedControlType", uiaPropertyLocalizedCtl, &el.Element.LocalizedControlType)
+	setStr("Name", uiaPropertyName, &el.Element.Name)
+	setStr("Value", 30045, strPtrAssign(&el.Element.Value))
+	setStr("AutomationId", uiaPropertyAutomationID, &el.Element.AutomationID)
+	setStr("ClassName", uiaPropertyClassName, &el.Element.ClassName)
+	setStr("HelpText", uiaPropertyHelpText, strPtrAssign(&el.Element.HelpText))
+	setStr("AccessKey", uiaPropertyAccessKey, strPtrAssign(&el.Element.AccessKey))
+	setStr("AcceleratorKey", uiaPropertyAccelerator, strPtrAssign(&el.Element.AcceleratorKey))
+	setBool("HasKeyboardFocus", uiaPropertyHasFocus, &el.Element.HasKeyboardFocus)
+	setBool("IsKeyboardFocusable", uiaPropertyIsFocusable, &el.Element.IsKeyboardFocusable)
+	setStr("ItemType", uiaPropertyItemType, strPtrAssign(&el.Element.ItemType))
+	setInt("ProcessId", uiaPropertyProcessID, &el.Element.ProcessID)
+	setBool("IsEnabled", uiaPropertyIsEnabled, &el.Element.IsEnabled)
+	setBool("IsPassword", uiaPropertyIsPassword, &el.Element.IsPassword)
+	setBool("IsOffscreen", uiaPropertyIsOffscreen, &el.Element.IsOffscreen)
+	setStr("FrameworkId", uiaPropertyFrameworkID, &el.Element.FrameworkID)
+	setBool("IsRequiredForForm", uiaPropertyIsRequired, &el.Element.IsRequiredForForm)
+	setStr("ItemStatus", uiaPropertyItemStatus, strPtrAssign(&el.Element.ItemStatus))
+	setStr("LabeledBy", uiaPropertyLabeledBy, strPtrAssign(&el.Element.LabeledBy))
+}
+
+func markPropertyErr(el *uiaBridgeElement, name string, err error) {
+	var stale *UIAElementStaleError
+	if errors.As(err, &stale) {
+		el.PropertyState[name] = propertyStatusStale
+	} else {
+		el.PropertyState[name] = propertyStatusUnavailable
+	}
+}
+
+func populateSupportedPatterns(el *uiaBridgeElement) {
+	defs := []struct {
+		name string
+		id   int32
+	}{{"Invoke", 10000}, {"SelectionItem", 10010}, {"Value", 10002}, {"Toggle", 10015}, {"ExpandCollapse", 10005}, {"Window", 10009}, {"Transform", 10016}, {"Text", 10014}, {"Selection", 10001}, {"Scroll", 10004}, {"RangeValue", 10003}, {"Grid", 10006}, {"Table", 10012}, {"LegacyIAccessible", 10018}}
+	for _, d := range defs {
+		ok, err := uiaGetCurrentPattern(el.NativePtr, d.id)
+		if err != nil {
+			continue
+		}
+		if ok {
+			el.SupportedPatterns = append(el.SupportedPatterns, d.name)
+		}
+	}
 }
 
 func (nativeUIAAPI) ElementFromHandle(state *uiaWorkerState, hwnd window.HWND) (*uiaBridgeElement, error) {
@@ -74,94 +162,6 @@ func (nativeUIAAPI) ElementFromPoint(state *uiaWorkerState, x, y int) (*uiaBridg
 		return nil, err
 	}
 	return wrapNativeElement(ptr, 0)
-}
-
-func detectSupportedPatterns(el *uiaElement) []string {
-	if el == nil {
-		return nil
-	}
-	patterns := []string{"Invoke", "LegacyIAccessible", "SelectionItem", "Toggle", "ExpandCollapse", "Window", "Transform"}
-	if !el.IsPassword {
-		patterns = append(patterns, "Value")
-	}
-	if strings.EqualFold(strings.TrimSpace(el.ControlType), "Window") {
-		patterns = append(patterns, "Window")
-	}
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(patterns))
-	for _, p := range patterns {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		if _, ok := seen[p]; ok {
-			continue
-		}
-		seen[p] = struct{}{}
-		out = append(out, p)
-	}
-	return out
-}
-
-func strPtrAssign(dst **string) *string {
-	if dst == nil {
-		return nil
-	}
-	v := ""
-	*dst = &v
-	return *dst
-}
-
-func readStringProperty(name, raw string, dst *string, unsupported map[string]bool, state map[string]string) {
-	if strings.TrimSpace(raw) == "" {
-		state[name] = propertyStatusUnsupported
-		unsupported[name] = true
-		if dst != nil {
-			*dst = ""
-		}
-		return
-	}
-	state[name] = propertyStatusOK
-	if dst != nil {
-		*dst = strings.TrimSpace(raw)
-	}
-}
-
-func readIntProperty(name string, raw int, dst *int, unsupported map[string]bool, state map[string]string) {
-	if raw <= 0 {
-		state[name] = propertyStatusUnsupported
-		unsupported[name] = true
-		if dst != nil {
-			*dst = 0
-		}
-		return
-	}
-	state[name] = propertyStatusOK
-	if dst != nil {
-		*dst = raw
-	}
-}
-
-func readBoolProperty(name string, raw bool, dst *bool, _ map[string]bool, state map[string]string) {
-	state[name] = propertyStatusOK
-	if dst != nil {
-		*dst = raw
-	}
-}
-
-func readRectProperty(name string, raw *uiaRect, dst **uiaRect, unsupported map[string]bool, state map[string]string) {
-	if raw == nil {
-		state[name] = propertyStatusUnsupported
-		unsupported[name] = true
-		if dst != nil {
-			*dst = nil
-		}
-		return
-	}
-	state[name] = propertyStatusOK
-	if dst != nil {
-		*dst = &uiaRect{Left: raw.Left, Top: raw.Top, Width: raw.Width, Height: raw.Height}
-	}
 }
 
 func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement) ([]*uiaBridgeElement, error) {

@@ -6,6 +6,7 @@ package inspect
 import (
 	"errors"
 	"fmt"
+	"math"
 	"syscall"
 	"unsafe"
 
@@ -15,12 +16,62 @@ import (
 const (
 	uiaTreeScopeChildren    = 0x2
 	uiaPropertyRuntimeID    = 30000
+	uiaPropertyBoundingRect = 30001
+	uiaPropertyProcessID    = 30002
+	uiaPropertyControlType  = 30003
+	uiaPropertyLocalizedCtl = 30004
+	uiaPropertyName         = 30005
+	uiaPropertyAccelerator  = 30006
+	uiaPropertyAccessKey    = 30007
+	uiaPropertyHasFocus     = 30008
+	uiaPropertyIsFocusable  = 30009
+	uiaPropertyIsEnabled    = 30010
+	uiaPropertyAutomationID = 30011
+	uiaPropertyClassName    = 30012
+	uiaPropertyHelpText     = 30013
+	uiaPropertyIsCtrlElem   = 30016
+	uiaPropertyIsContent    = 30017
+	uiaPropertyIsPassword   = 30019
+	uiaPropertyNativeHWND   = 30020
+	uiaPropertyItemType     = 30021
+	uiaPropertyIsOffscreen  = 30022
+	uiaPropertyOrientation  = 30023
+	uiaPropertyFrameworkID  = 30024
+	uiaPropertyIsRequired   = 30025
+	uiaPropertyItemStatus   = 30026
+	uiaPropertyLabeledBy    = 30018
 	uiaEElementNotAvailable = 0x80040201
 	uiaEElementNotEnabled   = 0x80040200
 	eAccessDenied           = 0x80070005
 	coEObjNotConnected      = 0x800401FD
 	rpcEServerUnavailable   = 0x800706BA
 )
+
+const (
+	vtEmpty   = 0
+	vtI4      = 3
+	vtR8      = 5
+	vtBool    = 11
+	vtBSTR    = 8
+	vtUnknown = 13
+)
+
+type comVariant struct {
+	VT         uint16
+	WReserved1 uint16
+	WReserved2 uint16
+	WReserved3 uint16
+	Val        int64
+	Val2       int64
+}
+
+type uiaPropRead struct {
+	Status string
+	I      int
+	B      bool
+	S      string
+	Rect   *uiaRect
+}
 
 func comRelease(ptr uintptr) {
 	if ptr == 0 {
@@ -158,4 +209,63 @@ func uiaElementRuntimeID(el uintptr) (string, error) {
 		return "", nil
 	}
 	return runtimeIDString(runtimeID), nil
+}
+
+func uiaGetCurrentPropertyValue(el uintptr, propertyID int32) (comVariant, error) {
+	var v comVariant
+	vt := *(*uintptr)(unsafe.Pointer(el))
+	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 11*unsafe.Sizeof(uintptr(0)))), el, uintptr(propertyID), uintptr(unsafe.Pointer(&v)))
+	return v, hresultErr("GetCurrentPropertyValue", hr)
+}
+
+func uiaGetCurrentPattern(el uintptr, patternID int32) (bool, error) {
+	var p uintptr
+	vt := *(*uintptr)(unsafe.Pointer(el))
+	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 12*unsafe.Sizeof(uintptr(0)))), el, uintptr(patternID), uintptr(unsafe.Pointer(&p)))
+	if err := hresultErr("GetCurrentPattern", hr); err != nil {
+		var stale *UIAElementStaleError
+		if errors.As(err, &stale) {
+			return false, err
+		}
+		return false, nil
+	}
+	if p != 0 {
+		comRelease(p)
+		return true, nil
+	}
+	return false, nil
+}
+
+func decodeVariant(v comVariant) uiaPropRead {
+	switch v.VT {
+	case vtEmpty:
+		return uiaPropRead{Status: propertyStatusEmpty}
+	case vtBSTR:
+		if v.Val == 0 {
+			return uiaPropRead{Status: propertyStatusEmpty}
+		}
+		s := syscall.UTF16PtrToString((*uint16)(unsafe.Pointer(uintptr(v.Val))))
+		if s == "" {
+			return uiaPropRead{Status: propertyStatusEmpty}
+		}
+		return uiaPropRead{Status: propertyStatusOK, S: s}
+	case vtI4:
+		i := int(int32(v.Val))
+		if i == 0 {
+			return uiaPropRead{Status: propertyStatusEmpty}
+		}
+		return uiaPropRead{Status: propertyStatusOK, I: i}
+	case vtBool:
+		return uiaPropRead{Status: propertyStatusOK, B: int16(v.Val) != 0}
+	case vtR8:
+		f := math.Float64frombits(uint64(v.Val))
+		return uiaPropRead{Status: propertyStatusOK, I: int(f)}
+	case vtUnknown:
+		if v.Val == 0 {
+			return uiaPropRead{Status: propertyStatusEmpty}
+		}
+		return uiaPropRead{Status: propertyStatusOK, S: fmt.Sprintf("0x%x", uintptr(v.Val))}
+	default:
+		return uiaPropRead{Status: propertyStatusUnsupported}
+	}
 }
