@@ -85,6 +85,7 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			}
 			for _, expanded := range expandResults {
 				if expanded.Err == nil {
+					a.view.UpdateNodeChildren(expanded.ParentID, expanded.Children)
 					a.view.ExpandTreeNode(expanded.ParentID)
 				}
 			}
