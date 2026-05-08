@@ -58,6 +58,40 @@ const (
 	vtUnknown = 13
 )
 
+const (
+	comVTableQueryInterface = 0
+	comVTableAddRef         = 1
+	comVTableRelease        = 2
+)
+
+const (
+	uiaVTableIUIAutomationElementFromHandle   = 6
+	uiaVTableIUIAutomationElementFromPoint    = 7
+	uiaVTableIUIAutomationGetFocusedElement   = 8
+	uiaVTableIUIAutomationCreateTrueCondition = 21
+	uiaVTableIUIAutomationGetRawViewWalker    = 16
+)
+
+const (
+	uiaVTableIUIAutomationElementFindAll                 = 6
+	uiaVTableIUIAutomationElementGetCurrentRuntimeID     = 9
+	uiaVTableIUIAutomationElementGetCurrentPropertyValue = 10
+	uiaVTableIUIAutomationElementGetCurrentPattern       = 11
+)
+
+const (
+	uiaVTableIUIAutomationElementArrayLength     = 3
+	uiaVTableIUIAutomationElementArrayGetElement = 4
+)
+
+const (
+	uiaVTableIUIAutomationTreeWalkerGetParentElement = 3
+)
+
+func comVTableMethod(vt uintptr, index uintptr) uintptr {
+	return *(*uintptr)(unsafe.Pointer(vt + index*unsafe.Sizeof(uintptr(0))))
+}
+
 type comVariant struct {
 	VT         uint16
 	WReserved1 uint16
@@ -80,7 +114,7 @@ func comRelease(ptr uintptr) {
 		return
 	}
 	vt := *(*uintptr)(unsafe.Pointer(ptr))
-	_, _, _ = syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 2*unsafe.Sizeof(uintptr(0)))), ptr)
+	_, _, _ = syscall.SyscallN(comVTableMethod(vt, comVTableRelease), ptr)
 }
 
 func comAddRef(ptr uintptr) {
@@ -88,7 +122,7 @@ func comAddRef(ptr uintptr) {
 		return
 	}
 	vt := *(*uintptr)(unsafe.Pointer(ptr))
-	_, _, _ = syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 1*unsafe.Sizeof(uintptr(0)))), ptr)
+	_, _, _ = syscall.SyscallN(comVTableMethod(vt, comVTableAddRef), ptr)
 }
 
 func hresultErr(op string, hr uintptr) error {
@@ -111,28 +145,28 @@ func hresultErr(op string, hr uintptr) error {
 func uiaCreateTrueCondition(automation uintptr) (uintptr, error) {
 	var cond uintptr
 	vt := *(*uintptr)(unsafe.Pointer(automation))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 23*unsafe.Sizeof(uintptr(0)))), automation, uintptr(unsafe.Pointer(&cond)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationCreateTrueCondition), automation, uintptr(unsafe.Pointer(&cond)))
 	return cond, hresultErr("CreateTrueCondition", hr)
 }
 
 func uiaGetRawViewWalker(automation uintptr) (uintptr, error) {
 	var walker uintptr
 	vt := *(*uintptr)(unsafe.Pointer(automation))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 16*unsafe.Sizeof(uintptr(0)))), automation, uintptr(unsafe.Pointer(&walker)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationGetRawViewWalker), automation, uintptr(unsafe.Pointer(&walker)))
 	return walker, hresultErr("get_RawViewWalker", hr)
 }
 
 func uiaElementFromHandle(automation uintptr, hwnd window.HWND) (uintptr, error) {
 	var el uintptr
 	vt := *(*uintptr)(unsafe.Pointer(automation))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 6*unsafe.Sizeof(uintptr(0)))), automation, uintptr(hwnd), uintptr(unsafe.Pointer(&el)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementFromHandle), automation, uintptr(hwnd), uintptr(unsafe.Pointer(&el)))
 	return el, hresultErr("ElementFromHandle", hr)
 }
 
 func uiaGetFocusedElement(automation uintptr) (uintptr, error) {
 	var el uintptr
 	vt := *(*uintptr)(unsafe.Pointer(automation))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 8*unsafe.Sizeof(uintptr(0)))), automation, uintptr(unsafe.Pointer(&el)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationGetFocusedElement), automation, uintptr(unsafe.Pointer(&el)))
 	return el, hresultErr("GetFocusedElement", hr)
 }
 
@@ -140,7 +174,7 @@ func uiaElementFromPoint(automation uintptr, x, y int) (uintptr, error) {
 	var el uintptr
 	pt := struct{ X, Y int32 }{X: int32(x), Y: int32(y)}
 	vt := *(*uintptr)(unsafe.Pointer(automation))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 7*unsafe.Sizeof(uintptr(0)))), automation, *(*uintptr)(unsafe.Pointer(&pt)), uintptr(unsafe.Pointer(&el)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementFromPoint), automation, *(*uintptr)(unsafe.Pointer(&pt)), uintptr(unsafe.Pointer(&el)))
 	return el, hresultErr("ElementFromPoint", hr)
 }
 
@@ -148,7 +182,7 @@ func uiaFindAllChildren(el, trueCond uintptr) (uintptr, error) {
 	log.Printf("inspect.uia.native.find_children checkpoint=\"FindAll started\" parent_ptr=0x%x true_condition_ptr=0x%x", el, trueCond)
 	var arr uintptr
 	vt := *(*uintptr)(unsafe.Pointer(el))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 6*unsafe.Sizeof(uintptr(0)))), el, uintptr(uiaTreeScopeChildren), trueCond, uintptr(unsafe.Pointer(&arr)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementFindAll), el, uintptr(uiaTreeScopeChildren), trueCond, uintptr(unsafe.Pointer(&arr)))
 	log.Printf("inspect.uia.native.find_children checkpoint=\"FindAll returned\" array_ptr=0x%x", arr)
 	return arr, hresultErr("FindAll", hr)
 }
@@ -156,28 +190,28 @@ func uiaFindAllChildren(el, trueCond uintptr) (uintptr, error) {
 func uiaArrayLength(arr uintptr) (int32, error) {
 	var ln int32
 	vt := *(*uintptr)(unsafe.Pointer(arr))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 3*unsafe.Sizeof(uintptr(0)))), arr, uintptr(unsafe.Pointer(&ln)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementArrayLength), arr, uintptr(unsafe.Pointer(&ln)))
 	return ln, hresultErr("IUIAutomationElementArray.Length", hr)
 }
 
 func uiaArrayGet(arr uintptr, idx int32) (uintptr, error) {
 	var el uintptr
 	vt := *(*uintptr)(unsafe.Pointer(arr))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 4*unsafe.Sizeof(uintptr(0)))), arr, uintptr(idx), uintptr(unsafe.Pointer(&el)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementArrayGetElement), arr, uintptr(idx), uintptr(unsafe.Pointer(&el)))
 	return el, hresultErr("IUIAutomationElementArray.GetElement", hr)
 }
 
 func uiaGetParentElement(walker, el uintptr) (uintptr, error) {
 	var parent uintptr
 	vt := *(*uintptr)(unsafe.Pointer(walker))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 3*unsafe.Sizeof(uintptr(0)))), walker, el, uintptr(unsafe.Pointer(&parent)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationTreeWalkerGetParentElement), walker, el, uintptr(unsafe.Pointer(&parent)))
 	return parent, hresultErr("GetParentElement", hr)
 }
 
 func uiaElementRuntimeID(el uintptr) (string, error) {
 	var arr uintptr
 	vt := *(*uintptr)(unsafe.Pointer(el))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 11*unsafe.Sizeof(uintptr(0)))), el, uintptr(uiaPropertyRuntimeID), uintptr(unsafe.Pointer(&arr)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementGetCurrentRuntimeID), el, uintptr(unsafe.Pointer(&arr)))
 	if err := hresultErr("GetCurrentPropertyValue(RuntimeID)", hr); err != nil {
 		var stale *UIAElementStaleError
 		if errors.As(err, &stale) {
@@ -218,14 +252,14 @@ func uiaElementRuntimeID(el uintptr) (string, error) {
 func uiaGetCurrentPropertyValue(el uintptr, propertyID int32) (comVariant, error) {
 	var v comVariant
 	vt := *(*uintptr)(unsafe.Pointer(el))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 11*unsafe.Sizeof(uintptr(0)))), el, uintptr(propertyID), uintptr(unsafe.Pointer(&v)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementGetCurrentPropertyValue), el, uintptr(propertyID), uintptr(unsafe.Pointer(&v)))
 	return v, hresultErr("GetCurrentPropertyValue", hr)
 }
 
 func uiaGetCurrentPattern(el uintptr, patternID int32) (bool, error) {
 	var p uintptr
 	vt := *(*uintptr)(unsafe.Pointer(el))
-	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 12*unsafe.Sizeof(uintptr(0)))), el, uintptr(patternID), uintptr(unsafe.Pointer(&p)))
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementGetCurrentPattern), el, uintptr(patternID), uintptr(unsafe.Pointer(&p)))
 	if err := hresultErr("GetCurrentPattern", hr); err != nil {
 		var stale *UIAElementStaleError
 		if errors.As(err, &stale) {

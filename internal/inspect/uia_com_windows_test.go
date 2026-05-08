@@ -262,6 +262,35 @@ func TestCanonicalUIAKey(t *testing.T) {
 	}
 }
 
+func TestUIAVTableIndexConstants(t *testing.T) {
+	tests := []struct {
+		name string
+		got  uintptr
+		want uintptr
+	}{
+		{"IUIAutomation.CreateTrueCondition", uiaVTableIUIAutomationCreateTrueCondition, 21},
+		{"IUIAutomation.get_RawViewWalker", uiaVTableIUIAutomationGetRawViewWalker, 16},
+		{"IUIAutomation.ElementFromHandle", uiaVTableIUIAutomationElementFromHandle, 6},
+		{"IUIAutomation.ElementFromPoint", uiaVTableIUIAutomationElementFromPoint, 7},
+		{"IUIAutomation.GetFocusedElement", uiaVTableIUIAutomationGetFocusedElement, 8},
+		{"IUIAutomationElement.FindAll", uiaVTableIUIAutomationElementFindAll, 6},
+		{"IUIAutomationElement.GetCurrentRuntimeId", uiaVTableIUIAutomationElementGetCurrentRuntimeID, 9},
+		{"IUIAutomationElement.GetCurrentPropertyValue", uiaVTableIUIAutomationElementGetCurrentPropertyValue, 10},
+		{"IUIAutomationElement.GetCurrentPattern", uiaVTableIUIAutomationElementGetCurrentPattern, 11},
+		{"IUIAutomationElementArray.Length", uiaVTableIUIAutomationElementArrayLength, 3},
+		{"IUIAutomationElementArray.GetElement", uiaVTableIUIAutomationElementArrayGetElement, 4},
+		{"IUIAutomationTreeWalker.GetParentElement", uiaVTableIUIAutomationTreeWalkerGetParentElement, 3},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Fatalf("%s constant mismatch: got %d want %d", tc.name, tc.got, tc.want)
+			}
+		})
+	}
+}
+
 func TestNativeUIAComClient_ElementByKey_Lookup(t *testing.T) {
 	clientAny, err := newNativeUIAComClient()
 	if err != nil {

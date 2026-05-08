@@ -139,12 +139,23 @@ func workerCOMInit(state *uiaWorkerState) error {
 		procCoUninitialize.Call()
 		return err
 	}
+	if trueCond == 0 {
+		comRelease(automation)
+		procCoUninitialize.Call()
+		return errors.New("CreateTrueCondition returned nil condition")
+	}
 	treeWalker, err := uiaGetRawViewWalker(automation)
 	if err != nil {
 		comRelease(trueCond)
 		comRelease(automation)
 		procCoUninitialize.Call()
 		return err
+	}
+	if treeWalker == 0 {
+		comRelease(trueCond)
+		comRelease(automation)
+		procCoUninitialize.Call()
+		return errors.New("get_RawViewWalker returned nil walker")
 	}
 	state.trueCond = trueCond
 	state.treeWalker = treeWalker
