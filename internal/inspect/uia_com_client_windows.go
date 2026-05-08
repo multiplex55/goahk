@@ -6,6 +6,7 @@ package inspect
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -226,6 +227,7 @@ func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("inspect.uia.native.find_children checkpoint=\"FindAll array length\" length=%d", n)
 	out := make([]*uiaBridgeElement, 0, n)
 	for i := int32(0); i < n; i++ {
 		ptr, getErr := uiaArrayGet(arr, i)
@@ -325,6 +327,7 @@ func (c *nativeUIAComClient) Children(el *uiaBridgeElement) ([]*uiaBridgeElement
 	if el == nil {
 		return nil, errUIANilElement
 	}
+	log.Printf("inspect.uia.com_client.children parent_key=%s parent_runtime_id=%s parent_native_ptr_present=%t", el.Key, el.RuntimeID, el.NativePtr != 0)
 	var out []*uiaBridgeElement
 	err := c.worker.Do("FindAll", func(state *uiaWorkerState) error {
 		var callErr error

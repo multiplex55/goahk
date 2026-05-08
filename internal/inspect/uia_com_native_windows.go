@@ -6,6 +6,7 @@ package inspect
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"syscall"
 	"unsafe"
@@ -144,9 +145,11 @@ func uiaElementFromPoint(automation uintptr, x, y int) (uintptr, error) {
 }
 
 func uiaFindAllChildren(el, trueCond uintptr) (uintptr, error) {
+	log.Printf("inspect.uia.native.find_children checkpoint=\"FindAll started\" parent_ptr=0x%x true_condition_ptr=0x%x", el, trueCond)
 	var arr uintptr
 	vt := *(*uintptr)(unsafe.Pointer(el))
 	hr, _, _ := syscall.SyscallN(*(*uintptr)(unsafe.Pointer(vt + 6*unsafe.Sizeof(uintptr(0)))), el, uintptr(uiaTreeScopeChildren), trueCond, uintptr(unsafe.Pointer(&arr)))
+	log.Printf("inspect.uia.native.find_children checkpoint=\"FindAll returned\" array_ptr=0x%x", arr)
 	return arr, hresultErr("FindAll", hr)
 }
 

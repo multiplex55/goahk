@@ -6,6 +6,7 @@ package inspect
 import (
 	"context"
 	"errors"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -111,6 +112,16 @@ func (d *nativeUIADeps) GetChildren(_ context.Context, ref string) ([]*uiaElemen
 	if err != nil {
 		return nil, errUIANilElement
 	}
+	log.Printf(
+		"inspect.uia.get_children_call ref=%s key=%s runtime_id=%s parent_key=%s native_ptr_present=%t element_runtime_id=%s element_hwnd=%s",
+		ref,
+		cached.bridge.Key,
+		cached.bridge.RuntimeID,
+		cached.bridge.ParentKey,
+		cached.bridge.NativePtr != 0,
+		cached.bridge.Element.RuntimeID,
+		cached.bridge.Element.HWND,
+	)
 	children, err := d.bridge.Children(cloneBridgeElement(cached.bridge))
 	if err != nil {
 		return nil, err

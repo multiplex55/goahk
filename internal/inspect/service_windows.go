@@ -100,7 +100,7 @@ func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRe
 		return InspectWindowResponse{}, err
 	}
 	p.setActiveMode(resolvedMode)
-	state := InspectModeState{RequestedMode: mode, ActiveMode: resolvedMode, SatisfiedMode: resolvedMode, FallbackUsed: mode != resolvedMode}
+	state := InspectModeState{RequestedMode: mode, ActiveMode: resolvedMode, SatisfiedMode: resolvedMode, FallbackUsed: fallbackModeSwitchUsed(mode, resolvedMode)}
 	var diagnostics *InspectDiagnostics
 	if state.FallbackUsed {
 		state.FailureStage = "ResolveWindowRoot"
@@ -128,7 +128,7 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 	p.setActiveMode(resolvedMode)
 	_ = p.refreshHighlightForCurrentSelection(ctx)
 	_ = p.highlights.ClearOnWindowSwitch(ctx, req.HWND)
-	state := InspectModeState{RequestedMode: mode, ActiveMode: resolvedMode, SatisfiedMode: resolvedMode, FallbackUsed: mode != resolvedMode}
+	state := InspectModeState{RequestedMode: mode, ActiveMode: resolvedMode, SatisfiedMode: resolvedMode, FallbackUsed: fallbackModeSwitchUsed(mode, resolvedMode)}
 	if state.FallbackUsed {
 		state.FailureStage = "ResolveWindowRoot"
 		state.GuidanceText = fallbackGuidanceText(resolvedMode)
@@ -912,6 +912,15 @@ func modeAllowsFallback(mode InspectMode) bool {
 	default:
 		return false
 	}
+}
+
+func fallbackModeSwitchUsed(requested, resolved InspectMode) bool {
+	requestedMode := normalizeInspectMode(requested)
+	resolvedMode := normalizeInspectMode(resolved)
+	if requestedMode == resolvedMode {
+		return false
+	}
+	return resolvedMode == InspectModeWindowTree || resolvedMode == InspectModeHWNDTree
 }
 
 func (p *windowsProvider) coreForMode(mode InspectMode) *providerCore {
