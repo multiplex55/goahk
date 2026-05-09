@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"goahk/internal/inspect"
 	"goahk/internal/uia"
 	"goahk/internal/window"
 )
@@ -22,8 +23,9 @@ func main() {
 }
 
 type deps struct {
-	window windowProvider
-	uia    uiaProvider
+	window  windowProvider
+	uia     uiaProvider
+	inspect inspect.Service
 }
 
 type windowProvider interface {
@@ -40,8 +42,9 @@ type uiaProvider interface {
 func defaultDeps() deps {
 	osWindow := window.NewOSProvider()
 	return deps{
-		window: osWindowProvider{provider: osWindow},
-		uia:    uia.NewOSInspectProvider(),
+		window:  osWindowProvider{provider: osWindow},
+		uia:     uia.NewOSInspectProvider(),
+		inspect: inspect.NewService(),
 	}
 }
 
@@ -172,9 +175,64 @@ func runUIA(ctx context.Context, action, format string, out io.Writer, args []st
 			return mapOpError("uia tree", err)
 		}
 		return emit(out, format, node, func() string { return uia.FormatTreeText(node) })
+	case "dump":
+		if d.inspect == nil {
+			return errors.New("inspect service is not configured")
+		}
+		req, err := parseDumpFlags(args)
+		if err != nil {
+			return err
+		}
+		resp, err := d.inspect.DumpTree(ctx, req)
+		if err != nil {
+			return mapOpError("uia dump", err)
+		}
+		return emit(out, format, resp, func() string {
+			return formatDumpText(resp.Text, req.Mode, req.HWND)
+		})
 	default:
 		return fmt.Errorf("unknown uia subcommand %q", action)
 	}
+}
+
+func parseDumpFlags(args []string) (inspect.DumpTreeRequest, error) {
+	fs := flag.NewFlagSet("uia dump", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	hwnd := fs.String("hwnd", "", "window handle in hex, e.g. 0x12345")
+	mode := fs.String("mode", string(inspect.InspectModeAuto), "inspect mode")
+	depth := fs.Int("depth", 3, "maximum depth")
+	if err := fs.Parse(args); err != nil {
+		return inspect.DumpTreeRequest{}, err
+	}
+	if strings.TrimSpace(*hwnd) == "" {
+		return inspect.DumpTreeRequest{}, errors.New("uia dump requires --hwnd")
+	}
+	parsedMode := normalizeDumpMode(*mode)
+	if parsedMode == "" {
+		return inspect.DumpTreeRequest{}, fmt.Errorf("unsupported mode %q", *mode)
+	}
+	return inspect.DumpTreeRequest{HWND: *hwnd, Mode: parsedMode, Depth: *depth}, nil
+}
+
+func normalizeDumpMode(value string) inspect.InspectMode {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "", "AUTO":
+		return inspect.InspectModeAuto
+	case "UIA_ONLY":
+		return inspect.InspectModeUIAOnly
+	case "UIA_TREE":
+		return inspect.InspectModeUIATree
+	case "WINDOW_TREE", "ACC", "ACC_ONLY", "MSAA", "MSAA_ONLY":
+		return inspect.InspectModeWindowTree
+	case "HWND_TREE", "HWND", "HWND_ONLY":
+		return inspect.InspectModeHWNDTree
+	default:
+		return ""
+	}
+}
+
+func formatDumpText(text string, mode inspect.InspectMode, hwnd string) string {
+	return fmt.Sprintf("HWND=%s MODE=%s\n%s", hwnd, mode, strings.TrimSpace(text))
 }
 
 func mapOpError(operation string, err error) error {
@@ -210,6 +268,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  uia focused")
 	fmt.Fprintln(w, "  uia under-cursor")
 	fmt.Fprintln(w, "  uia tree --active-window [--depth N]")
+	fmt.Fprintln(w, "  uia dump --hwnd 0x12345 [--mode AUTO|UIA_ONLY|WINDOW_TREE|HWND_TREE|UIA_TREE] [--depth N]")
 	fmt.Fprintln(w, "  uia <focused|under-cursor> [--copy-best-selector]")
 }
 
