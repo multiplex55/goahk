@@ -4,6 +4,7 @@ package main
 
 import (
 	"goahk/internal/inspect"
+	"strings"
 
 	"github.com/lxn/walk"
 )
@@ -52,6 +53,7 @@ type uiaTreeModel struct {
 	allChildren    map[NodeID][]NodeID
 	loadedChildren map[NodeID]bool
 	expanded       map[NodeID]bool
+	userCollapsed  map[NodeID]bool
 }
 
 func newUIATreeModel() *uiaTreeModel {
@@ -61,6 +63,7 @@ func newUIATreeModel() *uiaTreeModel {
 		allChildren:    map[NodeID][]NodeID{},
 		loadedChildren: map[NodeID]bool{},
 		expanded:       map[NodeID]bool{},
+		userCollapsed:  map[NodeID]bool{},
 	}
 }
 
@@ -93,6 +96,23 @@ func (m *uiaTreeModel) SetExpanded(nodeID string, expanded bool) {
 	m.expanded[NodeID(nodeID)] = expanded
 }
 func (m *uiaTreeModel) IsExpanded(nodeID string) bool { return m.expanded[NodeID(nodeID)] }
+func (m *uiaTreeModel) MarkExpanded(nodeID string) {
+	id := NodeID(nodeID)
+	m.expanded[id] = true
+	delete(m.userCollapsed, id)
+}
+func (m *uiaTreeModel) MarkCollapsed(nodeID string) {
+	id := NodeID(nodeID)
+	m.expanded[id] = false
+	m.userCollapsed[id] = true
+}
+func (m *uiaTreeModel) WasUserCollapsed(nodeID string) bool { return m.userCollapsed[NodeID(nodeID)] }
+func (m *uiaTreeModel) ShouldAutoExpand(nodeID string) bool {
+	if strings.TrimSpace(nodeID) == "" {
+		return false
+	}
+	return !m.WasUserCollapsed(nodeID)
+}
 
 func (m *uiaTreeModel) SetRoot(root inspect.TreeNodeDTO) {
 	n := &uiaTreeNode{TreeNodeDTO: root, id: NodeID(root.NodeID), maybeHasChildren: true}
@@ -103,6 +123,7 @@ func (m *uiaTreeModel) SetRoot(root inspect.TreeNodeDTO) {
 	m.allChildren = map[NodeID][]NodeID{}
 	m.loadedChildren = map[NodeID]bool{}
 	m.expanded = map[NodeID]bool{}
+	m.userCollapsed = map[NodeID]bool{}
 	m.attachPlaceholder(n)
 	m.PublishItemsReset(nil)
 }
@@ -121,6 +142,7 @@ func (m *uiaTreeModel) Reset() {
 	m.allChildren = map[NodeID][]NodeID{}
 	m.loadedChildren = map[NodeID]bool{}
 	m.expanded = map[NodeID]bool{}
+	m.userCollapsed = map[NodeID]bool{}
 	m.PublishItemsReset(nil)
 }
 

@@ -42,6 +42,21 @@ func TestUIATreeLoadedAndExpandedState(t *testing.T) {
 	}
 }
 
+func TestUIATreeUserCollapsedStateControlsAutoExpand(t *testing.T) {
+	m := newUIATreeModel()
+	if !m.ShouldAutoExpand("node-1") {
+		t.Fatal("expected default auto-expand enabled")
+	}
+	m.MarkCollapsed("node-1")
+	if !m.WasUserCollapsed("node-1") || m.ShouldAutoExpand("node-1") {
+		t.Fatal("expected collapsed node to block auto-expand")
+	}
+	m.MarkExpanded("node-1")
+	if m.WasUserCollapsed("node-1") || !m.ShouldAutoExpand("node-1") {
+		t.Fatal("expected explicit expand to clear user-collapsed state")
+	}
+}
+
 func TestUIATreeRootAndChildrenLifecycle(t *testing.T) {
 	m := newUIATreeModel()
 	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})

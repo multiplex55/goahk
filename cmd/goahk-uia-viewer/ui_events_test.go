@@ -26,6 +26,7 @@ type guardedView struct {
 	selected        []string
 	fatal           []string
 	lastRoot        inspect.TreeNodeDTO
+	autoExpand      map[string]bool
 }
 
 func (v *guardedView) enterQueue()                                        { v.mu.Lock(); v.queued = true; v.mu.Unlock() }
@@ -43,6 +44,16 @@ func (v *guardedView) UpdateNodeChildren(nodeID string, _ []inspect.TreeNodeDTO)
 func (v *guardedView) ExpandTreeNode(nodeID string) {
 	v.expandCalls++
 	v.expanded = append(v.expanded, nodeID)
+}
+func (v *guardedView) ShouldAutoExpand(nodeID string) bool {
+	if v.autoExpand == nil {
+		return true
+	}
+	allow, ok := v.autoExpand[nodeID]
+	if !ok {
+		return true
+	}
+	return allow
 }
 func (v *guardedView) SelectTreeNode(nodeID string) { v.selected = append(v.selected, nodeID) }
 
@@ -517,6 +528,38 @@ func TestOnWindowSelectedUpdatesChildrenForEveryAutoExpandLevel(t *testing.T) {
 	}
 	if len(fixture.ChildrenBy["pane"]) < 3 || fixture.ChildrenBy["pane"][1].NodeID == fixture.ChildrenBy["pane"][2].NodeID {
 		t.Fatalf("expected duplicate labels to remain distinct nodes in fixture")
+	}
+}
+
+func TestOnWindowSelectedSkipsAutoExpandWhenUserCollapsed(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{autoExpand: map[string]bool{"root": false, "child-1": false}}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnWindowSelected("0x2", false)
+	(<-mq.ch)()
+	if len(view.childrenUpdated) == 0 || view.childrenUpdated[0] != "root" {
+		t.Fatalf("expected children refresh for root, got %v", view.childrenUpdated)
+	}
+	if len(view.expanded) != 0 {
+		t.Fatalf("expected collapsed root to stay collapsed, got %v", view.expanded)
+	}
+}
+
+func TestOnTreeExpandedRefreshKeepsCollapsedBranchCollapsed(t *testing.T) {
+	svc := &fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{"n1": {{NodeID: "c1"}}}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{autoExpand: map[string]bool{"n1": false}}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnTreeExpanded("n1", false)
+	(<-mq.ch)()
+	if len(view.childrenUpdated) != 1 || view.childrenUpdated[0] != "n1" {
+		t.Fatalf("expected child refresh for n1, got %v", view.childrenUpdated)
+	}
+	if len(view.expanded) != 0 {
+		t.Fatalf("expected no programmatic re-expand for collapsed branch, got %v", view.expanded)
 	}
 }
 

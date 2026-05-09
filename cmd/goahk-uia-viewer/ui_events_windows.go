@@ -148,6 +148,11 @@ func (ui *viewerUI) attachEvents() {
 				return
 			}
 			if node, ok := item.(*uiaTreeNode); ok && ui.events != nil {
+				if ui.treeView.Expanded(node) {
+					ui.treeModel.MarkExpanded(node.NodeID)
+				} else {
+					ui.treeModel.MarkCollapsed(node.NodeID)
+				}
 				ui.events.OnTreeExpanded(node.NodeID, ui.treeModel.AreChildrenLoaded(node.NodeID))
 			}
 		})
@@ -434,14 +439,32 @@ func (ui *viewerUI) UpdateNodeChildren(nodeID string, children []inspect.TreeNod
 	}
 }
 func (ui *viewerUI) ExpandTreeNode(nodeID string) {
+	ui.expandTreeNode(nodeID, false)
+}
+
+func (ui *viewerUI) ShouldAutoExpand(nodeID string) bool {
 	if ui == nil || ui.treeModel == nil {
+		return true
+	}
+	return ui.treeModel.ShouldAutoExpand(nodeID)
+}
+
+func (ui *viewerUI) expandTreeNode(nodeID string, userInitiated bool) {
+	if ui == nil || ui.treeModel == nil {
+		return
+	}
+	if !userInitiated && !ui.treeModel.ShouldAutoExpand(nodeID) {
 		return
 	}
 	node, ok := ui.treeModel.ItemByID(nodeID)
 	if !ok {
 		return
 	}
-	ui.treeModel.SetExpanded(nodeID, true)
+	if userInitiated {
+		ui.treeModel.MarkExpanded(nodeID)
+	} else {
+		ui.treeModel.SetExpanded(nodeID, true)
+	}
 	if ui.treeView != nil {
 		ui.suppressTreeExpandEvent = true
 		defer func() { ui.suppressTreeExpandEvent = false }()
