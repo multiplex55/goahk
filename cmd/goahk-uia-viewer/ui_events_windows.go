@@ -48,19 +48,28 @@ func (ui *viewerUI) executePatternAction(action string) {
 			})
 			return
 		}
-		details, detailsErr := ui.controller.RefreshSelectedNodeDetails()
+		refresh := ui.controller.RefreshAfterAction()
 		ui.dispatcher.Queue(func() {
 			ui.setLoading(false)
 			if err != nil {
 				ui.setStatus("action failed: " + err.Error())
 				return
 			}
-			if detailsErr != nil {
-				ui.setStatus("action succeeded, refresh failed: " + detailsErr.Error())
+			baseStatus := fmt.Sprintf("action completed: %s", callableActionLabel(action))
+			if refresh.DetailsErr != nil {
+				if refresh.TargetClosed {
+					ui.setStatus(baseStatus + "; target window closed")
+					return
+				}
+				if refresh.Stale {
+					ui.setStatus(baseStatus + "; selected element became stale")
+					return
+				}
+				ui.setStatus(baseStatus + "; refresh failed: " + refresh.DetailsErr.Error())
 				return
 			}
-			ui.UpdateNodeDetails(details)
-			ui.setStatus(fmt.Sprintf("action completed: %s (patterns=%d)", callableActionLabel(action), len(details.Patterns)))
+			ui.UpdateNodeDetails(refresh.Details)
+			ui.setStatus(baseStatus + "; details refreshed")
 		})
 	}()
 }

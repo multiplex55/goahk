@@ -359,6 +359,29 @@ func TestOnTreeSelectedUpdatesDetails(t *testing.T) {
 	}
 }
 
+func TestOnTreeSelectedStaleDetailsIsNonFatalAndBusyClears(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{},
+		nodeDetailsErr:     inspect.ErrStaleCache,
+	}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.OnTreeSelected("node-1")
+	fn := <-mq.ch
+	fn()
+	if len(view.busy) != 2 || !view.busy[0] || view.busy[1] {
+		t.Fatalf("busy toggles = %v, want [true false]", view.busy)
+	}
+	if len(view.fatal) != 0 {
+		t.Fatalf("stale details should be non-fatal, got %v", view.fatal)
+	}
+	if len(view.status) == 0 || !strings.Contains(view.status[len(view.status)-1], "stale or closed") {
+		t.Fatalf("expected stale/closed status, got %v", view.status)
+	}
+}
+
 func TestOnWindowSelectedExpandsAndSelectsRoot(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
 	c := NewController(context.Background(), svc)

@@ -239,6 +239,10 @@ func (a *ViewerEventAdapter) OnTreeExpanded(nodeID string, loaded bool) {
 		a.ui.Queue(func() {
 			a.view.SetBusy(false)
 			if err != nil {
+				if isClosedOrStaleTarget(err) {
+					a.view.SetStatus("node expansion skipped: selected target is stale or closed")
+					return
+				}
 				msg := formatFatal("GetTreeRoot", nodeID, err)
 				a.view.SetStatus(msg)
 				return
@@ -258,11 +262,19 @@ func (a *ViewerEventAdapter) OnTreeSelected(nodeID string) {
 		a.ui.Queue(func() {
 			a.view.SetBusy(false)
 			if err != nil {
+				if isClosedOrStaleTarget(err) {
+					a.view.SetStatus("node selection completed, but target became stale or closed")
+					return
+				}
 				msg := formatFatal("InspectWindow", nodeID, err)
 				a.view.SetStatus(msg)
 				return
 			}
 			if detailsErr != nil {
+				if isClosedOrStaleTarget(detailsErr) {
+					a.view.SetStatus("node selected, but target became stale or closed")
+					return
+				}
 				msg := formatFatal("GetNodeDetails", nodeID, detailsErr)
 				a.view.SetStatus(msg)
 				return
