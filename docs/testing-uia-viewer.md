@@ -174,6 +174,32 @@ Use a deterministic target window (Notepad) so teams can reproduce behavior quic
 
 ## 6-rung ladder (service/controller expectations)
 
+## Event/state-machine contract checks
+
+Use this quick contract to validate that each UI gesture only triggers its allowed boundary.
+
+### State machine
+
+- `Refresh list` → `RefreshWindows` (window table only).
+- `Select window` → `GetTreeRoot` (+ root details bootstrap) for a new snapshot.
+- `Select node` → `SelectNode` + `GetNodeDetails` + `HighlightNode` (details/highlight only).
+- `Expand node` → `GetNodeChildren` only if that branch is not already loaded.
+- `Invoke pattern` → `InvokePattern`, then `GetNodeDetails` for current selection only.
+- `Refresh tree` → explicit `GetTreeRoot` rebuild for selected HWND only.
+
+### Event-to-side-effect matrix
+
+| Gesture | Expected side-effects | Must not happen |
+|---|---|---|
+| Refresh list | Replaces window table rows | Tree rebuild or node-details refresh |
+| Select window | Rebuilds selected-window tree snapshot | Refreshes whole list |
+| Select node | Updates selected-node details/highlight | Rebuilds tree root or list |
+| Expand node | Lazy-loads only missing children for that node | Refreshes list or unrelated branches |
+| Invoke pattern | Runs action + refreshes selected-node details | Rebuilds tree/list |
+| Refresh tree | Rebuilds selected HWND tree snapshot | Window list mutation |
+
+Status assertions should include stage and target (`RefreshWindows [window-table]`, `GetTreeRoot [HWND]`, `GetNodeChildren [nodeID]`, `GetNodeDetails [nodeID]`).
+
 ### 1) Window list
 
 - **Required service calls**

@@ -48,7 +48,7 @@ func (ui *viewerUI) executePatternAction(action string) {
 			})
 			return
 		}
-		details, detailsErr := ui.controller.RefreshSelectedNodeDetails()
+		details, detailsErr := ui.controller.RefreshSelectionDetails()
 		ui.dispatcher.Queue(func() {
 			ui.setLoading(false)
 			if err != nil {
@@ -328,18 +328,18 @@ func (ui *viewerUI) initialRefresh() {
 	ui.SetBusy(true)
 	go func() {
 		visible, title := ui.defaultRefreshArgs()
-		resp, err := ui.controller.RefreshWindows("", visible, title)
+		resp, err := ui.controller.RefreshWindowList("", visible, title)
 		ui.dispatcher.Queue(func() {
 			ui.setLoading(false)
 			if err != nil {
-				ui.setStatus("refresh failed: " + err.Error())
+				ui.setStatus("ERROR " + formatStageTarget("RefreshWindows", "window-table") + ": " + err.Error())
 				return
 			}
 			rows := mapWindowTableRows(resp.Windows, true)
 			if ui.windowModel != nil {
 				ui.windowModel.SetRows(rows)
 			}
-			ui.setStatus(fmt.Sprintf("loaded %d windows", len(rows)))
+			ui.setStatus(fmt.Sprintf("loaded %d windows %s", len(rows), formatStageTarget("RefreshWindows", "window-table")))
 		})
 	}()
 }
