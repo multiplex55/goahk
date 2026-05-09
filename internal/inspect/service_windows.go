@@ -876,8 +876,8 @@ func safeTreeRootCall(core *providerCore, ctx context.Context, hwnd string, refr
 	defer func() {
 		if r := recover(); r != nil {
 			stack := strings.TrimSpace(string(debug.Stack()))
-			log.Printf("inspect.resolve_root_panic provider=%s hwnd=%s panic=%v stack=%s", core.name, hwnd, r, stack)
-			err = fmt.Errorf("inspect: provider %s panic while resolving root for hwnd=%s: %v", core.name, hwnd, r)
+			log.Printf("inspect.resolve_root_panic provider=%s hwnd=%s panic=%v stack=%s", core.nodeNamespace, hwnd, r, stack)
+			err = fmt.Errorf("inspect: provider %s panic while resolving root for hwnd=%s: %v", core.nodeNamespace, hwnd, r)
 			root = TreeNodeDTO{}
 		}
 	}()
