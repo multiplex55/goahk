@@ -98,9 +98,16 @@ func (ui *viewerUI) attachEvents() {
 	if ui.windowTable != nil {
 		ui.windowTable.SetModel(ui.windowModel)
 		ui.windowTable.CurrentIndexChanged().Attach(func() {
+			if ui.suppressWindowSelectionEvent {
+				return
+			}
 			idx := ui.windowTable.CurrentIndex()
 			row, ok := ui.windowModel.WindowAt(idx)
 			if !ok {
+				return
+			}
+			if ui.controller != nil && ui.controller.IsSelectedWindow(row.ID) {
+				ui.setStatus("selected window unchanged; tree preserved")
 				return
 			}
 			if ui.events != nil {
@@ -324,6 +331,19 @@ func propertyContextCopyValue(row propertyTableRow, preferAHKControlType bool) s
 	return row.Value
 }
 
+func windowRowIndexByID(rows []windowTableRow, hwnd string) int {
+	target := strings.ToLower(strings.TrimSpace(hwnd))
+	if target == "" {
+		return -1
+	}
+	for i, row := range rows {
+		if strings.ToLower(strings.TrimSpace(row.ID)) == target {
+			return i
+		}
+	}
+	return -1
+}
+
 func (ui *viewerUI) initialRefresh() {
 	ui.SetBusy(true)
 	go func() {
@@ -337,7 +357,20 @@ func (ui *viewerUI) initialRefresh() {
 			}
 			rows := mapWindowTableRows(resp.Windows, true)
 			if ui.windowModel != nil {
+				selectedHWND := ""
+				if ui.windowTable != nil {
+					if current, ok := ui.windowModel.WindowAt(ui.windowTable.CurrentIndex()); ok {
+						selectedHWND = current.ID
+					}
+				}
+				ui.suppressWindowSelectionEvent = true
+				defer func() { ui.suppressWindowSelectionEvent = false }()
 				ui.windowModel.SetRows(rows)
+				if ui.windowTable != nil {
+					if idx := windowRowIndexByID(rows, selectedHWND); idx >= 0 {
+						ui.windowTable.SetCurrentIndex(idx)
+					}
+				}
 			}
 			ui.setStatus(fmt.Sprintf("loaded %d windows %s", len(rows), formatStageTarget("RefreshWindows", "window-table")))
 		})
@@ -384,7 +417,6 @@ func (ui *viewerUI) UpdateTreeRoot(root inspect.TreeNodeDTO) {
 		return
 	}
 
-	ui.treeView.SetModel(ui.treeModel)
 	if item, ok := ui.treeModel.ItemByID(root.NodeID); ok {
 		ui.suppressTreeSelectionEvent = true
 		defer func() { ui.suppressTreeSelectionEvent = false }()
