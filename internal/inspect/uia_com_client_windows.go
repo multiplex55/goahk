@@ -98,8 +98,9 @@ func wrapNativeElementOwned(ptr uintptr, hwnd window.HWND, parentKey string, sib
 		return nil, err
 	}
 	key := canonicalUIAKey(rid, true)
-	el := &uiaElement{RuntimeID: strings.TrimPrefix(key, "rid:"), HWND: hwnd.String()}
-	b := &uiaBridgeElement{Key: key, RuntimeID: key, AllowHWNDFallback: hwnd != 0, SupportedPatterns: nil, PropertyState: map[string]string{}, UnsupportedProperty: map[string]bool{}, NativePtr: ptr, Element: el}
+	rawRuntimeID := strings.TrimSpace(rid)
+	el := &uiaElement{RuntimeID: rawRuntimeID, HWND: hwnd.String()}
+	b := &uiaBridgeElement{Key: key, RuntimeID: rawRuntimeID, AllowHWNDFallback: hwnd != 0, SupportedPatterns: nil, PropertyState: map[string]string{}, UnsupportedProperty: map[string]bool{}, NativePtr: ptr, Element: el}
 	if resolvedOpts.PopulateProperties {
 		populateElementProperties(b)
 	}
@@ -503,7 +504,7 @@ func runtimeIDString(runtimeID []int) string {
 	for _, n := range runtimeID {
 		parts = append(parts, strconv.Itoa(n))
 	}
-	return fmt.Sprintf("rid:%s", strings.Join(parts, "."))
+	return strings.Join(parts, ".")
 }
 
 func canonicalUIAKey(raw string, isRuntimeID bool) string {
