@@ -4,6 +4,16 @@ This document defines a **tooling validation contract** for `goahk-uia-viewer`. 
 
 ## Parity contract: `UIA_TREE` vs fallback trees
 
+## UIA discovery vs details loading (phased pattern probing)
+
+- Native UIA wrapping is intentionally phased:
+  - **Tree discovery paths** (`GetTreeRoot`, child expansion, parent/child traversal) populate element properties but do **not** probe supported UIA patterns.
+  - **Details paths** (`GetNodeDetails` / element-by-ref refresh for selected nodes) then probe supported patterns on demand.
+- Expected behavior:
+  - Tree loading remains available even when COM pattern probing intermittently fails.
+  - Pattern/actionability panes may be incomplete for a node when probing fails, without collapsing the whole tree load.
+- Test expectations should treat pattern probing failures during discovery as degraded details data, not as discovery failure.
+
 ### Required parity mode
 
 - `UIA_TREE` is the required mode for `UIATreeInspector.ahk`-style parity.
