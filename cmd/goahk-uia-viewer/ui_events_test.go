@@ -367,6 +367,46 @@ func TestOnTreeExpandedAddsChildren(t *testing.T) {
 	}
 }
 
+func TestOnTreeExpandedDoesNotSelectNode(t *testing.T) {
+	svc := &fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{"n1": {{NodeID: "c1"}}}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnTreeExpanded("n1", false)
+	(<-mq.ch)()
+
+	if len(view.selected) != 0 {
+		t.Fatalf("expected expand to not alter selection, got %v", view.selected)
+	}
+	if len(view.expanded) != 1 || view.expanded[0] != "n1" {
+		t.Fatalf("expected expand to only expand branch n1, got %v", view.expanded)
+	}
+}
+
+func TestOnTreeExpandedDoesNotRefreshDetailsUnlessSelected(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{
+			childrenByNode: map[string][]inspect.TreeNodeDTO{"n1": {{NodeID: "c1"}}},
+		},
+	}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnTreeExpanded("n1", false)
+	(<-mq.ch)()
+
+	if svc.nodeDetailsCalls != 0 {
+		t.Fatalf("expected no details refresh on expand event, got %d calls", svc.nodeDetailsCalls)
+	}
+	if view.updates != 1 {
+		t.Fatalf("expected only child update during expand, got updates=%d", view.updates)
+	}
+}
+
 func TestOnTreeSelectedUpdatesDetails(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}}
 	c := NewController(context.Background(), svc)
