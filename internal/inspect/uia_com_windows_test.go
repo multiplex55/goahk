@@ -401,7 +401,7 @@ func TestUIAVTableIndexConstants(t *testing.T) {
 		{"IUIAutomation.ElementFromPoint", uiaVTableIUIAutomationElementFromPoint, 7},
 		{"IUIAutomation.GetFocusedElement", uiaVTableIUIAutomationGetFocusedElement, 8},
 		{"IUIAutomationElement.FindAll", uiaVTableIUIAutomationElementFindAll, 6},
-		{"IUIAutomationElement.GetRuntimeID", uiaVTableIUIAutomationElementGetRuntimeID, 5},
+		{"IUIAutomationElement.GetRuntimeID", uiaVTableIUIAutomationElementGetRuntimeID, 4},
 		{"IUIAutomationElement.GetCurrentPropertyValue", uiaVTableIUIAutomationElementGetCurrentPropertyValue, 10},
 		{"IUIAutomationElement.GetCurrentPattern", uiaVTableIUIAutomationElementGetCurrentPattern, 16},
 		{"IUIAutomationElementArray.Length", uiaVTableIUIAutomationElementArrayLength, 3},

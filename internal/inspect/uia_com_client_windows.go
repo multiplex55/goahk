@@ -606,11 +606,11 @@ func (c *nativeUIAComClient) cacheBridgeElement(el *uiaBridgeElement) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if existing, ok := c.elementsByKey[id]; ok && existing != nil && existing.NativePtr != el.NativePtr {
-		if existing.OwnsNativePtr && existing.NativePtr != 0 {
-			comRelease(existing.NativePtr)
-		}
-		c.elementsByFallback[id] = cloneBridgeElement(el)
-		c.elementsByFallback[id].OwnsNativePtr = true
+		// Do not release here. This runs outside the UIA COM worker apartment and can crash.
+		replacement := cloneBridgeElement(el)
+		replacement.OwnsNativePtr = true
+		c.elementsByKey[id] = replacement
+		delete(c.elementsByFallback, id)
 		return
 	}
 	c.elementsByKey[id] = cloneBridgeElement(el)

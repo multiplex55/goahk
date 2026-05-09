@@ -78,7 +78,7 @@ const (
 
 const (
 	uiaVTableIUIAutomationElementFindAll                 = 6
-	uiaVTableIUIAutomationElementGetRuntimeID            = 5
+	uiaVTableIUIAutomationElementGetRuntimeID            = 4
 	uiaVTableIUIAutomationElementGetCurrentPropertyValue = 10
 	uiaVTableIUIAutomationElementGetCurrentPattern       = 16
 )
