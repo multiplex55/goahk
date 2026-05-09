@@ -238,7 +238,9 @@ type SelectNodeRequest struct {
 	NodeID string `json:"nodeID"`
 }
 type SelectNodeResponse struct {
-	Selected TreeNodeDTO `json:"selected"`
+	Selected TreeNodeDTO       `json:"selected"`
+	State    InspectModeState  `json:"state,omitempty"`
+	Source   ProviderSourceDTO `json:"source,omitempty"`
 }
 
 type GetNodeDetailsRequest struct {

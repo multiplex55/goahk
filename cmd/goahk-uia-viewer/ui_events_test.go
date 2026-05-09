@@ -25,6 +25,7 @@ type guardedView struct {
 	childrenUpdated []string
 	selected        []string
 	fatal           []string
+	lastRoot        inspect.TreeNodeDTO
 }
 
 func (v *guardedView) enterQueue()                                        { v.mu.Lock(); v.queued = true; v.mu.Unlock() }
@@ -34,7 +35,7 @@ func (v *guardedView) SetStatus(s string)                                 { v.mu
 func (v *guardedView) ShowFatal(s string)                                 { v.mu.Lock(); v.fatal = append(v.fatal, s); v.mu.Unlock() }
 func (v *guardedView) UpdateWindowDetails(inspect.GetNodeDetailsResponse) { v.updates++ }
 func (v *guardedView) UpdateNodeDetails(inspect.GetNodeDetailsResponse)   { v.updates++ }
-func (v *guardedView) UpdateTreeRoot(inspect.TreeNodeDTO)                 { v.updates++ }
+func (v *guardedView) UpdateTreeRoot(root inspect.TreeNodeDTO)            { v.updates++; v.lastRoot = root }
 func (v *guardedView) UpdateNodeChildren(nodeID string, _ []inspect.TreeNodeDTO) {
 	v.updates++
 	v.childrenUpdated = append(v.childrenUpdated, nodeID)
@@ -160,7 +161,7 @@ func TestViewerEventAdapter_WindowSelectionStatusSet(t *testing.T) {
 func TestViewerEventAdapter_WindowSelectionFallbackStatusCopy(t *testing.T) {
 	svc := &fakeControllerService{
 		fakeInspectService: fakeInspectService{},
-		root:               inspect.TreeNodeDTO{NodeID: "root"},
+		root:               inspect.TreeNodeDTO{NodeID: "root", DisplayLabel: "window \"Root\""},
 		rootState: inspect.InspectModeState{
 			RequestedMode: inspect.InspectModeUIATree,
 			ActiveMode:    inspect.InspectModeHWNDTree,
@@ -177,8 +178,14 @@ func TestViewerEventAdapter_WindowSelectionFallbackStatusCopy(t *testing.T) {
 	adapter.OnWindowSelected("0x2", false)
 	fn := <-mq.ch
 	fn()
-	if len(view.status) == 0 || !strings.Contains(view.status[len(view.status)-1], "degrade reason: UIA tree is unavailable.") {
+	if len(view.status) == 0 || !strings.Contains(view.status[len(view.status)-1], "DEGRADED TREE: requested UIA_TREE but active HWND_TREE;") {
+		t.Fatalf("expected degraded prefix in status, got %v", view.status)
+	}
+	if !strings.Contains(view.status[len(view.status)-1], "degrade reason: UIA tree is unavailable.") {
 		t.Fatalf("expected fallback warning status, got %v", view.status)
+	}
+	if !strings.Contains(view.lastRoot.DisplayLabel, "[ACC/MSAA fallback]") {
+		t.Fatalf("expected degraded root suffix, got %q", view.lastRoot.DisplayLabel)
 	}
 }
 

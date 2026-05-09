@@ -88,7 +88,11 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			a.view.SetBusy(false)
 
 			rootID := result.Root.Root.NodeID
-			a.view.UpdateTreeRoot(result.Root.Root)
+			rootNode := result.Root.Root
+			if result.Root.State.FallbackUsed && strings.TrimSpace(rootNode.DisplayLabel) != "" {
+				rootNode.DisplayLabel += " [ACC/MSAA fallback]"
+			}
+			a.view.UpdateTreeRoot(rootNode)
 			a.view.SelectTreeNode(rootID)
 			hasDetails := result.DetailsErr == nil || result.Details.StatusText != ""
 			if hasDetails {
@@ -152,6 +156,12 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			}
 			status += "; parity: " + parity + " (" + modeSummary + ")"
 			if result.Root.State.FallbackUsed && didFallbackSwitch {
+				status = fmt.Sprintf(
+					"DEGRADED TREE: requested %s but active %s; %s",
+					result.Root.State.RequestedMode,
+					result.Root.State.ActiveMode,
+					status,
+				)
 				status = status + "; degrade reason: " + strings.TrimSpace(result.Root.State.DegradeReason)
 			}
 			switch strings.ToLower(strings.TrimSpace(result.Root.Source.Backend)) {

@@ -191,6 +191,20 @@ func (p *windowsProvider) SelectNode(ctx context.Context, req SelectNodeRequest)
 	}
 	_ = p.refreshHighlightSelection(ctx, req.NodeID, selected, core.childrenCache.window())
 	p.setSelectedNodeID(req.NodeID)
+	activeMode := p.activeModeForRead()
+	source := sourceMetadataForMode(activeMode)
+	state := InspectModeState{
+		RequestedMode: activeMode,
+		ActiveMode:    activeMode,
+		SatisfiedMode: activeMode,
+		FallbackUsed:  activeMode == InspectModeWindowTree || activeMode == InspectModeHWNDTree,
+		Provider:      source.Provider,
+		Backend:       source.Backend,
+	}
+	source.Fallback = "none"
+	if state.FallbackUsed {
+		source.Fallback = "active"
+	}
 	return SelectNodeResponse{Selected: TreeNodeDTO{
 		NodeID:               selected.NodeID,
 		NodeId:               selected.NodeID,
@@ -207,7 +221,7 @@ func (p *windowsProvider) SelectNode(ctx context.Context, req SelectNodeRequest)
 			RuntimeID:    selected.RuntimeID,
 		},
 		ClassName: selected.ClassName,
-	}}, nil
+	}, State: state, Source: source}, nil
 }
 
 func (p *windowsProvider) GetNodeDetails(ctx context.Context, req GetNodeDetailsRequest) (GetNodeDetailsResponse, error) {

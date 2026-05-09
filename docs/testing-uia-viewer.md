@@ -71,6 +71,16 @@ This sample tree is the regression target for UIA Raw View parity.
   - provider guidance text from inspect service: `UIA tree is unavailable. Switch to ACC/MSAA mode to continue inspecting this window.`
   - viewer status warning includes: `fallback mode active: degraded HWND/compatibility tree, selector parity may differ`.
 
+### Expected status examples
+
+- **Parity success (`UIA_TREE` / `UIA_ONLY` with native UIA):**
+  - `window loaded GetTreeRoot [...]; parity: parity preconditions satisfied (requested=UIA_TREE active=UIA_TREE provider=uia backend=native-com fallback=false)`
+- **AUTO degraded fallback:**
+  - `DEGRADED TREE: requested AUTO but active WINDOW_TREE; ...; parity: parity preconditions not met (... fallback=true); degrade reason: ...`
+- **UIA-only hard failure (no fallback):**
+  - `ERROR InspectWindow [...]` / `ERROR GetTreeRoot [...]` from root acquisition failure in `UIA_ONLY`.
+  - `UIA_ONLY` must not silently render `WINDOW_TREE`/`HWND_TREE` output when UIA acquisition fails.
+
 ### Failure interpretation
 
 - **Parity failure, not product regression by itself:** UIA unavailable, but fallback tree loads.

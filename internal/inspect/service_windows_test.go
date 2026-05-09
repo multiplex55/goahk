@@ -153,6 +153,30 @@ func TestWindowsProvider_UIAFailuresReturnStructuredErrors(t *testing.T) {
 	}
 }
 
+func TestWindowsProvider_SelectNodeIncludesModeAndFallbackState(t *testing.T) {
+	deps := &fakeAdapter{
+		root: &uiaElement{Ref: "root", RuntimeID: "1", HWND: "0x1", Name: "Root", ControlType: "Window", LocalizedControlType: "window"},
+		byRef: map[string]*uiaElement{
+			"root": {Ref: "root", RuntimeID: "1", HWND: "0x1", Name: "Root", ControlType: "Window", LocalizedControlType: "window"},
+		},
+	}
+	provider := newWindowsProviderWithDeps(newUIAAdapter(deps), &fakeWindowAdapter{}).(*windowsProvider)
+	root, err := provider.GetTreeRoot(context.Background(), GetTreeRootRequest{HWND: "0x1", Mode: InspectModeUIATree})
+	if err != nil {
+		t.Fatalf("GetTreeRoot failed: %v", err)
+	}
+	resp, err := provider.SelectNode(context.Background(), SelectNodeRequest{NodeID: root.Root.NodeID})
+	if err != nil {
+		t.Fatalf("SelectNode failed: %v", err)
+	}
+	if resp.State.RequestedMode != InspectModeUIATree || resp.State.ActiveMode != InspectModeUIATree || resp.State.FallbackUsed {
+		t.Fatalf("unexpected select state: %+v", resp.State)
+	}
+	if resp.Source.Provider != "uia" || resp.Source.Fallback != "none" {
+		t.Fatalf("unexpected select source: %+v", resp.Source)
+	}
+}
+
 func TestWindowsProvider_GetTreeRoot_ModeRoutingAndFallbackState(t *testing.T) {
 	windowTree := &fakeAdapter{
 		root: &uiaElement{Ref: "root-window", RuntimeID: "101", HWND: "0x1", Name: "Window Root"},
