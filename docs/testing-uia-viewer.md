@@ -242,3 +242,66 @@ This ladder is **manual verification on an interactive Windows desktop**. It com
 ### Deterministic test complement
 
 The fake-provider tests should remain authoritative for repeatable correctness checks (including empty-name panes, AHK-style labels, and pattern-action mappings). Manual ladder results are an additional confidence signal for real desktop behavior.
+
+## Feature-gated staged manual verification matrix
+
+Use internal env gates for crash triage sessions (no user-facing config schema):
+
+- `GOAHK_UIA_DISABLE_PATTERNS`
+- `GOAHK_UIA_MINIMAL_PROPERTIES`
+- `GOAHK_UIA_DISABLE_AUTO_EXPAND`
+- `GOAHK_UIA_MAX_INITIAL_DEPTH`
+- `GOAHK_UIA_TRACE_COM`
+
+Every session should record startup logs that include the active gate set (`startup uia_feature_gates ...`) before test actions.
+
+### Stage 1 — minimal mode baseline
+
+- Set:
+  - `GOAHK_UIA_MINIMAL_PROPERTIES=1`
+  - `GOAHK_UIA_DISABLE_PATTERNS=1`
+  - `GOAHK_UIA_DISABLE_AUTO_EXPAND=1`
+  - `GOAHK_UIA_MAX_INITIAL_DEPTH=1`
+  - `GOAHK_UIA_TRACE_COM=0`
+- Verify:
+  - Root selection loads.
+  - No deep automatic expansion occurs.
+  - Details render without pattern-dependent failures.
+
+### Stage 2 — children traversal tolerance
+
+- Keep Stage 1 gates.
+- Manually expand children.
+- Verify expected logs on partial failures:
+  - `inspect.uia.native.find_children checkpoint="get child failed" ...`
+  - `inspect.uia.native.find_children checkpoint="wrap child failed" ...`
+- Pass criteria:
+  - Remaining children still appear.
+  - Session continues without full tree load failure.
+
+### Stage 3 — auto-expand re-enable
+
+- Set:
+  - `GOAHK_UIA_DISABLE_AUTO_EXPAND=0`
+  - `GOAHK_UIA_MAX_INITIAL_DEPTH=2` (or 3)
+- Verify:
+  - Initial node expansion occurs to configured depth.
+  - Status/log trail still includes gate state for this run.
+
+### Stage 4 — pattern probing re-enable
+
+- Set:
+  - `GOAHK_UIA_DISABLE_PATTERNS=0`
+  - Optional: `GOAHK_UIA_TRACE_COM=1` for COM call checkpoints.
+- Verify:
+  - Pattern list repopulates on details paths.
+  - With COM tracing on, expected `inspect.uia.com_call_start/end` lines are present.
+
+### Rollback strategy
+
+If instability appears, roll back one stage at a time (4 -> 3 -> 2 -> 1), preserving logs per stage.
+
+1. Disable patterns first (`GOAHK_UIA_DISABLE_PATTERNS=1`).
+2. Disable auto-expand and reduce depth (`GOAHK_UIA_DISABLE_AUTO_EXPAND=1`, `GOAHK_UIA_MAX_INITIAL_DEPTH=1`).
+3. Enable minimal properties (`GOAHK_UIA_MINIMAL_PROPERTIES=1`).
+4. Keep COM tracing enabled only when necessary to localize faults (`GOAHK_UIA_TRACE_COM=1`), then disable to reduce noise.

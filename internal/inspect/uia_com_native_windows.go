@@ -149,12 +149,21 @@ func hresultErr(op string, hr uintptr) error {
 // Crash-localization instrumentation for native COM failures: log exact call
 // boundaries so the last emitted checkpoint identifies the failing vtable op.
 func logUIAComCallStart(op string, fields string) {
+	if !GetUIAFeatureGates().TraceCOM {
+		return
+	}
 	log.Printf("inspect.uia.com_call_start op=%s %s", op, fields)
 }
 func logUIAComCallEnd(op string, hr uintptr, fields string) {
+	if !GetUIAFeatureGates().TraceCOM {
+		return
+	}
 	log.Printf("inspect.uia.com_call_end op=%s hr=0x%x %s", op, uint32(hr), fields)
 }
 func logUIAComCallError(op string, err error, fields string) {
+	if !GetUIAFeatureGates().TraceCOM {
+		return
+	}
 	if err != nil {
 		log.Printf("inspect.uia.com_call_error op=%s err=%v %s", op, err, fields)
 	}

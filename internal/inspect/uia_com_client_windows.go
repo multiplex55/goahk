@@ -96,10 +96,18 @@ func normalizeWrapOptions(opts *uiaWrapOptions) uiaWrapOptions {
 	if opts == nil {
 		return uiaWrapOptions{PropertyLoadLevel: uiaPropertyLoadDetails, PopulatePatterns: true}
 	}
-	return uiaWrapOptions{
+	g := GetUIAFeatureGates()
+	resolved := uiaWrapOptions{
 		PropertyLoadLevel: opts.PropertyLoadLevel,
 		PopulatePatterns:  opts.PopulatePatterns,
 	}
+	if g.MinimalProperties {
+		resolved.PropertyLoadLevel = uiaPropertyLoadTree
+	}
+	if g.DisablePatterns {
+		resolved.PopulatePatterns = false
+	}
+	return resolved
 }
 
 func wrapNativeElementOwned(ptr uintptr, hwnd window.HWND, parentKey string, siblingIndex int, opts *uiaWrapOptions) (*uiaBridgeElement, error) {
@@ -354,12 +362,14 @@ func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement
 	for i := int32(0); i < n; i++ {
 		ptr, getErr := uiaArrayGet(arr, i)
 		if getErr != nil {
-			return nil, getErr
+			log.Printf("inspect.uia.native.find_children checkpoint=\"get child failed\" index=%d err=%v", i, getErr)
+			diag = errors.Join(diag, fmt.Errorf("child[%d] get element: %w", i, getErr))
+			continue
 		}
 		child, wrapErr := wrapNativeElementOwned(ptr, 0, parent.Key, int(i), &uiaWrapOptions{PropertyLoadLevel: uiaPropertyLoadTree, PopulatePatterns: false})
 		if wrapErr != nil {
 			log.Printf("inspect.uia.native.find_children checkpoint=\"wrap child failed\" index=%d err=%v", i, wrapErr)
-			diag = errors.Join(diag, fmt.Errorf("child[%d]: %w", i, wrapErr))
+			diag = errors.Join(diag, fmt.Errorf("child[%d] wrap: %w", i, wrapErr))
 			continue
 		}
 		child.Element.ParentRef = parent.Key
