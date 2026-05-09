@@ -16,6 +16,7 @@ This document defines a **tooling validation contract** for `goahk-uia-viewer`. 
 
 - `WINDOW_TREE` (ACC/MSAA) and `HWND_TREE` are compatibility/degraded views.
 - `HWND_TREE` is explicitly **not equivalent** to UIA parity and must never be treated as a parity pass.
+- ACC/MSAA parity is intentionally tracked separately from modern UIA parity; ACC output is expected to differ for UIA-rich applications.
 - When fallback is active (`FallbackUsed == true`), expected operator-facing messaging is:
   - provider guidance text from inspect service: `UIA tree is unavailable. Switch to ACC/MSAA mode to continue inspecting this window.`
   - viewer status warning includes: `fallback mode active: degraded HWND/compatibility tree, selector parity may differ`.

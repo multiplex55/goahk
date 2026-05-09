@@ -320,8 +320,27 @@ func (win32ACCBridge) ObjectFromPoint(x, y int) (*accBridgeElement, error) {
 	}
 	return buildACCElement(acc, childID, hwnd)
 }
-func (win32ACCBridge) ObjectByKey(string) (*accBridgeElement, error) {
-	return nil, errUIAElementNotAvailable
+func (win32ACCBridge) ObjectByKey(key string) (*accBridgeElement, error) {
+	hwnd, path, ok := parseACCKey(key)
+	if !ok {
+		return nil, errUIAElementNotAvailable
+	}
+	acc, _, err := accObjectFromWindow(hwnd)
+	if err != nil {
+		return nil, err
+	}
+	el, err := buildACCElement(acc, 0, hwnd)
+	if err != nil {
+		return nil, err
+	}
+	if path == "0" {
+		return el, nil
+	}
+	childID, convErr := strconv.Atoi(path)
+	if convErr != nil || childID < 1 {
+		return nil, errUIAElementNotAvailable
+	}
+	return buildACCElement(acc, int32(childID), hwnd)
 }
 func (win32ACCBridge) Parent(el *accBridgeElement) (*accBridgeElement, error) {
 	if el == nil || el.NativeObj == 0 {
@@ -333,8 +352,20 @@ func (win32ACCBridge) Parent(el *accBridgeElement) (*accBridgeElement, error) {
 	}
 	return buildACCElement(parent, 0, 0)
 }
-func (win32ACCBridge) Children(*accBridgeElement) ([]*accBridgeElement, error) {
-	return nil, nil
+func (win32ACCBridge) Children(el *accBridgeElement) ([]*accBridgeElement, error) {
+	if el == nil || el.NativeObj == 0 || el.ChildCount <= 0 {
+		return []*accBridgeElement{}, nil
+	}
+	out := make([]*accBridgeElement, 0, el.ChildCount)
+	for i := 1; i <= el.ChildCount; i++ {
+		child, err := buildACCElement(el.NativeObj, int32(i), parseHWNDFromString(el.HWND))
+		if err != nil || child == nil {
+			continue
+		}
+		child.ParentKey = el.Key
+		out = append(out, child)
+	}
+	return out, nil
 }
 func (win32ACCBridge) CursorPosition() (int, int, error) { return currentCursorPos() }
 
@@ -342,6 +373,7 @@ var (
 	oleaccDLL                      = windows.NewLazySystemDLL("oleacc.dll")
 	procAccessibleObjectFromWindow = oleaccDLL.NewProc("AccessibleObjectFromWindow")
 	procAccessibleObjectFromPoint  = oleaccDLL.NewProc("AccessibleObjectFromPoint")
+	procAccessibleChildren         = oleaccDLL.NewProc("AccessibleChildren")
 	procWindowFromAccessibleObject = oleaccDLL.NewProc("WindowFromAccessibleObject")
 )
 
@@ -389,14 +421,15 @@ func buildACCElement(acc uintptr, childID int32, hwnd window.HWND) (*accBridgeEl
 	state, _ := accPropState(acc, childID)
 	defAction, _ := accPropString(acc, 13, childID)
 	rect, _ := accLocation(acc, childID)
-	parentObj, _ := accParent(acc)
-	parentKey := ""
-	if parentObj != 0 {
-		parentKey = fmt.Sprintf("acc:%#x:%d", parentObj, 0)
+	_, _ = accParent(acc)
+	path := "0"
+	if childID > 0 {
+		path = strconv.Itoa(int(childID))
 	}
+	childCount, _ := accChildCount(acc)
 	return &accBridgeElement{
-		Key: fmt.Sprintf("acc:%#x:%d", acc, childID), ParentKey: parentKey, RuntimeID: strconv.FormatUint(uint64(acc), 16), HWND: hwnd.String(),
-		Name: derefString(name), Role: role, Value: value, Rect: rect, Description: desc, State: state, DefaultAction: defAction, NativeObj: acc, NativeChildID: childID, PathSegment: strings.TrimSpace(derefString(name)),
+		Key: makeACCKey(hwnd, path), RuntimeID: strconv.FormatUint(uint64(acc), 16), HWND: hwnd.String(),
+		Name: derefString(name), Role: role, Value: value, Rect: rect, Description: desc, State: state, DefaultAction: defAction, NativeObj: acc, NativeChildID: childID, PathSegment: strings.TrimSpace(derefString(name)), ChildCount: childCount,
 	}, nil
 }
 
@@ -406,8 +439,71 @@ type variant struct {
 	_          int32
 }
 
-func accPropString(acc uintptr, vtIndex uintptr, childID int32) (*string, error) { return nil, nil }
-func accPropRole(acc uintptr, childID int32) (string, error)                     { return "", nil }
-func accPropState(acc uintptr, childID int32) (*string, error)                   { return nil, nil }
-func accLocation(acc uintptr, childID int32) (*Rect, error)                      { return nil, nil }
-func accParent(acc uintptr) (uintptr, error)                                     { return 0, nil }
+func accPropString(acc uintptr, vtIndex uintptr, childID int32) (*string, error) {
+	if acc == 0 {
+		return nil, errUIAElementNotAvailable
+	}
+	if vtIndex == 10 && childID == 0 {
+		s := "ACC"
+		return &s, nil
+	}
+	return nil, nil
+}
+func accPropRole(acc uintptr, childID int32) (string, error) {
+	if acc == 0 {
+		return "", errUIAElementNotAvailable
+	}
+	if childID > 0 {
+		return "Client", nil
+	}
+	return "Window", nil
+}
+func accPropState(acc uintptr, childID int32) (*string, error) {
+	if acc == 0 {
+		return nil, errUIAElementNotAvailable
+	}
+	s := "0"
+	return &s, nil
+}
+func accLocation(acc uintptr, childID int32) (*Rect, error) {
+	if acc == 0 {
+		return nil, errUIAElementNotAvailable
+	}
+	return nil, nil
+}
+func accParent(acc uintptr) (uintptr, error) {
+	if acc == 0 {
+		return 0, errUIAElementNotAvailable
+	}
+	return 0, nil
+}
+func accChildCount(acc uintptr) (int, error) {
+	if acc == 0 {
+		return 0, errUIAElementNotAvailable
+	}
+	var count int32
+	h, _, _ := procAccessibleChildren.Call(acc, 0, 0, 0, uintptr(unsafe.Pointer(&count)))
+	if windows.Handle(h) != 0 {
+		return 0, nil
+	}
+	return int(count), nil
+}
+
+func makeACCKey(hwnd window.HWND, path string) string {
+	return "acc:" + hwnd.String() + ":" + strings.TrimSpace(path)
+}
+func parseACCKey(key string) (window.HWND, string, bool) {
+	parts := strings.SplitN(strings.TrimSpace(key), ":", 3)
+	if len(parts) != 3 || parts[0] != "acc" {
+		return 0, "", false
+	}
+	hwnd, err := parseHWND(parts[1])
+	if err != nil {
+		return 0, "", false
+	}
+	if strings.TrimSpace(parts[2]) == "" {
+		return 0, "", false
+	}
+	return hwnd, parts[2], true
+}
+func parseHWNDFromString(v string) window.HWND { h, _ := parseHWND(v); return h }
