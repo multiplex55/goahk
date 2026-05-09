@@ -78,7 +78,7 @@ const (
 
 const (
 	uiaVTableIUIAutomationElementFindAll                 = 6
-	uiaVTableIUIAutomationElementGetRuntimeID            = 4
+	uiaVTableIUIAutomationElementGetRuntimeID            = 5
 	uiaVTableIUIAutomationElementGetCurrentPropertyValue = 10
 	uiaVTableIUIAutomationElementGetCurrentPattern       = 16
 )
@@ -241,6 +241,9 @@ func uiaGetParentElement(walker, el uintptr) (uintptr, error) {
 }
 
 func uiaElementRuntimeID(el uintptr) (string, error) {
+	if el == 0 {
+		return "", &UIAComUnavailableError{Op: "GetRuntimeId", Err: errors.New("nil COM element")}
+	}
 	var arr uintptr
 	vt := *(*uintptr)(unsafe.Pointer(el))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementGetRuntimeID), el, uintptr(unsafe.Pointer(&arr)))
@@ -254,31 +257,51 @@ func uiaElementRuntimeID(el uintptr) (string, error) {
 	if arr == 0 {
 		return "", nil
 	}
-	defer syscall.SyscallN(procSafeArrayDestroy.Addr(), arr)
-	lb, ub := int32(0), int32(0)
-	if hr, _, _ := syscall.SyscallN(procSafeArrayGetLBound.Addr(), arr, 1, uintptr(unsafe.Pointer(&lb))); int32(hr) < 0 {
-		return "", hresultErr("SafeArrayGetLBound(RuntimeID)", hr)
-	}
-	if hr, _, _ := syscall.SyscallN(procSafeArrayGetUBound.Addr(), arr, 1, uintptr(unsafe.Pointer(&ub))); int32(hr) < 0 {
-		return "", hresultErr("SafeArrayGetUBound(RuntimeID)", hr)
-	}
-	if ub < lb {
-		return "", nil
-	}
-	runtimeID := make([]int, 0, ub-lb+1)
-	for i := lb; i <= ub; i++ {
-		v := int32(0)
-		iCopy := i
-		hr, _, _ := syscall.SyscallN(procSafeArrayGetElement.Addr(), arr, uintptr(unsafe.Pointer(&iCopy)), uintptr(unsafe.Pointer(&v)))
-		if int32(hr) < 0 {
-			return "", hresultErr("SafeArrayGetElement(RuntimeID)", hr)
-		}
-		runtimeID = append(runtimeID, int(v))
+	defer func() {
+		_, _, _ = syscall.SyscallN(procSafeArrayDestroy.Addr(), arr)
+	}()
+	runtimeID, err := safeArrayRuntimeIDInts(arr)
+	if err != nil {
+		return "", err
 	}
 	if len(runtimeID) == 0 {
 		return "", nil
 	}
 	return runtimeIDString(runtimeID), nil
+}
+
+func safeArrayRuntimeIDInts(arr uintptr) ([]int, error) {
+	lb, ub := int32(0), int32(0)
+	if hr, _, _ := syscall.SyscallN(procSafeArrayGetLBound.Addr(), arr, 1, uintptr(unsafe.Pointer(&lb))); int32(hr) < 0 {
+		return nil, hresultErr("SafeArrayGetLBound(GetRuntimeId)", hr)
+	}
+	if hr, _, _ := syscall.SyscallN(procSafeArrayGetUBound.Addr(), arr, 1, uintptr(unsafe.Pointer(&ub))); int32(hr) < 0 {
+		return nil, hresultErr("SafeArrayGetUBound(GetRuntimeId)", hr)
+	}
+	return safeArrayRuntimeIDIntsInBounds(lb, ub, func(i int32) (int32, error) {
+		v := int32(0)
+		iCopy := i
+		hr, _, _ := syscall.SyscallN(procSafeArrayGetElement.Addr(), arr, uintptr(unsafe.Pointer(&iCopy)), uintptr(unsafe.Pointer(&v)))
+		if int32(hr) < 0 {
+			return 0, hresultErr("SafeArrayGetElement(GetRuntimeId)", hr)
+		}
+		return v, nil
+	})
+}
+
+func safeArrayRuntimeIDIntsInBounds(lb, ub int32, getValue func(int32) (int32, error)) ([]int, error) {
+	if ub < lb {
+		return nil, nil
+	}
+	runtimeID := make([]int, 0, ub-lb+1)
+	for i := lb; i <= ub; i++ {
+		v, err := getValue(i)
+		if err != nil {
+			return nil, err
+		}
+		runtimeID = append(runtimeID, int(v))
+	}
+	return runtimeID, nil
 }
 
 func uiaGetCurrentPropertyValue(el uintptr, propertyID int32) (comVariant, error) {

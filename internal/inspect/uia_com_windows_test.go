@@ -357,7 +357,7 @@ func TestUIAVTableIndexConstants(t *testing.T) {
 		{"IUIAutomation.ElementFromPoint", uiaVTableIUIAutomationElementFromPoint, 7},
 		{"IUIAutomation.GetFocusedElement", uiaVTableIUIAutomationGetFocusedElement, 8},
 		{"IUIAutomationElement.FindAll", uiaVTableIUIAutomationElementFindAll, 6},
-		{"IUIAutomationElement.GetRuntimeID", uiaVTableIUIAutomationElementGetRuntimeID, 4},
+		{"IUIAutomationElement.GetRuntimeID", uiaVTableIUIAutomationElementGetRuntimeID, 5},
 		{"IUIAutomationElement.GetCurrentPropertyValue", uiaVTableIUIAutomationElementGetCurrentPropertyValue, 10},
 		{"IUIAutomationElement.GetCurrentPattern", uiaVTableIUIAutomationElementGetCurrentPattern, 16},
 		{"IUIAutomationElementArray.Length", uiaVTableIUIAutomationElementArrayLength, 3},
@@ -371,6 +371,45 @@ func TestUIAVTableIndexConstants(t *testing.T) {
 				t.Fatalf("%s constant mismatch: got %d want %d", tc.name, tc.got, tc.want)
 			}
 		})
+	}
+}
+
+func TestUIAElementRuntimeID_NilPointer(t *testing.T) {
+	_, err := uiaElementRuntimeID(0)
+	if err == nil || !strings.Contains(err.Error(), "GetRuntimeId") {
+		t.Fatalf("expected GetRuntimeId nil element error, got %v", err)
+	}
+}
+
+func TestSafeArrayRuntimeIDInts_NilSafeArray(t *testing.T) {
+	got, err := safeArrayRuntimeIDInts(0)
+	if err == nil {
+		t.Fatal("expected SafeArray error for nil pointer")
+	}
+	if got != nil {
+		t.Fatalf("expected nil runtime id on nil safe array, got %v", got)
+	}
+}
+
+func TestSafeArrayRuntimeIDIntsInBounds_ValidParse(t *testing.T) {
+	values := map[int32]int32{0: 1, 1: 2, 2: 3}
+	got, err := safeArrayRuntimeIDIntsInBounds(0, 2, func(i int32) (int32, error) {
+		return values[i], nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 3 || got[0] != 1 || got[1] != 2 || got[2] != 3 {
+		t.Fatalf("unexpected runtime id parse: %v", got)
+	}
+}
+
+func TestWrapNativeElementOwned_RuntimeIDAssignment(t *testing.T) {
+	if got := runtimeIDString([]int{1, 2, 3}); got != "1.2.3" {
+		t.Fatalf("runtimeIDString returned %q", got)
+	}
+	if got := canonicalUIAKey("1.2.3", true); got != "rid:1.2.3" {
+		t.Fatalf("canonicalUIAKey should prefix runtime id, got %q", got)
 	}
 }
 
