@@ -133,6 +133,10 @@ func (ui *viewerUI) buildLeftPane(parent walk.Container) error {
 		return err
 	}
 	ui.refreshBtn.SetText("Refresh list")
+	if ui.refreshTreeBtn, err = walk.NewPushButton(toolbar); err != nil {
+		return err
+	}
+	ui.refreshTreeBtn.SetText("Refresh tree")
 	if ui.modeCombo, err = walk.NewComboBox(toolbar); err != nil {
 		return err
 	}

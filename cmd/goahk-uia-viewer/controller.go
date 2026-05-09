@@ -50,17 +50,26 @@ type Controller struct {
 	diagnostics           *inspect.InspectDiagnostics
 	onFollowElement       []func(inspect.TreeNodeDTO)
 	onFollowError         []func(error)
+	selectionGeneration   uint64
 }
 
 type WindowSelectionResult struct {
 	Root              inspect.GetTreeRootResponse
 	Children          []inspect.TreeNodeDTO
 	Details           inspect.GetNodeDetailsResponse
+	NoOp              bool
+	Generation        uint64
 	DetailsErr        error
 	ChildLoadErr      error
 	SelectErr         error
 	HighlightErr      error
 	RootRetryWarnings []error
+}
+
+type SelectWindowOptions struct {
+	Activate        bool
+	ForceTreeReload bool
+	Reason          string
 }
 
 type StatusUpdate struct {
@@ -166,14 +175,33 @@ func (c *Controller) RefreshWindows(filter string, visibleOnly, titleOnly bool) 
 	return c.RefreshWindowList(filter, visibleOnly, titleOnly)
 }
 func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionResult, error) {
+	return c.SelectWindowWithOptions(hwnd, SelectWindowOptions{Activate: activate})
+}
+
+func (c *Controller) SelectWindowWithOptions(hwnd string, opts SelectWindowOptions) (WindowSelectionResult, error) {
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
+	normalizedHWND := strings.ToLower(strings.TrimSpace(hwnd))
+	if normalizedHWND == "" {
+		return WindowSelectionResult{}, errors.New("select window: hwnd is empty")
+	}
+	reason := strings.TrimSpace(opts.Reason)
+	if reason == "" {
+		reason = "window selection"
+	}
 	c.mu.Lock()
 	mode := c.effectiveModeLocked()
+	selectedWindowID := strings.ToLower(strings.TrimSpace(c.selectedWindowID))
+	if !opts.ForceTreeReload && selectedWindowID == normalizedHWND {
+		generation := c.selectionGeneration
+		c.mu.Unlock()
+		log.Printf("uia.viewer select_window_noop hwnd=%s reason=%q generation=%d", hwnd, reason, generation)
+		return WindowSelectionResult{NoOp: true, Generation: generation}, nil
+	}
 	c.selectedWindowID = hwnd
 	c.mu.Unlock()
-	log.Printf("uia.viewer select_window_start hwnd=%s activate=%t mode=%s", hwnd, activate, mode)
+	log.Printf("uia.viewer select_window_start hwnd=%s activate=%t mode=%s force_reload=%t reason=%q", hwnd, opts.Activate, mode, opts.ForceTreeReload, reason)
 	result := WindowSelectionResult{}
-	if activate {
+	if opts.Activate {
 		if _, err := c.service.ActivateWindow(c.runtimeContext(), inspect.ActivateWindowRequest{HWND: hwnd}); err != nil {
 			return WindowSelectionResult{}, fmt.Errorf("activate window hwnd=%s: %w", hwnd, err)
 		}
@@ -235,6 +263,8 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 		log.Printf("uia.viewer inspect_highlight_ok hwnd=%s node=%s", hwnd, rootNodeID)
 		c.mu.Lock()
 		c.selectedNodeID = rootNodeID
+		c.selectionGeneration++
+		result.Generation = c.selectionGeneration
 		c.mu.Unlock()
 	}
 	log.Printf("uia.viewer select_window_end hwnd=%s mode=%s provider=%s active_mode=%s fallback=%t err=nil", hwnd, mode, result.Root.Source.Provider, result.Root.State.ActiveMode, result.Root.State.FallbackUsed)
@@ -252,7 +282,25 @@ func (c *Controller) IsSelectedWindow(hwnd string) bool {
 }
 
 func (c *Controller) RefreshTreeForSelectedWindow(hwnd string, activate bool) (WindowSelectionResult, error) {
-	return c.SelectWindow(hwnd, activate)
+	return c.SelectWindowWithOptions(hwnd, SelectWindowOptions{
+		Activate:        activate,
+		ForceTreeReload: true,
+		Reason:          "refresh tree for selected window",
+	})
+}
+
+func (c *Controller) RefreshCurrentTree(activate bool) (WindowSelectionResult, error) {
+	c.mu.Lock()
+	hwnd := strings.TrimSpace(c.selectedWindowID)
+	c.mu.Unlock()
+	if hwnd == "" {
+		return WindowSelectionResult{}, errors.New("refresh tree: no selected window; select a window first")
+	}
+	return c.SelectWindowWithOptions(hwnd, SelectWindowOptions{
+		Activate:        activate,
+		ForceTreeReload: true,
+		Reason:          "explicit tree refresh",
+	})
 }
 
 func synthesizeRootDetails(root inspect.GetTreeRootResponse, detailsErr error) inspect.GetNodeDetailsResponse {

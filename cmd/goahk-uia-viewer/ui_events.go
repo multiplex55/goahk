@@ -53,10 +53,26 @@ func NewViewerEventAdapter(controller *Controller, view ViewUpdater, ui UIThread
 }
 
 func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
+	a.onWindowSelectionRequest(func() (WindowSelectionResult, error) {
+		return a.controller.SelectWindowWithOptions(hwnd, SelectWindowOptions{
+			Activate:        activate,
+			ForceTreeReload: false,
+			Reason:          "window list/table selection",
+		})
+	}, hwnd)
+}
+
+func (a *ViewerEventAdapter) OnRefreshTreeRequested(activate bool) {
+	a.onWindowSelectionRequest(func() (WindowSelectionResult, error) {
+		return a.controller.RefreshCurrentTree(activate)
+	}, "current")
+}
+
+func (a *ViewerEventAdapter) onWindowSelectionRequest(load func() (WindowSelectionResult, error), target string) {
 	a.view.SetBusy(true)
 	a.view.SetStatus("retrying transient root resolution...")
 	go func() {
-		result, err := a.controller.RefreshTreeForSelectedWindow(hwnd, activate)
+		result, err := load()
 		var expandResults []TreeExpandResult
 		if err == nil {
 			if a.isRecursiveMode != nil && a.isRecursiveMode() {
@@ -73,10 +89,10 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			}
 		}
 		if err != nil {
-			log.Printf("uia.viewer on_window_selected_err hwnd=%s activate=%t err=%v", hwnd, activate, err)
+			log.Printf("uia.viewer on_window_selected_err target=%s err=%v", target, err)
 			a.ui.Queue(func() {
 				a.view.SetBusy(false)
-				msg := formatFatal("InspectWindow", hwnd, err)
+				msg := formatFatal("InspectWindow", target, err)
 				a.view.SetStatus(msg)
 				if shouldShowSelectionErrorModal(err) {
 					a.view.ShowFatal(msg)
@@ -86,6 +102,10 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 		}
 		a.ui.Queue(func() {
 			a.view.SetBusy(false)
+			if result.NoOp {
+				a.view.SetStatus("selected window unchanged; tree preserved")
+				return
+			}
 
 			rootID := result.Root.Root.NodeID
 			rootNode := result.Root.Root
@@ -111,7 +131,7 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 				}
 			}
 
-			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("GetTreeRoot", hwnd), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
+			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("GetTreeRoot", target), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
 			modeSummary := fmt.Sprintf(
 				"requested=%s active=%s provider=%s backend=%s fallback=%t",
 				result.Root.State.RequestedMode,
@@ -122,7 +142,7 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			)
 			warnings := make([]string, 0, 6)
 			for _, warning := range result.RootRetryWarnings {
-				warnings = append(warnings, formatWarning("GetTreeRoot", hwnd, warning.Error()))
+				warnings = append(warnings, formatWarning("GetTreeRoot", target, warning.Error()))
 			}
 			if result.DetailsErr != nil {
 				warnings = append(warnings, formatWarning("GetNodeDetails", rootID, result.DetailsErr.Error()))
@@ -203,7 +223,7 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			}
 
 			a.view.SetStatus(status)
-			log.Printf("uia.viewer ui_update_done hwnd=%s root_node=%s properties=%d patterns=%d children=%d", hwnd, rootID, len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
+			log.Printf("uia.viewer ui_update_done target=%s root_node=%s properties=%d patterns=%d children=%d", target, rootID, len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
 		})
 	}()
 }
