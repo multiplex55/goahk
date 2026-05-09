@@ -211,7 +211,7 @@ func TestController_ExpandTreeDepthFromChildren_StartsFromLoadedRootChildren(t *
 		"b": {{NodeID: "b1"}},
 	}}
 	c := NewController(context.Background(), svc)
-	results := c.ExpandTreeDepthFromChildren([]inspect.TreeNodeDTO{{NodeID: "a"}, {NodeID: "b"}}, 1)
+	results := c.ExpandTreeDepthFromChildren(nil, 0, []inspect.TreeNodeDTO{{NodeID: "a"}, {NodeID: "b"}}, 1)
 	if len(results) != 2 {
 		t.Fatalf("expected root children to be expanded once each, got %d", len(results))
 	}
@@ -231,7 +231,7 @@ func TestController_ExpandTreeDepthFromChildren_BFSOrderingAcrossLevels(t *testi
 		"b1": {{NodeID: "b1x"}},
 	}}
 	c := NewController(context.Background(), svc)
-	_ = c.ExpandTreeDepthFromChildren([]inspect.TreeNodeDTO{{NodeID: "a"}, {NodeID: "b"}}, 2)
+	_ = c.ExpandTreeDepthFromChildren(nil, 0, []inspect.TreeNodeDTO{{NodeID: "a"}, {NodeID: "b"}}, 2)
 	if len(svc.nodeChildrenReqs) != 4 {
 		t.Fatalf("expected BFS expansion across two levels, got %d", len(svc.nodeChildrenReqs))
 	}
