@@ -96,7 +96,14 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			}
 
 			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("GetTreeRoot", hwnd), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))
-			modeSummary := fmt.Sprintf("requested=%s active=%s provider=%s fallback=%t", result.Root.State.RequestedMode, result.Root.State.ActiveMode, result.Root.Source.Provider, result.Root.State.FallbackUsed)
+			modeSummary := fmt.Sprintf(
+				"requested=%s active=%s provider=%s backend=%s fallback=%t",
+				result.Root.State.RequestedMode,
+				result.Root.State.ActiveMode,
+				result.Root.State.Provider,
+				result.Root.State.Backend,
+				result.Root.State.FallbackUsed,
+			)
 			warnings := make([]string, 0, 6)
 			for _, warning := range result.RootRetryWarnings {
 				warnings = append(warnings, formatWarning("GetTreeRoot", hwnd, warning.Error()))
@@ -115,7 +122,7 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			}
 			isUIAOnly := result.Root.State.RequestedMode == inspect.InspectModeUIAOnly
 			if len(warnings) > 0 {
-				status = "loaded with warning: " + strings.Join(warnings, "; ")
+				status = "loaded with traversal warnings: " + strings.Join(warnings, "; ")
 			}
 			if result.ChildLoadErr != nil {
 				status = "UIA root loaded, but child traversal failed: " + result.ChildLoadErr.Error()
@@ -127,10 +134,13 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 				status = status + "; " + result.Details.StatusText
 			}
 			didFallbackSwitch := result.Root.State.RequestedMode != result.Root.State.ActiveMode
+			parity := "parity preconditions satisfied"
+			if result.Root.State.FallbackUsed || (result.Root.State.RequestedMode != inspect.InspectModeUIATree && result.Root.State.RequestedMode != inspect.InspectModeUIAOnly) || strings.ToLower(strings.TrimSpace(result.Root.State.Provider)) != "uia" || strings.ToLower(strings.TrimSpace(result.Root.State.Backend)) != "native-com" {
+				parity = "parity preconditions not met"
+			}
+			status += "; parity: " + parity + " (" + modeSummary + ")"
 			if result.Root.State.FallbackUsed && didFallbackSwitch {
-				status = status + "; fallback mode active: degraded HWND/compatibility tree, selector parity may differ (" + modeSummary + ")"
-			} else {
-				status = status + "; mode: " + modeSummary
+				status = status + "; degrade reason: " + strings.TrimSpace(result.Root.State.DegradeReason)
 			}
 			switch strings.ToLower(strings.TrimSpace(result.Root.Source.Backend)) {
 			case "native-com":

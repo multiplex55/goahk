@@ -148,7 +148,7 @@ func TestViewerEventAdapter_WindowSelectionStatusSet(t *testing.T) {
 	view.enterQueue()
 	fn()
 	view.exitQueue()
-	if len(view.status) == 0 || !strings.Contains(view.status[len(view.status)-1], "window loaded GetTreeRoot [0x2]: properties=0 patterns=0 children=1; mode:") {
+	if len(view.status) == 0 || !strings.Contains(view.status[len(view.status)-1], "window loaded GetTreeRoot [0x2]: properties=0 patterns=0 children=1; parity:") {
 		t.Fatalf("expected success status with counts, got %v", view.status)
 	}
 }
@@ -161,6 +161,9 @@ func TestViewerEventAdapter_WindowSelectionFallbackStatusCopy(t *testing.T) {
 			RequestedMode: inspect.InspectModeUIATree,
 			ActiveMode:    inspect.InspectModeHWNDTree,
 			FallbackUsed:  true,
+			Provider:      "acc",
+			Backend:       "hwnd",
+			DegradeReason: "UIA tree is unavailable. Switch to ACC/MSAA mode to continue inspecting this window.",
 		},
 	}
 	c := NewController(context.Background(), svc)
@@ -170,7 +173,7 @@ func TestViewerEventAdapter_WindowSelectionFallbackStatusCopy(t *testing.T) {
 	adapter.OnWindowSelected("0x2", false)
 	fn := <-mq.ch
 	fn()
-	if len(view.status) == 0 || !strings.Contains(view.status[len(view.status)-1], "fallback mode active: degraded HWND/compatibility tree") {
+	if len(view.status) == 0 || !strings.Contains(view.status[len(view.status)-1], "degrade reason: UIA tree is unavailable.") {
 		t.Fatalf("expected fallback warning status, got %v", view.status)
 	}
 }
@@ -264,6 +267,9 @@ func TestOnWindowSelectedStillShowsDetailsWhenChildrenFail(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(view.status[len(view.status)-1]), "loaded with warning") {
 		t.Fatalf("child traversal error should not be masked as generic loaded warning, got %q", view.status[len(view.status)-1])
+	}
+	if !strings.Contains(strings.ToLower(view.status[len(view.status)-1]), "traversal") {
+		t.Fatalf("expected traversal-specific warning status, got %q", view.status[len(view.status)-1])
 	}
 }
 

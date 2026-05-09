@@ -106,6 +106,9 @@ type InspectModeState struct {
 	ActiveMode    InspectMode `json:"activeMode"`
 	SatisfiedMode InspectMode `json:"satisfiedMode,omitempty"`
 	FallbackUsed  bool        `json:"fallbackUsed"`
+	Provider      string      `json:"provider,omitempty"`
+	Backend       string      `json:"backend,omitempty"`
+	DegradeReason string      `json:"degradeReason,omitempty"`
 	FailureStage  string      `json:"failureStage,omitempty"`
 	GuidanceText  string      `json:"guidanceText,omitempty"`
 }

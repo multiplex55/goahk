@@ -102,11 +102,20 @@ func (p *windowsProvider) InspectWindow(ctx context.Context, req InspectWindowRe
 		return InspectWindowResponse{}, err
 	}
 	p.setActiveMode(resolvedMode)
-	state := InspectModeState{RequestedMode: mode, ActiveMode: resolvedMode, SatisfiedMode: resolvedMode, FallbackUsed: fallbackModeSwitchUsed(mode, resolvedMode)}
+	source := sourceMetadataForMode(resolvedMode)
+	state := InspectModeState{
+		RequestedMode: mode,
+		ActiveMode:    resolvedMode,
+		SatisfiedMode: resolvedMode,
+		FallbackUsed:  fallbackModeSwitchUsed(mode, resolvedMode),
+		Provider:      source.Provider,
+		Backend:       source.Backend,
+	}
 	var diagnostics *InspectDiagnostics
 	if state.FallbackUsed {
 		state.FailureStage = "ResolveWindowRoot"
 		state.GuidanceText = fallbackGuidanceText(resolvedMode)
+		state.DegradeReason = state.GuidanceText
 		diagnostics = &InspectDiagnostics{
 			Stage:        state.FailureStage,
 			Message:      state.GuidanceText,
@@ -130,10 +139,19 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 	p.setActiveMode(resolvedMode)
 	_ = p.refreshHighlightForCurrentSelection(ctx)
 	_ = p.highlights.ClearOnWindowSwitch(ctx, req.HWND)
-	state := InspectModeState{RequestedMode: mode, ActiveMode: resolvedMode, SatisfiedMode: resolvedMode, FallbackUsed: fallbackModeSwitchUsed(mode, resolvedMode)}
+	source := sourceMetadataForMode(resolvedMode)
+	state := InspectModeState{
+		RequestedMode: mode,
+		ActiveMode:    resolvedMode,
+		SatisfiedMode: resolvedMode,
+		FallbackUsed:  fallbackModeSwitchUsed(mode, resolvedMode),
+		Provider:      source.Provider,
+		Backend:       source.Backend,
+	}
 	if state.FallbackUsed {
 		state.FailureStage = "ResolveWindowRoot"
 		state.GuidanceText = fallbackGuidanceText(resolvedMode)
+		state.DegradeReason = state.GuidanceText
 	}
 	var diagnostics *InspectDiagnostics
 	if state.FallbackUsed {
@@ -144,7 +162,6 @@ func (p *windowsProvider) GetTreeRoot(ctx context.Context, req GetTreeRootReques
 		}
 		p.setDiagnostics(diagnostics)
 	}
-	source := sourceMetadataForMode(resolvedMode)
 	if state.FallbackUsed {
 		source.Fallback = "active"
 	} else {
