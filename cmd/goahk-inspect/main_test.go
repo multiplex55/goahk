@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"goahk/internal/inspect"
 	"goahk/internal/uia"
 	"goahk/internal/window"
 )
@@ -218,6 +219,78 @@ func TestDefaultDeps_AreOperationalProviders(t *testing.T) {
 	if _, ok := d.uia.(*uia.OSInspectProvider); !ok {
 		t.Fatalf("uia provider type = %T, want *uia.OSInspectProvider", d.uia)
 	}
+	if d.inspect == nil {
+		t.Fatal("inspect service is nil")
+	}
+}
+
+func TestRun_UIADump_ParsesAndRoutes(t *testing.T) {
+	called := false
+	d := deps{inspect: inspectServiceFunc{dumpTree: func(_ context.Context, req inspect.DumpTreeRequest) (inspect.DumpTreeResponse, error) {
+		called = true
+		if req.HWND != "0x10" || req.Mode != inspect.InspectModeUIAOnly || req.Depth != 2 {
+			t.Fatalf("unexpected req: %+v", req)
+		}
+		return inspect.DumpTreeResponse{Text: "Window \"Calculator\""}, nil
+	}}}
+	var out bytes.Buffer
+	if err := run(context.Background(), []string{"uia", "dump", "--hwnd", "0x10", "--mode", "UIA_ONLY", "--depth", "2"}, &out, &bytes.Buffer{}, d); err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	if !called {
+		t.Fatal("expected dump route call")
+	}
+	if !strings.Contains(out.String(), "MODE=UIA_ONLY") {
+		t.Fatalf("missing mode header in %q", out.String())
+	}
+}
+
+func TestParseDumpFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+		want    inspect.DumpTreeRequest
+	}{
+		{name: "default auto", args: []string{"--hwnd", "0x1"}, want: inspect.DumpTreeRequest{HWND: "0x1", Mode: inspect.InspectModeAuto, Depth: 3}},
+		{name: "window tree alias", args: []string{"--hwnd", "0x1", "--mode", "acc_only", "--depth", "1"}, want: inspect.DumpTreeRequest{HWND: "0x1", Mode: inspect.InspectModeWindowTree, Depth: 1}},
+		{name: "missing hwnd", args: []string{"--mode", "AUTO"}, wantErr: "requires --hwnd"},
+		{name: "invalid mode", args: []string{"--hwnd", "0x1", "--mode", "BAD"}, wantErr: "unsupported mode"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseDumpFlags(tt.args)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("expected err %q got %v", tt.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseDumpFlags err: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("got %+v want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRun_UIADump_ModeReportingAndDepthPassThrough(t *testing.T) {
+	d := deps{inspect: inspectServiceFunc{dumpTree: func(_ context.Context, req inspect.DumpTreeRequest) (inspect.DumpTreeResponse, error) {
+		if req.Depth != 4 {
+			t.Fatalf("depth=%d", req.Depth)
+		}
+		return inspect.DumpTreeResponse{Text: "Root \"Main\"\n  Child \"Item\""}, nil
+	}}}
+	var out bytes.Buffer
+	if err := run(context.Background(), []string{"uia", "dump", "--hwnd", "0x2", "--mode", "AUTO", "--depth", "4"}, &out, &bytes.Buffer{}, d); err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	text := out.String()
+	if !strings.Contains(text, "HWND=0x2 MODE=AUTO") || !strings.Contains(text, "Child \"Item\"") {
+		t.Fatalf("unexpected output %q", text)
+	}
 }
 
 func TestMapOpError_MapsPlatformAndBackendErrors(t *testing.T) {
@@ -261,6 +334,90 @@ type uiaProviderFunc struct {
 	focused func(context.Context) (uia.Element, error)
 	under   func(context.Context) (uia.Element, error)
 	tree    func(context.Context, int) (*uia.Node, error)
+}
+
+type inspectServiceFunc struct {
+	dumpTree func(context.Context, inspect.DumpTreeRequest) (inspect.DumpTreeResponse, error)
+}
+
+func (f inspectServiceFunc) DumpTree(ctx context.Context, req inspect.DumpTreeRequest) (inspect.DumpTreeResponse, error) {
+	if f.dumpTree == nil {
+		return inspect.DumpTreeResponse{}, nil
+	}
+	return f.dumpTree(ctx, req)
+}
+
+func (inspectServiceFunc) ListWindows(context.Context, inspect.ListWindowsRequest) (inspect.ListWindowsResponse, error) {
+	return inspect.ListWindowsResponse{}, nil
+}
+func (inspectServiceFunc) InspectWindow(context.Context, inspect.InspectWindowRequest) (inspect.InspectWindowResponse, error) {
+	return inspect.InspectWindowResponse{}, nil
+}
+func (inspectServiceFunc) GetTreeRoot(context.Context, inspect.GetTreeRootRequest) (inspect.GetTreeRootResponse, error) {
+	return inspect.GetTreeRootResponse{}, nil
+}
+func (inspectServiceFunc) GetNodeChildren(context.Context, inspect.GetNodeChildrenRequest) (inspect.GetNodeChildrenResponse, error) {
+	return inspect.GetNodeChildrenResponse{}, nil
+}
+func (inspectServiceFunc) SelectNode(context.Context, inspect.SelectNodeRequest) (inspect.SelectNodeResponse, error) {
+	return inspect.SelectNodeResponse{}, nil
+}
+func (inspectServiceFunc) GetNodeDetails(context.Context, inspect.GetNodeDetailsRequest) (inspect.GetNodeDetailsResponse, error) {
+	return inspect.GetNodeDetailsResponse{}, nil
+}
+func (inspectServiceFunc) GetFocusedElement(context.Context, inspect.GetFocusedElementRequest) (inspect.GetFocusedElementResponse, error) {
+	return inspect.GetFocusedElementResponse{}, nil
+}
+func (inspectServiceFunc) GetElementUnderCursor(context.Context, inspect.GetElementUnderCursorRequest) (inspect.GetElementUnderCursorResponse, error) {
+	return inspect.GetElementUnderCursorResponse{}, nil
+}
+func (inspectServiceFunc) HighlightNode(context.Context, inspect.HighlightNodeRequest) (inspect.HighlightNodeResponse, error) {
+	return inspect.HighlightNodeResponse{}, nil
+}
+func (inspectServiceFunc) ClearHighlight(context.Context, inspect.ClearHighlightRequest) (inspect.ClearHighlightResponse, error) {
+	return inspect.ClearHighlightResponse{}, nil
+}
+func (inspectServiceFunc) CopyBestSelector(context.Context, inspect.CopyBestSelectorRequest) (inspect.CopyBestSelectorResponse, error) {
+	return inspect.CopyBestSelectorResponse{}, nil
+}
+func (inspectServiceFunc) GetPatternActions(context.Context, inspect.GetPatternActionsRequest) (inspect.GetPatternActionsResponse, error) {
+	return inspect.GetPatternActionsResponse{}, nil
+}
+func (inspectServiceFunc) InvokePattern(context.Context, inspect.InvokePatternRequest) (inspect.InvokePatternResponse, error) {
+	return inspect.InvokePatternResponse{}, nil
+}
+func (inspectServiceFunc) ActivateWindow(context.Context, inspect.ActivateWindowRequest) (inspect.ActivateWindowResponse, error) {
+	return inspect.ActivateWindowResponse{}, nil
+}
+func (inspectServiceFunc) ToggleFollowCursor(context.Context, inspect.ToggleFollowCursorRequest) (inspect.ToggleFollowCursorResponse, error) {
+	return inspect.ToggleFollowCursorResponse{}, nil
+}
+func (inspectServiceFunc) PauseFollowCursor(context.Context, inspect.PauseFollowCursorRequest) (inspect.PauseFollowCursorResponse, error) {
+	return inspect.PauseFollowCursorResponse{}, nil
+}
+func (inspectServiceFunc) ResumeFollowCursor(context.Context, inspect.ResumeFollowCursorRequest) (inspect.ResumeFollowCursorResponse, error) {
+	return inspect.ResumeFollowCursorResponse{}, nil
+}
+func (inspectServiceFunc) LockFollowCursor(context.Context, inspect.LockFollowCursorRequest) (inspect.LockFollowCursorResponse, error) {
+	return inspect.LockFollowCursorResponse{}, nil
+}
+func (inspectServiceFunc) UnlockFollowCursor(context.Context, inspect.UnlockFollowCursorRequest) (inspect.UnlockFollowCursorResponse, error) {
+	return inspect.UnlockFollowCursorResponse{}, nil
+}
+func (inspectServiceFunc) RefreshWindows(context.Context, inspect.RefreshWindowsRequest) (inspect.RefreshWindowsResponse, error) {
+	return inspect.RefreshWindowsResponse{}, nil
+}
+func (inspectServiceFunc) RefreshTreeRoot(context.Context, inspect.RefreshTreeRootRequest) (inspect.RefreshTreeRootResponse, error) {
+	return inspect.RefreshTreeRootResponse{}, nil
+}
+func (inspectServiceFunc) RefreshNodeChildren(context.Context, inspect.RefreshNodeChildrenRequest) (inspect.RefreshNodeChildrenResponse, error) {
+	return inspect.RefreshNodeChildrenResponse{}, nil
+}
+func (inspectServiceFunc) RefreshNodeDetails(context.Context, inspect.RefreshNodeDetailsRequest) (inspect.RefreshNodeDetailsResponse, error) {
+	return inspect.RefreshNodeDetailsResponse{}, nil
+}
+func (inspectServiceFunc) GetDiagnostics(context.Context, inspect.GetDiagnosticsRequest) (inspect.GetDiagnosticsResponse, error) {
+	return inspect.GetDiagnosticsResponse{}, nil
 }
 
 func (f uiaProviderFunc) Focused(ctx context.Context) (uia.Element, error) {
