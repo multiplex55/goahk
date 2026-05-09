@@ -85,6 +85,13 @@ type TreePopulateOptions struct {
 	ContinueOnError bool
 }
 
+type PostActionRefreshResult struct {
+	Details      inspect.GetNodeDetailsResponse
+	DetailsErr   error
+	TargetClosed bool
+	Stale        bool
+}
+
 func NewController(ctx context.Context, svc inspect.Service) *Controller {
 	c := &Controller{ctx: ctx, service: svc, followInterval: 120 * time.Millisecond, nodesByID: map[string]inspect.TreeNodeDTO{}, nodeChildren: map[string][]string{}, nodeExpanded: map[string]bool{}, nodeLoadFailed: map[string]error{}, statusText: "Click here to enable Acc path capturing (can't be used with UIA!)"}
 	c.mode = inspect.InspectModeAuto
@@ -526,6 +533,67 @@ func (c *Controller) RefreshSelectedNodeDetails() (inspect.GetNodeDetailsRespons
 	nodeID := c.selectedNodeID
 	c.mu.Unlock()
 	return c.service.GetNodeDetails(c.runtimeContext(), inspect.GetNodeDetailsRequest{NodeID: nodeID})
+}
+
+func (c *Controller) RefreshAfterAction() PostActionRefreshResult {
+	details, err := c.RefreshSelectedNodeDetails()
+	result := PostActionRefreshResult{Details: details, DetailsErr: err}
+	if err == nil {
+		return result
+	}
+	if !isClosedOrStaleTarget(err) {
+		return result
+	}
+	msg := strings.ToLower(err.Error())
+	result.Stale = true
+	result.TargetClosed = strings.Contains(msg, "window closed") || strings.Contains(msg, "target closed") || strings.Contains(msg, "no such window")
+	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
+	c.mu.Lock()
+	staleNodeID := c.selectedNodeID
+	c.selectedNodeID = ""
+	c.lastFollowNode = ""
+	if staleNodeID != "" {
+		c.clearNodeExpansionStateLocked(staleNodeID)
+	}
+	c.mu.Unlock()
+	return result
+}
+
+func isClosedOrStaleTarget(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, inspect.ErrStaleCache) || errors.Is(err, inspect.ErrTransientFailure) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "stale") ||
+		strings.Contains(msg, "element unavailable") ||
+		strings.Contains(msg, "element not available") ||
+		strings.Contains(msg, "window closed") ||
+		strings.Contains(msg, "target closed") ||
+		strings.Contains(msg, "nil com pointer") ||
+		strings.Contains(msg, "nil element")
+}
+
+func (c *Controller) clearNodeExpansionStateLocked(rootID string) {
+	queue := []string{rootID}
+	seen := map[string]bool{}
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		for _, child := range c.nodeChildren[id] {
+			queue = append(queue, child)
+		}
+		delete(c.nodeChildren, id)
+		delete(c.nodeExpanded, id)
+		delete(c.nodeLoadFailed, id)
+		delete(c.nodesByID, id)
+	}
 }
 func (c *Controller) InvokePattern(nodeID, action string, payload map[string]any) (inspect.InvokePatternResponse, error) {
 	return c.service.InvokePattern(c.runtimeContext(), inspect.InvokePatternRequest{NodeID: nodeID, Action: action, Payload: payload})

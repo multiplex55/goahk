@@ -779,6 +779,39 @@ func TestSelectWindowReturnsRootWhenDetailsFail(t *testing.T) {
 	}
 }
 
+func TestController_RefreshAfterAction_StaleClearsSelectionAndHighlight(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{
+			childrenByNode: map[string][]inspect.TreeNodeDTO{
+				"stale-node": {{NodeID: "child-1"}},
+			},
+		},
+		nodeDetailsErr: inspect.ErrStaleCache,
+	}
+	c := NewController(context.Background(), svc)
+	c.selectedNodeID = "stale-node"
+	c.nodeExpanded["stale-node"] = true
+	c.nodeChildren["stale-node"] = []string{"child-1"}
+	c.nodeExpanded["child-1"] = true
+
+	res := c.RefreshAfterAction()
+	if !res.Stale || !errors.Is(res.DetailsErr, inspect.ErrStaleCache) {
+		t.Fatalf("expected stale refresh result, got %+v", res)
+	}
+	if res.TargetClosed {
+		t.Fatalf("did not expect target closed for ErrStaleCache")
+	}
+	if c.selectedNodeID != "" {
+		t.Fatalf("expected selectedNodeID cleared, got %q", c.selectedNodeID)
+	}
+	if svc.clearCalls == 0 {
+		t.Fatal("expected highlight to be cleared")
+	}
+	if c.nodeExpanded["stale-node"] || c.nodeExpanded["child-1"] {
+		t.Fatalf("expected stale expansion chain cleared, got %+v", c.nodeExpanded)
+	}
+}
+
 func TestControllerModeAccessors(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}}
 	c := NewController(context.Background(), svc)
