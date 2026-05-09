@@ -26,6 +26,9 @@ type Controller struct {
 	mu                    sync.Mutex
 	selectedWindowID      string
 	selectedNodeID        string
+	selectionCtx          context.Context
+	selectionCancel       context.CancelFunc
+	selectionGeneration   uint64
 	visibleOnly           bool
 	titleOnly             bool
 	mode                  inspect.InspectMode
@@ -71,10 +74,11 @@ type StatusUpdate struct {
 }
 
 type TreeExpandResult struct {
-	ParentID string
-	Children []inspect.TreeNodeDTO
-	Depth    int
-	Err      error
+	ParentID   string
+	Children   []inspect.TreeNodeDTO
+	Depth      int
+	Generation uint64
+	Err        error
 }
 
 type TreePopulateOptions struct {
@@ -173,6 +177,13 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 	c.mu.Lock()
 	mode := c.effectiveModeLocked()
+	if c.selectionCancel != nil {
+		c.selectionCancel()
+	}
+	selectionCtx, selectionCancel := context.WithCancel(c.runtimeContext())
+	c.selectionCtx = selectionCtx
+	c.selectionCancel = selectionCancel
+	c.selectionGeneration++
 	c.selectedWindowID = hwnd
 	c.mu.Unlock()
 	log.Printf("uia.viewer select_window_start hwnd=%s activate=%t mode=%s", hwnd, activate, mode)
@@ -338,7 +349,14 @@ func (c *Controller) effectiveModeLocked() inspect.InspectMode {
 	return c.mode
 }
 func (c *Controller) ExpandNode(nodeID string) (inspect.GetNodeChildrenResponse, error) {
-	resp, err := c.service.GetNodeChildren(c.runtimeContext(), inspect.GetNodeChildrenRequest{NodeID: nodeID})
+	return c.ExpandNodeWithContext(c.currentSelectionContext(), nodeID)
+}
+
+func (c *Controller) ExpandNodeWithContext(ctx context.Context, nodeID string) (inspect.GetNodeChildrenResponse, error) {
+	if ctx == nil {
+		ctx = c.runtimeContext()
+	}
+	resp, err := c.service.GetNodeChildren(ctx, inspect.GetNodeChildrenRequest{NodeID: nodeID})
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err != nil {
@@ -360,16 +378,20 @@ func (c *Controller) ExpandTreeDepth(rootID string, maxDepth int) []TreeExpandRe
 	if strings.TrimSpace(rootID) == "" || maxDepth <= 0 {
 		return nil
 	}
-	resp, err := c.ExpandNode(rootID)
+	ctx, generation := c.currentSelectionContextWithGeneration()
+	resp, err := c.ExpandNodeWithContext(ctx, rootID)
 	if err != nil {
-		return []TreeExpandResult{{ParentID: rootID, Depth: 0, Err: err}}
+		return []TreeExpandResult{{ParentID: rootID, Depth: 0, Generation: generation, Err: err}}
 	}
-	results := []TreeExpandResult{{ParentID: rootID, Depth: 0, Children: resp.Children}}
-	results = append(results, c.ExpandTreeDepthFromChildren(resp.Children, maxDepth-1)...)
+	results := []TreeExpandResult{{ParentID: rootID, Depth: 0, Generation: generation, Children: resp.Children}}
+	results = append(results, c.ExpandTreeDepthFromChildren(ctx, generation, resp.Children, maxDepth-1)...)
 	return results
 }
 
-func (c *Controller) ExpandTreeDepthFromChildren(children []inspect.TreeNodeDTO, remainingDepth int) []TreeExpandResult {
+func (c *Controller) ExpandTreeDepthFromChildren(ctx context.Context, generation uint64, children []inspect.TreeNodeDTO, remainingDepth int) []TreeExpandResult {
+	if ctx == nil || generation == 0 {
+		ctx, generation = c.currentSelectionContextWithGeneration()
+	}
 	if remainingDepth <= 0 || len(children) == 0 {
 		return nil
 	}
@@ -393,12 +415,12 @@ func (c *Controller) ExpandTreeDepthFromChildren(children []inspect.TreeNodeDTO,
 			continue
 		}
 		seen[current.id] = true
-		resp, err := c.ExpandNode(current.id)
+		resp, err := c.ExpandNodeWithContext(ctx, current.id)
 		if err != nil {
-			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth + 1, Err: err})
+			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth + 1, Generation: generation, Err: err})
 			continue
 		}
-		results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth + 1, Children: resp.Children})
+		results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth + 1, Generation: generation, Children: resp.Children})
 		nextDepth := current.depth + 1
 		for _, grandchild := range resp.Children {
 			if strings.TrimSpace(grandchild.NodeID) == "" {
@@ -421,7 +443,7 @@ func (c *Controller) PopulateTreeFromRoot(rootID string, opts TreePopulateOption
 	if opts.MaxNodes <= 0 {
 		opts.MaxNodes = 300
 	}
-	ctx := c.runtimeContext()
+	ctx, generation := c.currentSelectionContextWithGeneration()
 	if opts.TotalTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.TotalTimeout)
@@ -437,7 +459,7 @@ func (c *Controller) PopulateTreeFromRoot(rootID string, opts TreePopulateOption
 	expanded := 0
 	for len(queue) > 0 {
 		if ctx.Err() != nil {
-			results = append(results, TreeExpandResult{ParentID: rootID, Depth: 0, Err: fmt.Errorf("timeout reached: %w", ctx.Err())})
+			results = append(results, TreeExpandResult{ParentID: rootID, Depth: 0, Generation: generation, Err: fmt.Errorf("timeout reached: %w", ctx.Err())})
 			break
 		}
 		current := queue[0]
@@ -447,11 +469,11 @@ func (c *Controller) PopulateTreeFromRoot(rootID string, opts TreePopulateOption
 		}
 		seen[current.id] = true
 		if expanded >= opts.MaxNodes {
-			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Err: fmt.Errorf("budget reached: max nodes=%d", opts.MaxNodes)})
+			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Generation: generation, Err: fmt.Errorf("budget reached: max nodes=%d", opts.MaxNodes)})
 			break
 		}
 		if current.depth >= opts.MaxDepth {
-			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Err: fmt.Errorf("max depth reached: %d", opts.MaxDepth)})
+			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Generation: generation, Err: fmt.Errorf("max depth reached: %d", opts.MaxDepth)})
 			continue
 		}
 		callCtx := ctx
@@ -461,13 +483,13 @@ func (c *Controller) PopulateTreeFromRoot(rootID string, opts TreePopulateOption
 			resp, err := c.service.GetNodeChildren(callCtx, inspect.GetNodeChildrenRequest{NodeID: current.id})
 			cancel()
 			if err != nil {
-				results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Err: err})
+				results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Generation: generation, Err: err})
 				if current.id == rootID || !opts.ContinueOnError {
 					break
 				}
 				continue
 			}
-			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Children: resp.Children})
+			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Generation: generation, Children: resp.Children})
 			expanded++
 			for _, ch := range resp.Children {
 				if strings.TrimSpace(ch.NodeID) == "" {
@@ -479,13 +501,13 @@ func (c *Controller) PopulateTreeFromRoot(rootID string, opts TreePopulateOption
 		}
 		resp, err := c.service.GetNodeChildren(callCtx, inspect.GetNodeChildrenRequest{NodeID: current.id})
 		if err != nil {
-			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Err: err})
+			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Generation: generation, Err: err})
 			if current.id == rootID || !opts.ContinueOnError {
 				break
 			}
 			continue
 		}
-		results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Children: resp.Children})
+		results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Generation: generation, Children: resp.Children})
 		expanded++
 		for _, ch := range resp.Children {
 			if strings.TrimSpace(ch.NodeID) == "" {
@@ -495,6 +517,34 @@ func (c *Controller) PopulateTreeFromRoot(rootID string, opts TreePopulateOption
 		}
 	}
 	return results
+}
+
+func (c *Controller) currentSelectionContext() context.Context {
+	ctx, _ := c.currentSelectionContextWithGeneration()
+	return ctx
+}
+
+func (c *Controller) currentSelectionContextWithGeneration() (context.Context, uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.currentSelectionContextLocked()
+}
+
+func (c *Controller) currentSelectionContextLocked() (context.Context, uint64) {
+	if c.selectionGeneration == 0 || c.selectionCancel == nil || c.selectionCtx == nil {
+		ctx, cancel := context.WithCancel(c.runtimeContext())
+		c.selectionCtx = ctx
+		c.selectionCancel = cancel
+		c.selectionGeneration++
+		return ctx, c.selectionGeneration
+	}
+	return c.selectionCtx, c.selectionGeneration
+}
+
+func (c *Controller) IsCurrentGeneration(gen uint64) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return gen != 0 && gen == c.selectionGeneration
 }
 
 func (c *Controller) ExpandedNodeIDs() []string {
@@ -549,6 +599,12 @@ func (c *Controller) RefreshAfterAction() PostActionRefreshResult {
 	result.TargetClosed = strings.Contains(msg, "window closed") || strings.Contains(msg, "target closed") || strings.Contains(msg, "no such window")
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 	c.mu.Lock()
+	if c.selectionCancel != nil {
+		c.selectionCancel()
+		c.selectionCancel = nil
+		c.selectionCtx = nil
+		c.selectionGeneration++
+	}
 	staleNodeID := c.selectedNodeID
 	c.selectedNodeID = ""
 	c.lastFollowNode = ""
@@ -801,6 +857,12 @@ func (c *Controller) Shutdown() {
 	c.followLocked = false
 	c.lastFollowNode = ""
 	c.selectedNodeID = ""
+	if c.selectionCancel != nil {
+		c.selectionCancel()
+	}
+	c.selectionCancel = nil
+	c.selectionCtx = nil
+	c.selectionGeneration++
 	c.mu.Unlock()
 }
 func normalizeInspectError(err error) string {

@@ -69,7 +69,7 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 					ContinueOnError: true,
 				})
 			} else {
-				expandResults = a.controller.ExpandTreeDepthFromChildren(result.Children, a.autoExpandDepth()-1)
+				expandResults = a.controller.ExpandTreeDepthFromChildren(nil, 0, result.Children, a.autoExpandDepth()-1)
 			}
 		}
 		if err != nil {
@@ -105,6 +105,9 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 				a.view.ExpandTreeNode(rootID)
 			}
 			for _, expanded := range expandResults {
+				if !a.controller.IsCurrentGeneration(expanded.Generation) {
+					continue
+				}
 				if expanded.Err == nil {
 					a.view.UpdateNodeChildren(expanded.ParentID, expanded.Children)
 					a.view.ExpandTreeNode(expanded.ParentID)
