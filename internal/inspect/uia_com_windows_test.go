@@ -363,6 +363,15 @@ func TestUIAVTableIndexConstants(t *testing.T) {
 		{"IUIAutomationElementArray.Length", uiaVTableIUIAutomationElementArrayLength, 3},
 		{"IUIAutomationElementArray.GetElement", uiaVTableIUIAutomationElementArrayGetElement, 4},
 		{"IUIAutomationTreeWalker.GetParentElement", uiaVTableIUIAutomationTreeWalkerGetParentElement, 3},
+		{"IUIAutomationInvokePattern.Invoke", uiaVTableIUIAutomationInvokePatternInvoke, 3},
+		{"IUIAutomationSelectionItemPattern.Select", uiaVTableIUIAutomationSelectionItemPatternSelect, 3},
+		{"IUIAutomationValuePattern.SetValue", uiaVTableIUIAutomationValuePatternSetValue, 3},
+		{"IUIAutomationLegacyIAccessiblePattern.Select", uiaVTableIUIAutomationLegacyIAccessiblePatternSelect, 3},
+		{"IUIAutomationLegacyIAccessiblePattern.DoDefaultAction", uiaVTableIUIAutomationLegacyIAccessiblePatternDoDefaultAction, 4},
+		{"IUIAutomationLegacyIAccessiblePattern.SetValue", uiaVTableIUIAutomationLegacyIAccessiblePatternSetValue, 5},
+		{"IUIAutomationTogglePattern.Toggle", uiaVTableIUIAutomationTogglePatternToggle, 3},
+		{"IUIAutomationExpandCollapsePattern.Expand", uiaVTableIUIAutomationExpandCollapsePatternExpand, 3},
+		{"IUIAutomationExpandCollapsePattern.Collapse", uiaVTableIUIAutomationExpandCollapsePatternCollapse, 4},
 	}
 
 	for _, tc := range tests {
@@ -371,6 +380,46 @@ func TestUIAVTableIndexConstants(t *testing.T) {
 				t.Fatalf("%s constant mismatch: got %d want %d", tc.name, tc.got, tc.want)
 			}
 		})
+	}
+}
+
+func TestWithBSTR_AllocFreeLifecycle(t *testing.T) {
+	origAlloc := sysAllocStringCall
+	origFree := sysFreeStringCall
+	defer func() {
+		sysAllocStringCall = origAlloc
+		sysFreeStringCall = origFree
+	}()
+
+	var allocs, frees int
+	var freed uintptr
+	sysAllocStringCall = func(s *uint16) uintptr {
+		if s == nil {
+			t.Fatal("expected utf16 string pointer")
+		}
+		allocs++
+		return 0x99
+	}
+	sysFreeStringCall = func(bstr uintptr) {
+		frees++
+		freed = bstr
+	}
+
+	wantErr := errors.New("invoke failed")
+	err := withBSTR("abc", "SetValue", func(bstr uintptr) error {
+		if bstr != 0x99 {
+			t.Fatalf("unexpected bstr: got 0x%x", bstr)
+		}
+		return wantErr
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected callback error, got %v", err)
+	}
+	if allocs != 1 || frees != 1 {
+		t.Fatalf("expected one alloc/free, got allocs=%d frees=%d", allocs, frees)
+	}
+	if freed != 0x99 {
+		t.Fatalf("unexpected freed ptr: got 0x%x", freed)
 	}
 }
 
