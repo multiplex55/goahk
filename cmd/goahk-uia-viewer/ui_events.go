@@ -260,29 +260,32 @@ func (a *ViewerEventAdapter) OnTreeExpanded(nodeID string, loaded bool) {
 func (a *ViewerEventAdapter) OnTreeSelected(nodeID string) {
 	a.view.SetBusy(true)
 	go func() {
-		err := a.controller.SelectNode(nodeID)
-		details, detailsErr := a.controller.RefreshSelectedNodeDetails()
+		result := a.controller.SelectTreeNode(nodeID)
 		a.ui.Queue(func() {
 			a.view.SetBusy(false)
-			if err != nil {
-				if isClosedOrStaleTarget(err) {
+			if result.SelectErr != nil {
+				if isClosedOrStaleTarget(result.SelectErr) {
 					a.view.SetStatus("node selection completed, but target became stale or closed")
 					return
 				}
-				msg := formatFatal("InspectWindow", nodeID, err)
+				msg := formatFatal("InspectWindow", nodeID, result.SelectErr)
 				a.view.SetStatus(msg)
 				return
 			}
-			if detailsErr != nil {
-				if isClosedOrStaleTarget(detailsErr) {
+			if result.DetailsErr != nil {
+				if isClosedOrStaleTarget(result.DetailsErr) {
 					a.view.SetStatus("node selected, but target became stale or closed")
 					return
 				}
-				msg := formatFatal("GetNodeDetails", nodeID, detailsErr)
+				msg := formatFatal("GetNodeDetails", nodeID, result.DetailsErr)
 				a.view.SetStatus(msg)
 				return
 			}
-			a.view.UpdateNodeDetails(details)
+			a.view.UpdateNodeDetails(result.Details)
+			if result.HighlightErr != nil {
+				a.view.SetStatus(formatWarning("HighlightNode", nodeID, result.HighlightErr.Error()))
+				return
+			}
 			a.view.SetStatus("node selected " + formatStageTarget("GetNodeDetails", nodeID))
 		})
 	}()
