@@ -4,13 +4,14 @@ This document defines a **tooling validation contract** for `goahk-uia-viewer`. 
 
 ## Parity contract: `UIA_TREE` vs fallback trees
 
-## UIA discovery vs details loading (phased pattern probing)
+## UIA discovery vs details loading (phased property + pattern resolution)
 
 - Native UIA wrapping is intentionally phased:
-  - **Tree discovery paths** (`GetTreeRoot`, child expansion, parent/child traversal) populate element properties but do **not** probe supported UIA patterns.
-  - **Details paths** (`GetNodeDetails` / element-by-ref refresh for selected nodes) then probe supported patterns on demand.
+  - **Tree discovery paths** (`GetTreeRoot`, child expansion, parent/child traversal) load only a minimal property tier: `RuntimeId`, `ControlType`, `LocalizedControlType`, `Name`, `ClassName`, `ProcessId`, `BoundingRectangle`, and `NativeWindowHandle`. Discovery does **not** load details-tier properties and does **not** probe supported UIA patterns.
+  - **Details paths** (`GetNodeDetails` / element-by-ref refresh for selected nodes) load the extended user-facing property set and then probe supported patterns on demand.
 - Expected behavior:
   - Tree loading remains available even when COM pattern probing intermittently fails.
+  - Tree rows can intentionally show fewer fields than the selected-node details panel because details-tier properties are deferred.
   - Pattern/actionability panes may be incomplete for a node when probing fails, without collapsing the whole tree load.
 - Test expectations should treat pattern probing failures during discovery as degraded details data, not as discovery failure.
 
