@@ -199,6 +199,45 @@ func TestController_ExpandTreeDepth_ExpandsBreadthFirstToDepth(t *testing.T) {
 	}
 }
 
+func TestController_ExpandTreeDepthFromChildren_StartsFromLoadedRootChildren(t *testing.T) {
+	svc := &fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{
+		"a": {{NodeID: "a1"}},
+		"b": {{NodeID: "b1"}},
+	}}
+	c := NewController(context.Background(), svc)
+	results := c.ExpandTreeDepthFromChildren([]inspect.TreeNodeDTO{{NodeID: "a"}, {NodeID: "b"}}, 1)
+	if len(results) != 2 {
+		t.Fatalf("expected root children to be expanded once each, got %d", len(results))
+	}
+	if len(svc.nodeChildrenReqs) != 2 {
+		t.Fatalf("expected no duplicate root expansion path, got calls=%d", len(svc.nodeChildrenReqs))
+	}
+	if svc.nodeChildrenReqs[0].NodeID != "a" || svc.nodeChildrenReqs[1].NodeID != "b" {
+		t.Fatalf("expected BFS from loaded children [a b], got %+v", svc.nodeChildrenReqs)
+	}
+}
+
+func TestController_ExpandTreeDepthFromChildren_BFSOrderingAcrossLevels(t *testing.T) {
+	svc := &fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{
+		"a":  {{NodeID: "a1"}},
+		"b":  {{NodeID: "b1"}},
+		"a1": {{NodeID: "a1x"}},
+		"b1": {{NodeID: "b1x"}},
+	}}
+	c := NewController(context.Background(), svc)
+	_ = c.ExpandTreeDepthFromChildren([]inspect.TreeNodeDTO{{NodeID: "a"}, {NodeID: "b"}}, 2)
+	if len(svc.nodeChildrenReqs) != 4 {
+		t.Fatalf("expected BFS expansion across two levels, got %d", len(svc.nodeChildrenReqs))
+	}
+	got := []string{svc.nodeChildrenReqs[0].NodeID, svc.nodeChildrenReqs[1].NodeID, svc.nodeChildrenReqs[2].NodeID, svc.nodeChildrenReqs[3].NodeID}
+	want := []string{"a", "b", "a1", "b1"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected BFS order %v, got %v", want, got)
+		}
+	}
+}
+
 func TestController_InvokePattern_ForSelection(t *testing.T) {
 	svc := &fakeInspectService{}
 	c := NewController(context.Background(), svc)

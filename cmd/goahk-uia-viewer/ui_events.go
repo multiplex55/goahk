@@ -53,7 +53,7 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 		result, err := a.controller.SelectWindow(hwnd, activate)
 		var expandResults []TreeExpandResult
 		if err == nil {
-			expandResults = a.controller.ExpandTreeDepth(result.Root.Root.NodeID, a.autoExpandDepth())
+			expandResults = a.controller.ExpandTreeDepthFromChildren(result.Children, a.autoExpandDepth()-1)
 		}
 		if err != nil {
 			log.Printf("uia.viewer on_window_selected_err hwnd=%s activate=%t err=%v", hwnd, activate, err)

@@ -344,29 +344,51 @@ func (c *Controller) ExpandTreeDepth(rootID string, maxDepth int) []TreeExpandRe
 	if strings.TrimSpace(rootID) == "" || maxDepth <= 0 {
 		return nil
 	}
+	resp, err := c.ExpandNode(rootID)
+	if err != nil {
+		return []TreeExpandResult{{ParentID: rootID, Err: err}}
+	}
+	results := []TreeExpandResult{{ParentID: rootID, Children: resp.Children}}
+	results = append(results, c.ExpandTreeDepthFromChildren(resp.Children, maxDepth-1)...)
+	return results
+}
+
+func (c *Controller) ExpandTreeDepthFromChildren(children []inspect.TreeNodeDTO, remainingDepth int) []TreeExpandResult {
+	if remainingDepth <= 0 || len(children) == 0 {
+		return nil
+	}
 	type depthNode struct {
 		id    string
 		depth int
 	}
-	queue := []depthNode{{id: rootID, depth: 0}}
+	queue := make([]depthNode, 0, len(children))
+	for _, child := range children {
+		if strings.TrimSpace(child.NodeID) == "" {
+			continue
+		}
+		queue = append(queue, depthNode{id: child.NodeID, depth: 0})
+	}
 	seen := map[string]bool{}
 	results := make([]TreeExpandResult, 0)
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
-		if seen[current.id] || current.depth >= maxDepth {
+		if seen[current.id] || current.depth >= remainingDepth {
 			continue
 		}
 		seen[current.id] = true
-		children, err := c.ExpandNode(current.id)
+		resp, err := c.ExpandNode(current.id)
 		if err != nil {
 			results = append(results, TreeExpandResult{ParentID: current.id, Err: err})
 			continue
 		}
-		results = append(results, TreeExpandResult{ParentID: current.id, Children: children.Children})
+		results = append(results, TreeExpandResult{ParentID: current.id, Children: resp.Children})
 		nextDepth := current.depth + 1
-		for _, child := range children.Children {
-			queue = append(queue, depthNode{id: child.NodeID, depth: nextDepth})
+		for _, grandchild := range resp.Children {
+			if strings.TrimSpace(grandchild.NodeID) == "" {
+				continue
+			}
+			queue = append(queue, depthNode{id: grandchild.NodeID, depth: nextDepth})
 		}
 	}
 	return results
