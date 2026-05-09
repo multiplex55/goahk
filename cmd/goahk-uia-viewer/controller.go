@@ -137,6 +137,12 @@ func (c *Controller) Mode() inspect.InspectMode {
 	defer c.mu.Unlock()
 	return c.mode
 }
+
+func (c *Controller) SelectionGeneration() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.selectionGeneration
+}
 func (c *Controller) SetAllowFallback(allow bool) {
 	c.mu.Lock()
 	c.allowFallback = allow

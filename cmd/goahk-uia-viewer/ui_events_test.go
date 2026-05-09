@@ -41,6 +41,17 @@ func (v *guardedView) UpdateNodeChildren(nodeID string, _ []inspect.TreeNodeDTO)
 	v.updates++
 	v.childrenUpdated = append(v.childrenUpdated, nodeID)
 }
+func (v *guardedView) UpdateTreeBatch(results []TreeExpandResult) {
+	for _, result := range results {
+		if result.Err != nil {
+			continue
+		}
+		v.UpdateNodeChildren(result.ParentID, result.Children)
+		if v.ShouldAutoExpand(result.ParentID) {
+			v.ExpandTreeNode(result.ParentID)
+		}
+	}
+}
 func (v *guardedView) ExpandTreeNode(nodeID string) {
 	v.expandCalls++
 	v.expanded = append(v.expanded, nodeID)
