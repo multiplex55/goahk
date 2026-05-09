@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"time"
 
 	"goahk/internal/inspect"
 )
@@ -27,6 +28,9 @@ var bootstrapCheck = walkBootstrapCheck
 var (
 	startupLogOnce sync.Once
 	startupLogger  *log.Logger
+	appVersion     = "dev"
+	buildCommit    = "unknown"
+	buildTime      = "unknown"
 )
 
 func logStartup(msg string) {
@@ -37,9 +41,12 @@ func logStartup(msg string) {
 }
 
 func openStartupLogFile() *os.File {
-	preferred := filepath.Join("dist", "goahk-uia-viewer", "goahk-uia-viewer.log")
-	if f, err := createLogFile(preferred); err == nil {
-		return f
+	localAppData := os.Getenv("LOCALAPPDATA")
+	if localAppData != "" {
+		stable := filepath.Join(localAppData, "goahk", "uia-viewer", "uia-viewer.log")
+		if f, err := createLogFile(stable); err == nil {
+			return f
+		}
 	}
 	exe, err := os.Executable()
 	if err != nil {
@@ -61,6 +68,8 @@ func createLogFile(path string) (*os.File, error) {
 }
 
 func runWindows() (err error) {
+	logStartup(fmt.Sprintf("startup metadata ts=%s runtime_mode=windows-uia-viewer feature_gate_follow_cursor=true feature_gate_acc_path_capture=true", time.Now().UTC().Format(time.RFC3339Nano)))
+	logStartup(fmt.Sprintf("startup build version=%s commit=%s built_at=%s", appVersion, buildCommit, buildTime))
 	logStartup("startup begin")
 	logStartup("bootstrap check begin")
 	if err := bootstrapCheck(); err != nil {
