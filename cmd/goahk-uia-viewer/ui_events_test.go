@@ -21,6 +21,7 @@ type guardedView struct {
 	status          []string
 	updates         int
 	expanded        []string
+	expandCalls     int
 	childrenUpdated []string
 	selected        []string
 	fatal           []string
@@ -38,7 +39,10 @@ func (v *guardedView) UpdateNodeChildren(nodeID string, _ []inspect.TreeNodeDTO)
 	v.updates++
 	v.childrenUpdated = append(v.childrenUpdated, nodeID)
 }
-func (v *guardedView) ExpandTreeNode(nodeID string) { v.expanded = append(v.expanded, nodeID) }
+func (v *guardedView) ExpandTreeNode(nodeID string) {
+	v.expandCalls++
+	v.expanded = append(v.expanded, nodeID)
+}
 func (v *guardedView) SelectTreeNode(nodeID string) { v.selected = append(v.selected, nodeID) }
 
 func TestViewerEventAdapter_WindowSelectionPipeline(t *testing.T) {
@@ -360,8 +364,49 @@ func TestOnWindowSelectedExpandsAndSelectsRoot(t *testing.T) {
 	if len(view.expanded) == 0 || view.expanded[0] != "root" {
 		t.Fatalf("expected root expanded, got %v", view.expanded)
 	}
+	if view.expandCalls == 0 {
+		t.Fatal("expected expand command path invocation")
+	}
 	if len(view.selected) == 0 || view.selected[0] != "root" {
 		t.Fatalf("expected root selected, got %v", view.selected)
+	}
+}
+
+func TestOnWindowSelectedExpansionOrderMatchesLoadedResults(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{"root": {{NodeID: "child-1"}}, "child-1": {{NodeID: "grand-1"}}}}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.autoExpandDepth = func() int { return 2 }
+
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+
+	want := []string{"root", "child-1"}
+	if len(view.expanded) != len(want) {
+		t.Fatalf("expected deterministic expansion order %v, got %v", want, view.expanded)
+	}
+	for i := range want {
+		if view.expanded[i] != want[i] {
+			t.Fatalf("expected deterministic expansion order %v, got %v", want, view.expanded)
+		}
+	}
+}
+
+func TestOnWindowSelectedProgrammaticExpansionDoesNotTriggerDuplicateChildLoad(t *testing.T) {
+	svc := &fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{"n1": {{NodeID: "c1"}}}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnTreeExpanded("n1", false)
+	fn := <-mq.ch
+	fn()
+	if len(svc.nodeChildrenReqs) != 1 {
+		t.Fatalf("expected single child-load dispatch, got %d", len(svc.nodeChildrenReqs))
 	}
 }
 

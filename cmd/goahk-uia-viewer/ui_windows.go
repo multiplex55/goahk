@@ -14,6 +14,7 @@ type viewerUI struct {
 	dispatcher                 UIThreadMarshaller
 	walkUIThread               *walk.MainWindow
 	suppressTreeSelectionEvent bool
+	suppressTreeExpandEvent    bool
 	mw                         *walk.MainWindow
 	root                       *walk.Composite
 

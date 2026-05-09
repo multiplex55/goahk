@@ -270,3 +270,30 @@ func TestUIATreeAutoExpandLevelOrder_RootThenChildLevels(t *testing.T) {
 		t.Fatalf("expected child expansion to render next level, got count=%d", child.ChildCount())
 	}
 }
+
+func TestUIATreeBulkExpansionKeepsModelAndVisualBookkeepingConsistent(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "a"}, {NodeID: "b"}})
+	m.SetChildren("a", []inspect.TreeNodeDTO{{NodeID: "a1"}})
+	m.SetChildren("b", []inspect.TreeNodeDTO{{NodeID: "b1"}})
+
+	for _, id := range []string{"root", "a", "b"} {
+		m.SetExpanded(id, true)
+	}
+
+	for _, id := range []string{"root", "a", "b"} {
+		if !m.IsExpanded(id) {
+			t.Fatalf("expected expanded model state for %s", id)
+		}
+		if !m.AreChildrenLoaded(id) {
+			t.Fatalf("expected loaded child bookkeeping for %s", id)
+		}
+	}
+
+	a, _ := m.ItemByID("a")
+	b, _ := m.ItemByID("b")
+	if a.ChildCount() != 1 || b.ChildCount() != 1 {
+		t.Fatalf("expected visual expansion bookkeeping to keep children visible: a=%d b=%d", a.ChildCount(), b.ChildCount())
+	}
+}
