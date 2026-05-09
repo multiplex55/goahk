@@ -483,15 +483,12 @@ func TestOnWindowSelectedShowsFallbackStatus(t *testing.T) {
 }
 
 func TestOnWindowSelectedUpdatesChildrenForEveryAutoExpandLevel(t *testing.T) {
+	fixture := buildFakeNotepadTreeFixture()
 	svc := &fakeControllerService{
 		fakeInspectService: fakeInspectService{
-			childrenByNode: map[string][]inspect.TreeNodeDTO{
-				"root": {{NodeID: "a"}, {NodeID: "b"}},
-				"a":    {{NodeID: "a1"}},
-				"b":    {},
-			},
+			childrenByNode: fixture.ChildrenBy,
 		},
-		root: inspect.TreeNodeDTO{NodeID: "root"},
+		root: fixture.Root,
 	}
 	c := NewController(context.Background(), svc)
 	mq := &queueMarshaller{ch: make(chan func(), 2)}
@@ -511,6 +508,15 @@ func TestOnWindowSelectedUpdatesChildrenForEveryAutoExpandLevel(t *testing.T) {
 		if view.childrenUpdated[i] != want[i] {
 			t.Fatalf("expected UpdateNodeChildren order %v, got %v", want, view.childrenUpdated)
 		}
+	}
+	if len(view.expanded) < len(want) || view.expanded[0] != "root" || view.expanded[1] != "child-1" {
+		t.Fatalf("expected non-leaf expansion calls for %v, got %v", want, view.expanded)
+	}
+	if len(view.status) == 0 || strings.Contains(strings.ToLower(view.status[len(view.status)-1]), "degraded") {
+		t.Fatalf("expected successful UIA status without fallback/degraded, got %v", view.status)
+	}
+	if len(fixture.ChildrenBy["pane"]) < 3 || fixture.ChildrenBy["pane"][1].NodeID == fixture.ChildrenBy["pane"][2].NodeID {
+		t.Fatalf("expected duplicate labels to remain distinct nodes in fixture")
 	}
 }
 

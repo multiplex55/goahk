@@ -5,9 +5,6 @@ package main
 import "strings"
 
 func uiaNodeLabel(nodeID, displayLabel, localizedControlType, controlType, name string) string {
-	if strings.TrimSpace(displayLabel) != "" {
-		return displayLabel
-	}
 	if s := composeTypeNameLabel(localizedControlType, name); s != "" {
 		return s
 	}

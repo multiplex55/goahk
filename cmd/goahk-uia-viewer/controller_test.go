@@ -245,15 +245,21 @@ func TestController_ExpandTreeDepthFromChildren_BFSOrderingAcrossLevels(t *testi
 }
 
 func TestController_PopulateTreeFromRoot_RecursiveModeReachesDeeperThanDepth2(t *testing.T) {
-	svc := &fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{
-		"root": {{NodeID: "a"}},
-		"a":    {{NodeID: "b"}},
-		"b":    {{NodeID: "c"}},
-	}}
+	fixture := buildFakeNotepadTreeFixture()
+	svc := &fakeInspectService{childrenByNode: fixture.ChildrenBy}
 	c := NewController(context.Background(), svc)
 	results := c.PopulateTreeFromRoot("root", TreePopulateOptions{MaxDepth: 5, MaxNodes: 20, ContinueOnError: true})
-	if len(results) < 3 {
-		t.Fatalf("expected deeper recursive traversal, got %d results", len(results))
+	requested := map[string]bool{}
+	for _, req := range svc.nodeChildrenReqs {
+		requested[req.NodeID] = true
+	}
+	for _, id := range fixture.AllNodeIDs {
+		if !requested[id] {
+			t.Fatalf("expected recursive mode to request node %q, got %v", id, requested)
+		}
+	}
+	if len(results) < len(fixture.NonLeafIDs) {
+		t.Fatalf("expected recursive traversal results for non-leaf nodes, got %d", len(results))
 	}
 }
 

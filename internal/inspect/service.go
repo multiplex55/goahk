@@ -779,17 +779,8 @@ func formatDumpTreeLine(node DumpNode, level int) string {
 }
 
 func formatDumpNodeLine(controlType, localizedControlType, name string, root bool) string {
-	typ := strings.TrimSpace(controlType)
-	if strings.TrimSpace(localizedControlType) != "" {
-		typ = strings.TrimSpace(localizedControlType)
-	}
-	if typ == "" {
-		typ = "unknown"
-	}
-	if root {
-		return fmt.Sprintf("%s \"%s\"", strings.ToLower(typ), strings.TrimSpace(name))
-	}
-	return fmt.Sprintf("%s \"%s\"", typ, strings.TrimSpace(name))
+	_ = root
+	return formatDisplayLabel(name, localizedControlType, controlType)
 }
 
 func mapProviderError(err error) error {
