@@ -4,8 +4,6 @@ package main
 
 import (
 	"syscall"
-
-	"github.com/lxn/walk"
 )
 
 const (

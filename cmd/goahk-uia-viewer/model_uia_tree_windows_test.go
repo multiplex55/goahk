@@ -380,6 +380,23 @@ func TestUIATreeSetChildren_ReusesPointersAcrossSequentialUpdates(t *testing.T) 
 	}
 }
 
+func TestUIATreePointerIdentitySurvivesChildLoad(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "parent"}})
+	before, _ := m.ItemByID("parent")
+
+	m.SetChildren("parent", []inspect.TreeNodeDTO{{NodeID: "child"}})
+	after, _ := m.ItemByID("parent")
+
+	if before != after {
+		t.Fatal("expected parent pointer identity to survive child load")
+	}
+	if after.ChildCount() != 1 {
+		t.Fatalf("expected visible child after load, got %d", after.ChildCount())
+	}
+}
+
 func TestUIATreeNonFilteredMode_SharesAllNodePointers(t *testing.T) {
 	m := newUIATreeModel()
 	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})

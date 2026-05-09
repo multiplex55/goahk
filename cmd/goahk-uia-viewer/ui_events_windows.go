@@ -69,12 +69,7 @@ func (ui *viewerUI) applyPostInvokeDetailsOnly(action string, invokeErr error, d
 	// no UpdateTreeRoot, UpdateNodeChildren, or ExpandTreeNode calls here.
 	ui.UpdateWindowDetails(details)
 	ui.UpdateNodeDetails(details)
-	ui.validateHighlightAfterInvoke(details)
 	ui.setStatus(fmt.Sprintf("action completed: %s (patterns=%d)", callableActionLabel(action), len(details.Patterns)))
-}
-
-func (ui *viewerUI) validateHighlightAfterInvoke(details inspect.GetNodeDetailsResponse) {
-	_ = details.Status
 }
 
 // walkUIThread enforces the UI threading rule for the viewer:

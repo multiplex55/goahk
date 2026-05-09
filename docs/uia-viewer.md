@@ -82,6 +82,18 @@ Recommended behavior contracts:
 - Property/selector/pattern panes render empty guidance when no node is selected.
 - Refresh attempts to preserve logical user position; if unavailable, fallback to root safely.
 
+## Expand mode definitions
+
+The tree toolbar’s expand mode selector exposes five modes:
+
+- `Manual / lazy`: only load root children; deeper nodes expand on demand.
+- `Expand 1 level`: eagerly expand one level below the root.
+- `Expand 2 levels`: eagerly expand two levels below the root.
+- `Expand 3 levels`: eagerly expand three levels below the root.
+- `AHK snapshot`: perform a one-time recursive tree build (bounded by startup limits) with no background refresh loop.
+
+Default startup mode is `AHK snapshot`.
+
 ## Troubleshooting
 
 ### `go test` on viewer package fails on non-Windows

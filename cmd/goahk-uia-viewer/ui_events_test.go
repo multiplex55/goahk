@@ -22,6 +22,7 @@ type guardedView struct {
 	updates         int
 	expanded        []string
 	expandCalls     int
+	batchCalls      int
 	childrenUpdated []string
 	selected        []string
 	fatal           []string
@@ -42,6 +43,7 @@ func (v *guardedView) UpdateNodeChildren(nodeID string, _ []inspect.TreeNodeDTO)
 	v.childrenUpdated = append(v.childrenUpdated, nodeID)
 }
 func (v *guardedView) UpdateTreeBatch(results []TreeExpandResult) {
+	v.batchCalls++
 	for _, result := range results {
 		if result.Err != nil {
 			continue
@@ -50,6 +52,41 @@ func (v *guardedView) UpdateTreeBatch(results []TreeExpandResult) {
 		if v.ShouldAutoExpand(result.ParentID) {
 			v.ExpandTreeNode(result.ParentID)
 		}
+	}
+}
+
+func TestOnWindowSelectedNoOpDoesNotReloadTree(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	_, _ = c.SelectWindow("0x2", false)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnWindowSelected("0x2", false)
+	(<-mq.ch)()
+
+	if view.batchCalls != 0 {
+		t.Fatalf("expected no tree batch updates for same-window no-op, got %d", view.batchCalls)
+	}
+	if len(view.selected) != 0 {
+		t.Fatalf("expected no selection mutation for same-window no-op, got %v", view.selected)
+	}
+}
+
+func TestOnWindowSelectedSnapshotAppliesBatchOnce(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.isRecursiveMode = func() bool { return true }
+
+	adapter.OnWindowSelected("0x2", false)
+	(<-mq.ch)()
+
+	if view.batchCalls != 1 {
+		t.Fatalf("expected exactly one tree batch apply for snapshot mode, got %d", view.batchCalls)
 	}
 }
 func (v *guardedView) ExpandTreeNode(nodeID string) {
