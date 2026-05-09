@@ -872,11 +872,13 @@ func treeRootWithTransientRetry(ctx context.Context, core *providerCore, hwnd st
 	return TreeNodeDTO{}, lastErr
 }
 
+// safeTreeRootCall guards provider root resolution from Go panics only.
+// It does not recover process-fatal native access violations (for example 0xc0000005).
 func safeTreeRootCall(core *providerCore, ctx context.Context, hwnd string, refresh bool) (root TreeNodeDTO, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			stack := strings.TrimSpace(string(debug.Stack()))
-			log.Printf("inspect.resolve_root_panic provider=%s hwnd=%s panic=%v stack=%s", core.nodeNamespace, hwnd, r, stack)
+			log.Printf("inspect.resolve_root_panic provider=%s hwnd=%s scope=go-panic-only native_av_not_caught=true panic=%v stack=%s", core.nodeNamespace, hwnd, r, stack)
 			err = fmt.Errorf("inspect: provider %s panic while resolving root for hwnd=%s: %v", core.nodeNamespace, hwnd, r)
 			root = TreeNodeDTO{}
 		}

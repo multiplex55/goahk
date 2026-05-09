@@ -43,7 +43,12 @@ type ViewerEventAdapter struct {
 }
 
 func NewViewerEventAdapter(controller *Controller, view ViewUpdater, ui UIThreadMarshaller) *ViewerEventAdapter {
-	return &ViewerEventAdapter{controller: controller, view: view, ui: ui, autoExpandDepth: func() int { return 3 }}
+	gates := inspect.GetUIAFeatureGates()
+	depth := gates.MaxInitialDepth
+	if gates.DisableAutoExpand {
+		depth = 1
+	}
+	return &ViewerEventAdapter{controller: controller, view: view, ui: ui, autoExpandDepth: func() int { return depth }}
 }
 
 func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {

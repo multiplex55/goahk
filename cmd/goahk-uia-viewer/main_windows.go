@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -67,8 +69,45 @@ func createLogFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 }
 
+func parseEnvBool(name string) bool {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return false
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return v == "1" || strings.EqualFold(v, "yes") || strings.EqualFold(v, "on")
+	}
+	return b
+}
+
+func parseEnvInt(name string, def int) int {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+func configureUIAFeatureGatesFromEnv() inspect.UIAFeatureGates {
+	g := inspect.UIAFeatureGates{
+		DisablePatterns:   parseEnvBool("GOAHK_UIA_DISABLE_PATTERNS"),
+		MinimalProperties: parseEnvBool("GOAHK_UIA_MINIMAL_PROPERTIES"),
+		DisableAutoExpand: parseEnvBool("GOAHK_UIA_DISABLE_AUTO_EXPAND"),
+		MaxInitialDepth:   parseEnvInt("GOAHK_UIA_MAX_INITIAL_DEPTH", 3),
+		TraceCOM:          parseEnvBool("GOAHK_UIA_TRACE_COM"),
+	}
+	inspect.SetUIAFeatureGates(g)
+	return inspect.GetUIAFeatureGates()
+}
 func runWindows() (err error) {
+	gates := configureUIAFeatureGatesFromEnv()
 	logStartup(fmt.Sprintf("startup metadata ts=%s runtime_mode=windows-uia-viewer feature_gate_follow_cursor=true feature_gate_acc_path_capture=true", time.Now().UTC().Format(time.RFC3339Nano)))
+	logStartup(fmt.Sprintf("startup uia_feature_gates disable_patterns=%t minimal_properties=%t disable_auto_expand=%t max_initial_depth=%d trace_com=%t", gates.DisablePatterns, gates.MinimalProperties, gates.DisableAutoExpand, gates.MaxInitialDepth, gates.TraceCOM))
 	logStartup(fmt.Sprintf("startup build version=%s commit=%s built_at=%s", appVersion, buildCommit, buildTime))
 	logStartup("startup begin")
 	logStartup("bootstrap check begin")
