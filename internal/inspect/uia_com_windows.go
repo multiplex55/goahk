@@ -23,6 +23,7 @@ type uiaBridgeElement struct {
 	SupportedPatterns   []string
 	UnsupportedProperty map[string]bool
 	PropertyState       map[string]string
+	OwnsNativePtr       bool
 }
 
 type nativeUIABridge interface {
@@ -56,6 +57,7 @@ type uiaAutomationClient interface {
 	Toggle(*uiaBridgeElement) error
 	Expand(*uiaBridgeElement) error
 	Collapse(*uiaBridgeElement) error
+	Close() error
 }
 
 type win32UIAComBridge struct {
@@ -167,6 +169,7 @@ func (unavailableUIAClient) DoDefaultAction(*uiaBridgeElement) error {
 func (unavailableUIAClient) Toggle(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
 func (unavailableUIAClient) Expand(*uiaBridgeElement) error   { return ErrProviderActionUnsupported }
 func (unavailableUIAClient) Collapse(*uiaBridgeElement) error { return ErrProviderActionUnsupported }
+func (unavailableUIAClient) Close() error                     { return nil }
 
 func currentCursorPos() (int, int, error) {
 	pt := winPoint{}
