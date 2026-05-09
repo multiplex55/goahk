@@ -21,11 +21,23 @@ const (
 const (
 	uiaVTableIUIAutomationInvokePatternInvoke                     = 3
 	uiaVTableIUIAutomationSelectionItemPatternSelect              = 3
-	uiaVTableIUIAutomationValuePatternSetValue                    = 4
-	uiaVTableIUIAutomationLegacyIAccessiblePatternDoDefaultAction = 18
+	uiaVTableIUIAutomationValuePatternSetValue                    = 3
+	uiaVTableIUIAutomationLegacyIAccessiblePatternSelect          = 3
+	uiaVTableIUIAutomationLegacyIAccessiblePatternDoDefaultAction = 4
+	uiaVTableIUIAutomationLegacyIAccessiblePatternSetValue        = 5
 	uiaVTableIUIAutomationTogglePatternToggle                     = 3
 	uiaVTableIUIAutomationExpandCollapsePatternExpand             = 3
 	uiaVTableIUIAutomationExpandCollapsePatternCollapse           = 4
+)
+
+var (
+	sysAllocStringCall = func(s *uint16) uintptr {
+		bstr, _, _ := procSysAllocString.Call(uintptr(unsafe.Pointer(s)))
+		return bstr
+	}
+	sysFreeStringCall = func(bstr uintptr) {
+		procSysFreeString.Call(bstr)
+	}
 )
 
 func uiaInvokePatternInvoke(el uintptr) error {
@@ -60,13 +72,24 @@ func uiaValuePatternSetValue(el uintptr, value string) error {
 		return err
 	}
 	defer comRelease(pattern)
-	bstr, convErr := syscall.UTF16PtrFromString(value)
-	if convErr != nil {
-		return &UIAComUnavailableError{Op: "SetValue", Err: convErr}
-	}
 	vt := *(*uintptr)(unsafe.Pointer(pattern))
-	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationValuePatternSetValue), pattern, uintptr(unsafe.Pointer(bstr)))
-	return hresultErr("SetValue", hr)
+	return withBSTR(value, "SetValue", func(bstr uintptr) error {
+		hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationValuePatternSetValue), pattern, bstr)
+		return hresultErr("SetValue", hr)
+	})
+}
+
+func withBSTR(value string, op string, fn func(bstr uintptr) error) error {
+	utf16, convErr := syscall.UTF16PtrFromString(value)
+	if convErr != nil {
+		return &UIAComUnavailableError{Op: op, Err: convErr}
+	}
+	bstr := sysAllocStringCall(utf16)
+	if bstr == 0 {
+		return &UIAComUnavailableError{Op: op, Err: syscall.ENOMEM}
+	}
+	defer sysFreeStringCall(bstr)
+	return fn(bstr)
 }
 
 func uiaLegacyIAccessiblePatternDoDefaultAction(el uintptr) error {
