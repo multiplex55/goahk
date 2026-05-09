@@ -67,6 +67,8 @@ const (
 )
 
 const (
+	// COM vtable slot indexes must match the exact ABI method order; a bad index
+	// can dispatch into the wrong function pointer and crash the process.
 	uiaVTableIUIAutomationElementFromHandle   = 6
 	uiaVTableIUIAutomationElementFromPoint    = 7
 	uiaVTableIUIAutomationGetFocusedElement   = 8
@@ -76,9 +78,9 @@ const (
 
 const (
 	uiaVTableIUIAutomationElementFindAll                 = 6
-	uiaVTableIUIAutomationElementGetCurrentRuntimeID     = 9
+	uiaVTableIUIAutomationElementGetRuntimeID            = 4
 	uiaVTableIUIAutomationElementGetCurrentPropertyValue = 10
-	uiaVTableIUIAutomationElementGetCurrentPattern       = 11
+	uiaVTableIUIAutomationElementGetCurrentPattern       = 16
 )
 
 const (
@@ -241,8 +243,8 @@ func uiaGetParentElement(walker, el uintptr) (uintptr, error) {
 func uiaElementRuntimeID(el uintptr) (string, error) {
 	var arr uintptr
 	vt := *(*uintptr)(unsafe.Pointer(el))
-	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementGetCurrentRuntimeID), el, uintptr(unsafe.Pointer(&arr)))
-	if err := hresultErr("GetCurrentPropertyValue(RuntimeID)", hr); err != nil {
+	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementGetRuntimeID), el, uintptr(unsafe.Pointer(&arr)))
+	if err := hresultErr("GetRuntimeId", hr); err != nil {
 		var stale *UIAElementStaleError
 		if errors.As(err, &stale) {
 			return "", err
