@@ -347,3 +347,33 @@ func TestUIATreeBulkExpansionKeepsModelAndVisualBookkeepingConsistent(t *testing
 		t.Fatalf("expected visual expansion bookkeeping to keep children visible: a=%d b=%d", a.ChildCount(), b.ChildCount())
 	}
 }
+
+func TestUIATreeSetChildren_ReusesPointersAcrossSequentialUpdates(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "a", Name: "first"}})
+
+	first, _ := m.ItemByID("a")
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "a", Name: "second"}})
+	second, _ := m.ItemByID("a")
+
+	if first != second {
+		t.Fatal("expected SetChildren to reuse existing node pointer")
+	}
+	if second.Name != "second" {
+		t.Fatalf("expected in-place field refresh, got %q", second.Name)
+	}
+}
+
+func TestUIATreeNonFilteredMode_SharesAllNodePointers(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	if m.root != m.allRoot {
+		t.Fatal("expected root and allRoot to alias in non-filtered mode")
+	}
+
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "a"}})
+	if m.nodes[NodeID("a")] != m.allNodes[NodeID("a")] {
+		t.Fatal("expected visible and all node maps to share child pointers")
+	}
+}
