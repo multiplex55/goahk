@@ -82,9 +82,23 @@ type DumpTreeRequest struct {
 }
 
 type DumpTreeResponse struct {
-	RootNodeID string `json:"rootNodeID"`
-	Depth      int    `json:"depth"`
-	Text       string `json:"text"`
+	RootNodeID   string            `json:"rootNodeID"`
+	Depth        int               `json:"depth"`
+	Mode         InspectMode       `json:"mode"`
+	Metadata     ProviderSourceDTO `json:"metadata"`
+	NodeCount    int               `json:"nodeCount"`
+	WarningCount int               `json:"warningCount"`
+	Warnings     []string          `json:"warnings,omitempty"`
+	Root         DumpNode          `json:"root"`
+	Text         string            `json:"text"`
+}
+
+type DumpNode struct {
+	NodeID               string     `json:"nodeID"`
+	ControlType          string     `json:"controlType,omitempty"`
+	LocalizedControlType string     `json:"localizedControlType,omitempty"`
+	Name                 string     `json:"name,omitempty"`
+	Children             []DumpNode `json:"children,omitempty"`
 }
 
 type service struct {
@@ -666,6 +680,8 @@ func (s service) DumpTree(ctx context.Context, req DumpTreeRequest) (DumpTreeRes
 		depth = 3
 	}
 	rootID := req.NodeID
+	var metadata ProviderSourceDTO
+	var warnings []string
 	if rootID == "" {
 		if req.HWND == "" {
 			return DumpTreeResponse{}, ErrInvalidNodeID
@@ -675,45 +691,101 @@ func (s service) DumpTree(ctx context.Context, req DumpTreeRequest) (DumpTreeRes
 			return DumpTreeResponse{}, err
 		}
 		rootID = root.Root.NodeID
+		metadata = root.Source
+		if root.State.FallbackUsed {
+			warnings = append(warnings, "fallback mode active")
+		}
+		if strings.TrimSpace(root.State.GuidanceText) != "" {
+			warnings = append(warnings, root.State.GuidanceText)
+		}
 	}
 	node, err := s.GetNodeDetails(ctx, GetNodeDetailsRequest{NodeID: rootID})
 	if err != nil {
 		return DumpTreeResponse{}, err
 	}
-	lines := []string{formatDumpNodeLine(node.Element.ControlType, node.Element.LocalizedControlType, node.Element.Name)}
+	if metadata.Provider == "" {
+		metadata = node.Source
+	}
+	root := DumpNode{
+		NodeID:               rootID,
+		ControlType:          node.Element.ControlType,
+		LocalizedControlType: node.Element.LocalizedControlType,
+		Name:                 node.Element.Name,
+	}
+	nodeCount := 1
 	if depth > 1 {
-		if err := s.dumpNodeChildren(ctx, rootID, 1, depth, &lines); err != nil {
+		children, childCount, err := s.dumpNodeChildren(ctx, rootID, 1, depth)
+		if err != nil {
 			return DumpTreeResponse{}, err
 		}
+		root.Children = children
+		nodeCount += childCount
 	}
-	return DumpTreeResponse{RootNodeID: rootID, Depth: depth, Text: strings.Join(lines, "\n")}, nil
+	lines := []string{formatDumpTreeLine(root, 0)}
+	appendDumpTreeLines(root.Children, 1, &lines)
+	return DumpTreeResponse{
+		RootNodeID:   rootID,
+		Depth:        depth,
+		Mode:         req.Mode,
+		Metadata:     metadata,
+		NodeCount:    nodeCount,
+		WarningCount: len(warnings),
+		Warnings:     warnings,
+		Root:         root,
+		Text:         strings.Join(lines, "\n"),
+	}, nil
 }
 
-func (s service) dumpNodeChildren(ctx context.Context, parentID string, level, maxDepth int, lines *[]string) error {
+func (s service) dumpNodeChildren(ctx context.Context, parentID string, level, maxDepth int) ([]DumpNode, int, error) {
 	if level >= maxDepth {
-		return nil
+		return nil, 0, nil
 	}
 	children, err := s.GetNodeChildren(ctx, GetNodeChildrenRequest{NodeID: parentID})
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
+	nodes := make([]DumpNode, 0, len(children.Children))
+	nodeCount := 0
 	for _, child := range children.Children {
-		indent := strings.Repeat("  ", level)
-		*lines = append(*lines, indent+formatDumpNodeLine(child.ControlType, child.LocalizedControlType, child.Name))
-		if err := s.dumpNodeChildren(ctx, child.NodeID, level+1, maxDepth, lines); err != nil {
-			return err
+		n := DumpNode{
+			NodeID:               child.NodeID,
+			ControlType:          child.ControlType,
+			LocalizedControlType: child.LocalizedControlType,
+			Name:                 child.Name,
 		}
+		nodeCount++
+		grandChildren, grandCount, err := s.dumpNodeChildren(ctx, child.NodeID, level+1, maxDepth)
+		if err != nil {
+			return nil, 0, err
+		}
+		n.Children = grandChildren
+		nodeCount += grandCount
+		nodes = append(nodes, n)
 	}
-	return nil
+	return nodes, nodeCount, nil
 }
 
-func formatDumpNodeLine(controlType, localizedControlType, name string) string {
+func appendDumpTreeLines(nodes []DumpNode, level int, lines *[]string) {
+	for _, child := range nodes {
+		*lines = append(*lines, strings.Repeat("  ", level)+formatDumpTreeLine(child, level))
+		appendDumpTreeLines(child.Children, level+1, lines)
+	}
+}
+
+func formatDumpTreeLine(node DumpNode, level int) string {
+	return formatDumpNodeLine(node.ControlType, node.LocalizedControlType, node.Name, level == 0)
+}
+
+func formatDumpNodeLine(controlType, localizedControlType, name string, root bool) string {
 	typ := strings.TrimSpace(controlType)
 	if strings.TrimSpace(localizedControlType) != "" {
 		typ = strings.TrimSpace(localizedControlType)
 	}
 	if typ == "" {
 		typ = "unknown"
+	}
+	if root {
+		return fmt.Sprintf("%s \"%s\"", strings.ToLower(typ), strings.TrimSpace(name))
 	}
 	return fmt.Sprintf("%s \"%s\"", typ, strings.TrimSpace(name))
 }

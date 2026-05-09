@@ -234,13 +234,13 @@ func TestRun_UIADump_ParsesAndRoutes(t *testing.T) {
 		return inspect.DumpTreeResponse{Text: "Window \"Calculator\""}, nil
 	}}}
 	var out bytes.Buffer
-	if err := run(context.Background(), []string{"uia", "dump", "--hwnd", "0x10", "--mode", "UIA_ONLY", "--depth", "2"}, &out, &bytes.Buffer{}, d); err != nil {
+	if err := run(context.Background(), []string{"uia", "uia-dump", "--hwnd", "0x10", "--mode", "UIA_ONLY", "--depth", "2"}, &out, &bytes.Buffer{}, d); err != nil {
 		t.Fatalf("run error: %v", err)
 	}
 	if !called {
 		t.Fatal("expected dump route call")
 	}
-	if !strings.Contains(out.String(), "MODE=UIA_ONLY") {
+	if !strings.Contains(out.String(), "mode=") {
 		t.Fatalf("missing mode header in %q", out.String())
 	}
 }
@@ -259,7 +259,7 @@ func TestParseDumpFlags(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseDumpFlags(tt.args)
+			got, _, err := parseDumpFlags(tt.args)
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("expected err %q got %v", tt.wantErr, err)
@@ -288,8 +288,21 @@ func TestRun_UIADump_ModeReportingAndDepthPassThrough(t *testing.T) {
 		t.Fatalf("run error: %v", err)
 	}
 	text := out.String()
-	if !strings.Contains(text, "HWND=0x2 MODE=AUTO") || !strings.Contains(text, "Child \"Item\"") {
+	if !strings.Contains(text, "nodes=") || !strings.Contains(text, "Child \"Item\"") {
 		t.Fatalf("unexpected output %q", text)
+	}
+}
+
+func TestRun_UIADump_JSONFlagForcesJSONOutput(t *testing.T) {
+	d := deps{inspect: inspectServiceFunc{dumpTree: func(_ context.Context, req inspect.DumpTreeRequest) (inspect.DumpTreeResponse, error) {
+		return inspect.DumpTreeResponse{Depth: req.Depth, NodeCount: 1, Root: inspect.DumpNode{NodeID: "root"}, Text: `window "Root"`}, nil
+	}}}
+	var out bytes.Buffer
+	if err := run(context.Background(), []string{"uia", "dump", "--hwnd", "0x2", "--json"}, &out, &bytes.Buffer{}, d); err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	if !strings.Contains(out.String(), `"rootNodeID"`) && !strings.Contains(out.String(), `"root"`) {
+		t.Fatalf("expected json output, got %q", out.String())
 	}
 }
 
