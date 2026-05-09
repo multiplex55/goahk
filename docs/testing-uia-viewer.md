@@ -4,6 +4,45 @@ This document defines a **tooling validation contract** for `goahk-uia-viewer`. 
 
 ## Parity contract: `UIA_TREE` vs fallback trees
 
+### AHK parity contract (UIA Raw View)
+
+This contract defines strict parity against AHK UIA Raw View behavior and is the regression baseline for viewer parity mode.
+
+- **Root acquisition:** must use `ElementFromHandle(hwnd)`.
+- **Child traversal:** must use `FindAll(TrueCondition, TreeScope_Children)` recursively from that root.
+- **Node preservation:** keep nodes with empty names and keep duplicate labels (no dedupe/collapse by text label).
+- **Expansion in parity mode:** every loaded tree node is visually expanded in parity mode.
+- **Disallowed equivalence:** ACC/MSAA/HWND fallback output must **not** be treated as parity success.
+
+### Parity Preconditions
+
+Parity assertions are valid only when all of the following runtime state fields are true:
+
+- requested mode: `UIA_TREE` or `UIA_ONLY`
+- active provider: `uia`
+- backend: `native-com`
+- fallback: `false`
+
+### Canonical Notepad regression target tree
+
+Use the following shape as the canonical expected sample for parity regression checks (empty names and repeated labels are intentional and must be preserved):
+
+```text
+window "Untitled - Notepad"
+└─ pane ""
+   └─ pane ""
+      ├─ text "Untitled - Notepad"
+      ├─ pane ""
+      │  ├─ text ""
+      │  └─ text ""
+      ├─ pane ""
+      │  └─ document ""
+      └─ pane ""
+         └─ text "Ln 1, Col 1"
+```
+
+This sample tree is the regression target for UIA Raw View parity.
+
 ## UIA discovery vs details loading (phased property + pattern resolution)
 
 - Native UIA wrapping is intentionally phased:
