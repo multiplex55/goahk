@@ -60,3 +60,21 @@ func TestUIAWorkerClosePreventsNewJobs(t *testing.T) {
 		t.Fatal("expected error after close")
 	}
 }
+
+func TestUIAWorkerJobPanicRecoveredAndWorkerContinues(t *testing.T) {
+	w, err := newUIACOMWorkerWithInit(func(*uiaWorkerState) error { return nil })
+	if err != nil {
+		t.Fatalf("new worker: %v", err)
+	}
+	defer w.Close()
+
+	err = w.Do("panic-job", func(*uiaWorkerState) error { panic("boom") })
+	var unavailable *UIAComUnavailableError
+	if !errors.As(err, &unavailable) {
+		t.Fatalf("expected UIAComUnavailableError, got %T (%v)", err, err)
+	}
+
+	if err := w.Do("followup", func(*uiaWorkerState) error { return nil }); err != nil {
+		t.Fatalf("follow-up job should succeed, got %v", err)
+	}
+}

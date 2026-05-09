@@ -87,11 +87,20 @@ func (w *uiaCOMWorker) loop(ready chan<- error, initFn func(*uiaWorkerState) err
 		if uiaWorkerJobObserver != nil {
 			uiaWorkerJobObserver(job.op)
 		}
-		job.dn <- job.fn(state)
+		job.dn <- runUIAWorkerJobSafely(job.op, state, job.fn)
 	}
 	releaseWorkerState(state)
 	log.Printf("inspect.uia.worker_stop status=ok backend=native-com")
 	close(w.closed)
+}
+
+func runUIAWorkerJobSafely(op string, state *uiaWorkerState, fn func(*uiaWorkerState) error) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = &UIAComUnavailableError{Op: op, Err: fmt.Errorf("worker panic recovered: %v", r)}
+		}
+	}()
+	return fn(state)
 }
 
 func (w *uiaCOMWorker) Do(op string, fn func(*uiaWorkerState) error) error {

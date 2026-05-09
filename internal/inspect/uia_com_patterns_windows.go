@@ -138,6 +138,9 @@ func uiaExpandCollapsePatternCollapse(el uintptr) error {
 
 func uiaGetCurrentPatternPtr(el uintptr, patternID int32, op string) (uintptr, error) {
 	var p uintptr
+	if err := requireCOMPtr(op, el); err != nil {
+		return 0, err
+	}
 	vt := *(*uintptr)(unsafe.Pointer(el))
 	logUIAComCallStart(op, fmt.Sprintf("element_ptr=0x%x pattern_id=%d", el, patternID))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementGetCurrentPattern), el, uintptr(patternID), uintptr(unsafe.Pointer(&p)))
