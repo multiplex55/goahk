@@ -173,9 +173,13 @@ func (p *providerCore) nodeChildren(ctx context.Context, nodeID string) ([]TreeN
 		if !errors.Is(err, ErrStaleCache) {
 			return nil, err
 		}
-		// Stale node fallback: refresh window root and retry once.
+		p.evictStaleNodeSubtree(windowID, nodeID)
+		// Stale node fallback: refresh window root and retry once only when the root is still valid.
 		p.invalidateWindowCache(windowID)
 		if _, rootErr := p.treeRoot(ctx, windowID, false); rootErr != nil {
+			if errors.Is(rootErr, ErrStaleCache) {
+				return nil, ErrStaleCache
+			}
 			return nil, rootErr
 		}
 		children, err = p.loadNodeChildren(ctx, nodeID)
@@ -571,6 +575,27 @@ func (p *providerCore) invalidateWindowCache(_ string) {
 	p.parentByID = map[string]string{}
 	p.mu.Unlock()
 	p.childrenCache.invalidateAll()
+}
+
+func (p *providerCore) evictStaleNodeSubtree(windowID, nodeID string) {
+	p.childrenCache.invalidateNode(windowID, nodeID)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.nodeToRef, nodeID)
+	queue := []string{nodeID}
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		for childID, parentID := range p.parentByID {
+			if parentID != id {
+				continue
+			}
+			queue = append(queue, childID)
+			delete(p.nodeToRef, childID)
+			delete(p.parentByID, childID)
+		}
+		delete(p.parentByID, id)
+	}
 }
 
 func (p *providerCore) hasAncestor(nodeID, ancestorID string) bool {
