@@ -43,6 +43,16 @@ type nativeUIADeps struct {
 	nextID       uint64
 }
 
+func (d *nativeUIADeps) Close() error {
+	if d == nil || d.bridge == nil {
+		return nil
+	}
+	if b, ok := d.bridge.(*win32UIAComBridge); ok && b.client != nil {
+		return b.client.Close()
+	}
+	return nil
+}
+
 func (d *nativeUIADeps) ResolveWindowRoot(_ context.Context, hwnd string) (*uiaElement, error) {
 	target, err := parseHWND(hwnd)
 	if err != nil {
@@ -370,5 +380,6 @@ func cloneBridgeElement(el *uiaBridgeElement) *uiaBridgeElement {
 			out.PropertyState[k] = v
 		}
 	}
+	out.OwnsNativePtr = false
 	return &out
 }

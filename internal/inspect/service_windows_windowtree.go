@@ -134,6 +134,7 @@ func (d *nativeWindowTreeDeps) Expand(context.Context, string) error {
 func (d *nativeWindowTreeDeps) Collapse(context.Context, string) error {
 	return ErrProviderActionUnsupported
 }
+func (d *nativeWindowTreeDeps) Close() error { return nil }
 
 type win32WindowTreeBridge struct{}
 

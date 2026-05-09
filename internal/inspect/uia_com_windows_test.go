@@ -27,6 +27,21 @@ func (fakeUIAClient) DoDefaultAction(*uiaBridgeElement) error                 { 
 func (fakeUIAClient) Toggle(*uiaBridgeElement) error                          { return nil }
 func (fakeUIAClient) Expand(*uiaBridgeElement) error                          { return nil }
 func (fakeUIAClient) Collapse(*uiaBridgeElement) error                        { return nil }
+func (fakeUIAClient) Close() error                                            { return nil }
+
+func TestWrapNativeElementOwnedAndBorrowed_Ownership(t *testing.T) {
+	origRuntime := uiaElementRuntimeIDCall
+	defer func() { uiaElementRuntimeIDCall = origRuntime }()
+	uiaElementRuntimeIDCall = func(uintptr) (string, error) { return "rid:own", nil }
+	owned, _ := wrapNativeElementOwned(0x1, 0, "", -1, &uiaWrapOptions{PropertyLoadLevel: uiaPropertyLoadTree, PopulatePatterns: false})
+	borrowed, _ := wrapNativeElementBorrowed(0x2, 0, "", -1)
+	if owned == nil || !owned.OwnsNativePtr {
+		t.Fatalf("expected owned wrapper")
+	}
+	if borrowed == nil || borrowed.OwnsNativePtr {
+		t.Fatalf("expected borrowed wrapper")
+	}
+}
 
 func TestNewWin32UIABridge_UsesNativeClientWhenAvailable(t *testing.T) {
 	orig := newUIAComClient

@@ -70,7 +70,11 @@ var (
 
 func wrapNativeElementBorrowed(ptr uintptr, hwnd window.HWND, parentKey string, siblingIndex int) (*uiaBridgeElement, error) {
 	comAddRef(ptr)
-	return wrapNativeElementOwned(ptr, hwnd, parentKey, siblingIndex, nil)
+	el, err := wrapNativeElementOwned(ptr, hwnd, parentKey, siblingIndex, nil)
+	if el != nil {
+		el.OwnsNativePtr = false
+	}
+	return el, err
 }
 
 type uiaWrapOptions struct {
@@ -110,7 +114,7 @@ func wrapNativeElementOwned(ptr uintptr, hwnd window.HWND, parentKey string, sib
 	key := canonicalUIAKey(rid, true)
 	rawRuntimeID := strings.TrimSpace(rid)
 	el := &uiaElement{RuntimeID: rawRuntimeID, HWND: hwnd.String()}
-	b := &uiaBridgeElement{Key: key, RuntimeID: rawRuntimeID, AllowHWNDFallback: hwnd != 0, SupportedPatterns: nil, PropertyState: map[string]string{}, UnsupportedProperty: map[string]bool{}, NativePtr: ptr, Element: el}
+	b := &uiaBridgeElement{Key: key, RuntimeID: rawRuntimeID, AllowHWNDFallback: hwnd != 0, SupportedPatterns: nil, PropertyState: map[string]string{}, UnsupportedProperty: map[string]bool{}, NativePtr: ptr, Element: el, OwnsNativePtr: true}
 	switch resolvedOpts.PropertyLoadLevel {
 	case uiaPropertyLoadDetails:
 		populateElementDetailsProperties(b, resolvedOpts.PopulatePatterns)
@@ -592,25 +596,45 @@ func (c *nativeUIAComClient) cacheBridgeElement(el *uiaBridgeElement) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if existing, ok := c.elementsByKey[id]; ok && existing != nil && existing.NativePtr != el.NativePtr {
+		if existing.OwnsNativePtr && existing.NativePtr != 0 {
+			comRelease(existing.NativePtr)
+		}
 		c.elementsByFallback[id] = cloneBridgeElement(el)
+		c.elementsByFallback[id].OwnsNativePtr = true
 		return
 	}
 	c.elementsByKey[id] = cloneBridgeElement(el)
+	c.elementsByKey[id].OwnsNativePtr = true
 }
 
 func (c *nativeUIAComClient) releaseCachedElements() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, el := range c.elementsByKey {
-		if el != nil {
+		if el != nil && el.OwnsNativePtr {
 			comRelease(el.NativePtr)
 		}
 	}
 	for _, el := range c.elementsByFallback {
-		if el != nil {
+		if el != nil && el.OwnsNativePtr {
 			comRelease(el.NativePtr)
 		}
 	}
 	c.elementsByKey = map[string]*uiaBridgeElement{}
 	c.elementsByFallback = map[string]*uiaBridgeElement{}
+}
+
+func (c *nativeUIAComClient) Close() error {
+	if c == nil {
+		return nil
+	}
+	if c.worker != nil {
+		_ = c.worker.Do("ReleaseCachedElements", func(*uiaWorkerState) error {
+			c.releaseCachedElements()
+			return nil
+		})
+		return c.worker.Close()
+	}
+	c.releaseCachedElements()
+	return nil
 }

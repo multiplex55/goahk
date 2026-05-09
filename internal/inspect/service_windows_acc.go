@@ -174,6 +174,7 @@ func (d *nativeACCDeps) DoDefaultAction(context.Context, string) error {
 func (d *nativeACCDeps) Toggle(context.Context, string) error   { return ErrProviderActionUnsupported }
 func (d *nativeACCDeps) Expand(context.Context, string) error   { return ErrProviderActionUnsupported }
 func (d *nativeACCDeps) Collapse(context.Context, string) error { return ErrProviderActionUnsupported }
+func (d *nativeACCDeps) Close() error                           { return nil }
 
 func (d *nativeACCDeps) lookupByRef(ref string) (*accBridgeElement, error) {
 	parsed, err := parseNodeRef(ref)

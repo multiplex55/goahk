@@ -1090,6 +1090,7 @@ func (unsupportedUIADeps) Expand(context.Context, string) error {
 func (unsupportedUIADeps) Collapse(context.Context, string) error {
 	return ErrProviderActionUnsupported
 }
+func (unsupportedUIADeps) Close() error { return nil }
 
 func (unsupportedUIAAdapter) ResolveWindowRoot(ctx context.Context, hwnd string) (*uiaElement, error) {
 	return unsupportedUIADeps{}.ResolveWindowRoot(ctx, hwnd)

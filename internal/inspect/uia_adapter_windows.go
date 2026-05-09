@@ -92,6 +92,7 @@ type windowsUIADeps interface {
 	Toggle(context.Context, string) error
 	Expand(context.Context, string) error
 	Collapse(context.Context, string) error
+	Close() error
 }
 
 type windowsUIAAdapter struct{ deps windowsUIADeps }
