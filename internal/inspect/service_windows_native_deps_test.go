@@ -177,6 +177,33 @@ func TestNativeUIADeps_StaleRetryRequiresFallbackMarker(t *testing.T) {
 	}
 }
 
+func TestNativeUIADeps_StaleRetrySkipsRootRefreshWhenHWNDMissing(t *testing.T) {
+	root := bridgeEl("rid:stale-closed", "0x2c", "stale")
+	root.AllowHWNDFallback = true
+	resolveRootCalls := 0
+	bridge := newBridgeFixture()
+	bridge.resolveRoot = func(h window.HWND) (*uiaBridgeElement, error) {
+		resolveRootCalls++
+		return root, nil
+	}
+	bridge.byKey = func(string) (*uiaBridgeElement, error) {
+		return nil, &UIAElementStaleError{Op: "ElementByKey", Err: errors.New("stale")}
+	}
+	deps := &nativeUIADeps{bridge: bridge, sessionID: "sess", refToElement: map[string]*cachedBridgeElement{}, keyToRef: map[string]string{}}
+	registered, _ := deps.ResolveWindowRoot(context.Background(), "0x2c")
+
+	orig := hwndExistsCheck
+	hwndExistsCheck = func(string) bool { return false }
+	t.Cleanup(func() { hwndExistsCheck = orig })
+
+	if _, err := deps.GetElementByRef(context.Background(), registered.Ref); err == nil || !strings.Contains(strings.ToLower(err.Error()), "stale") {
+		t.Fatalf("expected stale error when hwnd no longer exists, got %v", err)
+	}
+	if resolveRootCalls != 1 {
+		t.Fatalf("expected no stale refresh resolve attempt after root load, resolveRootCalls=%d", resolveRootCalls)
+	}
+}
+
 func TestNativeUIADeps_BridgeMappingIncludesPatternsAndUnsupportedProps(t *testing.T) {
 	bridge := newBridgeFixture()
 	bridge.resolveRoot = func(h window.HWND) (*uiaBridgeElement, error) {

@@ -281,6 +281,9 @@ func (d *nativeUIADeps) tryRefreshAfterStale(el *uiaBridgeElement, err error) *u
 	if parseErr != nil || hwnd == 0 {
 		return nil
 	}
+	if !hwndExists(el.Element.HWND) {
+		return nil
+	}
 	fresh, rootErr := d.bridge.ResolveRoot(hwnd)
 	if rootErr != nil || fresh == nil {
 		return nil

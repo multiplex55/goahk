@@ -19,6 +19,25 @@ import (
 	"goahk/internal/window"
 )
 
+var (
+	user32DLL       = syscall.NewLazyDLL("user32.dll")
+	procIsWindow    = user32DLL.NewProc("IsWindow")
+	hwndExistsCheck = hwndExistsNative
+)
+
+func hwndExists(hwnd string) bool {
+	return hwndExistsCheck(hwnd)
+}
+
+func hwndExistsNative(hwnd string) bool {
+	handle, err := parseHWND(hwnd)
+	if err != nil || handle == 0 {
+		return false
+	}
+	r1, _, _ := procIsWindow.Call(uintptr(handle))
+	return r1 != 0
+}
+
 type windowAdapter interface {
 	EnumerateWindows(context.Context) ([]window.Info, error)
 	ActivateWindow(context.Context, window.HWND) error

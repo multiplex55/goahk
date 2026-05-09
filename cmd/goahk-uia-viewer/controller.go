@@ -889,12 +889,21 @@ func (c *Controller) Shutdown() {
 	c.mu.Unlock()
 }
 func normalizeInspectError(err error) string {
+	msg := ""
+	if err != nil {
+		msg = strings.ToLower(err.Error())
+	}
 	switch {
 	case err == nil:
 		return "none"
 	case errors.Is(err, inspect.ErrProviderActionUnsupported):
 		return "ErrProviderActionUnsupported"
-	case errors.Is(err, inspect.ErrStaleCache):
+	case errors.Is(err, inspect.ErrStaleCache),
+		strings.Contains(msg, "target closed"),
+		strings.Contains(msg, "window closed"),
+		strings.Contains(msg, "no such window"),
+		strings.Contains(msg, "element not available"),
+		strings.Contains(msg, "stale"):
 		return "ErrStaleCache"
 	case errors.Is(err, inspect.ErrInvalidNodeID):
 		return "ErrInvalidNodeID"
