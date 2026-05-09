@@ -367,8 +367,8 @@ func TestProviderAdapter_TreeAPIContract(t *testing.T) {
 	if len(children) != 1 {
 		t.Fatalf("expected direct children only, got %d", len(children))
 	}
-	if children[0].NodeID != "node:rid:2" {
-		t.Fatalf("expected direct child c1, got %s", children[0].NodeID)
+	if children[0].NodeID != "node:path:"+root.NodeID+"/0" {
+		t.Fatalf("expected direct child path identity, got %s", children[0].NodeID)
 	}
 
 	grandchildren, err := core.nodeChildren(context.Background(), children[0].NodeID)
@@ -791,5 +791,53 @@ func TestProviderAdapter_GetPatternActions_ExposesEnabledAndRequiredArgs(t *test
 	}
 	if len(actions[0].RequiredArgs) != 1 || actions[0].RequiredArgs[0] != "value" {
 		t.Fatalf("expected required value argument, got %+v", actions[0].RequiredArgs)
+	}
+}
+
+func TestProviderAdapter_SiblingPathIdentityAndRefResolution(t *testing.T) {
+	adapter := &fakeAdapter{
+		root: &uiaElement{Ref: "root", RuntimeID: "1", Name: "Root"},
+		kids: map[string][]*uiaElement{
+			"root": {
+				{Ref: "a", RuntimeID: "dup", ParentRef: "root", Name: "Same", ControlType: "Button"},
+				{Ref: "b", RuntimeID: "dup", ParentRef: "root", Name: "Same", ControlType: "Button"},
+				{Ref: "c", ParentRef: "root", Name: "Same", ControlType: "Button"},
+			},
+		},
+		byRef: map[string]*uiaElement{
+			"a": {Ref: "a", RuntimeID: "dup", ParentRef: "root", Name: "A"},
+			"b": {Ref: "b", RuntimeID: "dup", ParentRef: "root", Name: "B"},
+			"c": {Ref: "c", ParentRef: "root", Name: "C"},
+		},
+	}
+	core := newProviderCoreWithNamespace(adapter, false, "uia")
+	root, err := core.treeRoot(context.Background(), "0x1", false)
+	if err != nil {
+		t.Fatalf("treeRoot: %v", err)
+	}
+	children, err := core.nodeChildren(context.Background(), root.NodeID)
+	if err != nil {
+		t.Fatalf("nodeChildren: %v", err)
+	}
+	if len(children) != 3 {
+		t.Fatalf("children=%d", len(children))
+	}
+	seen := map[string]bool{}
+	for i, child := range children {
+		if seen[child.NodeID] {
+			t.Fatalf("duplicate node id: %s", child.NodeID)
+		}
+		seen[child.NodeID] = true
+		want := "node:uia:path:" + root.NodeID + "/" + fmt.Sprintf("%d", i)
+		if child.NodeID != want {
+			t.Fatalf("child[%d] id=%q want=%q", i, child.NodeID, want)
+		}
+		d, err := core.inspectByNodeID(context.Background(), child.NodeID)
+		if err != nil {
+			t.Fatalf("inspect %s: %v", child.NodeID, err)
+		}
+		if d.Name != string('A'+rune(i)) {
+			t.Fatalf("detail mismatch for %s: name=%q", child.NodeID, d.Name)
+		}
 	}
 }

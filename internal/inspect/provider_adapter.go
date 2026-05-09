@@ -197,10 +197,10 @@ func (p *providerCore) loadNodeChildren(ctx context.Context, nodeID string) ([]T
 		return nil, p.wrapErr("GetChildren", nodeID, "", err)
 	}
 	out := make([]TreeNodeDTO, 0, len(rawChildren))
-	for _, child := range rawChildren {
-		n := p.cacheNode(child)
+	for siblingIndex, child := range rawChildren {
+		n := p.cacheChildNode(nodeID, siblingIndex, child)
 		n.Expanded = false
-		n.Cycle = p.hasAncestor(nodeID, n.NodeID)
+		n.Cycle = p.hasAncestorRef(nodeID, strings.TrimSpace(child.Ref)) || p.hasAncestor(nodeID, n.NodeID)
 		out = append(out, n)
 	}
 	return out, nil
@@ -462,8 +462,9 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 		return TreeNodeDTO{}
 	}
 	nodeID := p.cacheNodeRef(el)
+	parentID := ""
 	if el.ParentRef != "" {
-		parentID := p.parentOf(nodeID)
+		parentID = p.parentOf(nodeID)
 		if parentID == "" {
 			parentID = runtimeNodeIDWithNamespace(p.nodeNamespace, "", el.ParentRef)
 		}
@@ -471,13 +472,45 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 		p.parentByID[nodeID] = parentID
 		p.mu.Unlock()
 	}
+	return p.treeNodeFromElement(nodeID, parentID, el)
+}
+
+func (p *providerCore) cacheNodeRef(el *uiaElement) string {
+	nodeID := runtimeNodeIDWithNamespace(p.nodeNamespace, el.RuntimeID, el.Ref)
+	p.mu.Lock()
+	p.nodeToRef[nodeID] = el.Ref
+	if el.ParentRef != "" {
+		for existingID, existingRef := range p.nodeToRef {
+			if existingRef == el.ParentRef {
+				p.parentByID[nodeID] = existingID
+				break
+			}
+		}
+	}
+	p.mu.Unlock()
+	return nodeID
+}
+
+func (p *providerCore) cacheChildNode(parentNodeID string, siblingIndex int, el *uiaElement) TreeNodeDTO {
+	if el == nil || el.Ref == "" {
+		return TreeNodeDTO{}
+	}
+	nodeID := nodePathIDWithNamespace(p.nodeNamespace, parentNodeID, siblingIndex)
+	p.mu.Lock()
+	p.nodeToRef[nodeID] = el.Ref
+	p.parentByID[nodeID] = parentNodeID
+	p.mu.Unlock()
+	return p.treeNodeFromElement(nodeID, parentNodeID, el)
+}
+
+func (p *providerCore) treeNodeFromElement(nodeID, parentID string, el *uiaElement) TreeNodeDTO {
 	patterns := patternActionsForElement(el)
 	names := make([]string, 0, len(patterns))
 	for _, p := range patterns {
 		names = append(names, p.Action)
 	}
 	node := TreeNodeDTO{
-		NodeID: nodeID, NodeId: nodeID, RuntimeID: strings.TrimSpace(el.RuntimeID), HWND: strings.TrimSpace(el.HWND),
+		NodeID: nodeID, NodeId: nodeID, ParentNodeID: parentID, RuntimeID: strings.TrimSpace(el.RuntimeID), HWND: strings.TrimSpace(el.HWND),
 		Name: el.Name, ControlType: normalizeControlType(el.ControlType, el.LocalizedControlType),
 		LocalizedControlType: normalizeLocalizedControlType(el.LocalizedControlType, el.ControlType),
 		DisplayLabel:         formatDisplayLabel(el.Name, normalizeLocalizedControlType(el.LocalizedControlType, el.ControlType), normalizeControlType(el.ControlType, el.LocalizedControlType)),
@@ -491,6 +524,15 @@ func (p *providerCore) cacheNode(el *uiaElement) TreeNodeDTO {
 		}
 	}
 	return node
+}
+
+func nodePathIDWithNamespace(namespace, parentNodeID string, siblingIndex int) string {
+	ns := strings.TrimSpace(namespace)
+	path := strings.TrimSpace(parentNodeID) + "/" + strconv.Itoa(siblingIndex)
+	if ns != "" {
+		return "node:" + ns + ":path:" + path
+	}
+	return "node:path:" + path
 }
 
 func runtimeNodeID(runtimeID, ref string) string {
@@ -509,22 +551,6 @@ func runtimeNodeIDWithNamespace(namespace, runtimeID, ref string) string {
 		return "node:" + ns + ":ref:" + strings.TrimSpace(ref)
 	}
 	return "node:ref:" + strings.TrimSpace(ref)
-}
-
-func (p *providerCore) cacheNodeRef(el *uiaElement) string {
-	nodeID := runtimeNodeIDWithNamespace(p.nodeNamespace, el.RuntimeID, el.Ref)
-	p.mu.Lock()
-	p.nodeToRef[nodeID] = el.Ref
-	if el.ParentRef != "" {
-		for existingID, existingRef := range p.nodeToRef {
-			if existingRef == el.ParentRef {
-				p.parentByID[nodeID] = existingID
-				break
-			}
-		}
-	}
-	p.mu.Unlock()
-	return nodeID
 }
 
 func (p *providerCore) lookupRef(nodeID string) (string, bool) {
@@ -559,6 +585,24 @@ func (p *providerCore) hasAncestor(nodeID, ancestorID string) bool {
 		}
 		if parent == ancestorID {
 			return true
+		}
+		current = parent
+	}
+	return true
+}
+
+func (p *providerCore) hasAncestorRef(nodeID, ancestorRef string) bool {
+	if nodeID == "" || ancestorRef == "" {
+		return false
+	}
+	current := nodeID
+	for i := 0; i < 128; i++ {
+		if ref, ok := p.lookupRef(current); ok && ref == ancestorRef {
+			return true
+		}
+		parent := p.parentOf(current)
+		if parent == "" {
+			return false
 		}
 		current = parent
 	}
