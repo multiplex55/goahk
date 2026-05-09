@@ -181,3 +181,15 @@ func TestACCDetailsPropertyStatus_EmptyVsUnsupported(t *testing.T) {
 		t.Fatalf("expected Value=empty and HelpText=unsupported, got %#v", status)
 	}
 }
+
+func TestACCStableKeyRoundTrip(t *testing.T) {
+	hwnd := window.HWND(0x44)
+	key := makeACCKey(hwnd, "1")
+	if key != "acc:0x44:1" {
+		t.Fatalf("unexpected key: %q", key)
+	}
+	parsedHWND, path, ok := parseACCKey(key)
+	if !ok || parsedHWND != hwnd || path != "1" {
+		t.Fatalf("round trip failed: hwnd=%v path=%q ok=%v", parsedHWND, path, ok)
+	}
+}

@@ -6,7 +6,9 @@ package inspect
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -847,7 +849,7 @@ func (p *windowsProvider) resolveTreeRoot(ctx context.Context, hwnd string, mode
 func (p *windowsProvider) resolveRequestedRootWithRetry(ctx context.Context, hwnd string, mode InspectMode, refresh bool) (TreeNodeDTO, error) {
 	core := p.coreForMode(mode)
 	if mode != InspectModeUIATree && mode != InspectModeAuto && mode != InspectModeUIAOnly {
-		return core.treeRoot(ctx, hwnd, refresh)
+		return safeTreeRootCall(core, ctx, hwnd, refresh)
 	}
 	return treeRootWithTransientRetry(ctx, core, hwnd, refresh)
 }
@@ -861,13 +863,25 @@ func treeRootWithTransientRetry(ctx context.Context, core *providerCore, hwnd st
 				return TreeNodeDTO{}, err
 			}
 		}
-		root, err := core.treeRoot(ctx, hwnd, refresh)
+		root, err := safeTreeRootCall(core, ctx, hwnd, refresh)
 		if err == nil {
 			return root, nil
 		}
 		lastErr = err
 	}
 	return TreeNodeDTO{}, lastErr
+}
+
+func safeTreeRootCall(core *providerCore, ctx context.Context, hwnd string, refresh bool) (root TreeNodeDTO, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			stack := strings.TrimSpace(string(debug.Stack()))
+			log.Printf("inspect.resolve_root_panic provider=%s hwnd=%s panic=%v stack=%s", core.nodeNamespace, hwnd, r, stack)
+			err = fmt.Errorf("inspect: provider %s panic while resolving root for hwnd=%s: %v", core.nodeNamespace, hwnd, r)
+			root = TreeNodeDTO{}
+		}
+	}()
+	return core.treeRoot(ctx, hwnd, refresh)
 }
 
 func sleepWithContext(ctx context.Context, delay time.Duration) error {
