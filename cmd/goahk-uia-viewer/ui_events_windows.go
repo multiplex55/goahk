@@ -99,6 +99,41 @@ func (ui *viewerUI) filterNotImplementedStatus() string {
 	return "Tree filtering not implemented yet"
 }
 
+func (ui *viewerUI) preserveExpansionEnabled() bool {
+	if ui == nil || ui.preserveExpandChk == nil {
+		return true
+	}
+	return ui.preserveExpandChk.Checked()
+}
+
+func (ui *viewerUI) applyFilterTransition(filterText string) {
+	if ui == nil || ui.treeModel == nil {
+		return
+	}
+	next := strings.TrimSpace(filterText)
+	prev := strings.TrimSpace(ui.lastFilterText)
+	wasFiltered := prev != ""
+	isFiltered := next != ""
+	if !wasFiltered && isFiltered {
+		ui.preFilterExpansion = ui.treeModel.SnapshotExpansion()
+		ui.preFilterExpansion.SelectedID = ui.currentSelectedTreeNodeID()
+		return
+	}
+	if wasFiltered && isFiltered {
+		ui.preFilterExpansion = ui.treeModel.SnapshotExpansion()
+		ui.expandFilterMatchAncestors()
+		return
+	}
+	if wasFiltered && !isFiltered {
+		if ui.preFilterExpansion != nil {
+			ui.treeModel.RestoreExpansion(ui.preFilterExpansion)
+			ui.restoreVisualExpansion(ui.preFilterExpansion)
+		}
+		ui.preFilterExpansion = nil
+	}
+	ui.lastFilterText = next
+}
+
 func (ui *viewerUI) attachEvents() {
 	ui.walkUIThread = ui.mw
 	ui.dispatcher = &walkUIThread{mw: ui.walkUIThread}
@@ -182,8 +217,16 @@ func (ui *viewerUI) attachEvents() {
 	}
 	if ui.refreshTreeBtn != nil {
 		ui.refreshTreeBtn.Clicked().Attach(func() {
+			var snapshot *TreeExpansionSnapshot
+			if ui.preserveExpansionEnabled() && ui.treeModel != nil {
+				snapshot = ui.treeModel.SnapshotExpansion()
+				snapshot.SelectedID = ui.currentSelectedTreeNodeID()
+			}
 			if ui.events != nil {
 				ui.events.OnRefreshTreeRequested(ui.activateOnSelect())
+			}
+			if snapshot != nil {
+				ui.preFilterExpansion = snapshot
 			}
 		})
 	}
@@ -206,6 +249,7 @@ func (ui *viewerUI) attachEvents() {
 	}
 	if ui.filterEdit != nil {
 		ui.filterEdit.TextChanged().Attach(func() {
+			ui.applyFilterTransition(ui.filterEdit.Text())
 			ui.setStatus(ui.filterNotImplementedStatus())
 		})
 	}
@@ -433,6 +477,9 @@ func (ui *viewerUI) UpdateTreeRoot(root inspect.TreeNodeDTO) {
 	}
 
 	ui.treeModel.SetRoot(root)
+	if ui.preFilterExpansion != nil && ui.preserveExpansionEnabled() {
+		ui.treeModel.RestoreExpansion(ui.preFilterExpansion)
+	}
 	if ui.treeView == nil {
 		return
 	}
@@ -441,6 +488,9 @@ func (ui *viewerUI) UpdateTreeRoot(root inspect.TreeNodeDTO) {
 		ui.suppressTreeSelectionEvent = true
 		defer func() { ui.suppressTreeSelectionEvent = false }()
 		ui.treeView.SetCurrentItem(item)
+	}
+	if ui.preFilterExpansion != nil && ui.preserveExpansionEnabled() {
+		ui.restoreVisualExpansion(ui.preFilterExpansion)
 	}
 	ui.treeView.Invalidate()
 }
@@ -519,4 +569,43 @@ func (ui *viewerUI) SelectTreeNode(nodeID string) {
 	ui.suppressTreeSelectionEvent = true
 	defer func() { ui.suppressTreeSelectionEvent = false }()
 	ui.treeView.SetCurrentItem(item)
+}
+
+func (ui *viewerUI) currentSelectedTreeNodeID() string {
+	if ui == nil || ui.treeView == nil {
+		return ""
+	}
+	if node, ok := ui.treeView.CurrentItem().(*uiaTreeNode); ok && node != nil {
+		return node.NodeID
+	}
+	return ""
+}
+
+func (ui *viewerUI) restoreVisualExpansion(snapshot *TreeExpansionSnapshot) {
+	if ui == nil || ui.treeView == nil || ui.treeModel == nil || snapshot == nil {
+		return
+	}
+	ui.suppressTreeExpandEvent = true
+	defer func() { ui.suppressTreeExpandEvent = false }()
+	for _, id := range snapshot.ExpandedIDs {
+		node, ok := ui.treeModel.ItemByID(id)
+		if !ok {
+			continue
+		}
+		_ = ui.treeView.SetExpanded(node, true)
+	}
+	if snapshot.SelectedID != "" {
+		if node, ok := ui.treeModel.ItemByID(snapshot.SelectedID); ok {
+			ui.suppressTreeSelectionEvent = true
+			ui.treeView.SetCurrentItem(node)
+			ui.suppressTreeSelectionEvent = false
+		}
+	}
+}
+
+func (ui *viewerUI) expandFilterMatchAncestors() {
+	// Placeholder for full filtered projection behavior; keep user-visible expansion continuity.
+	if ui.preFilterExpansion != nil {
+		ui.restoreVisualExpansion(ui.preFilterExpansion)
+	}
 }
