@@ -840,3 +840,25 @@ func TestSelectWindowLogsDetailsError(t *testing.T) {
 		t.Fatalf("expected details logs, got %s", logs)
 	}
 }
+func TestController_InvokePatternForSelection_DoesNotMutateTreeExpansionOrSelection(t *testing.T) {
+	svc := &fakeInspectService{}
+	c := NewController(context.Background(), svc)
+	c.selectedNodeID = "node-1"
+	c.nodeExpanded["root"] = true
+	c.nodeExpanded["child"] = true
+
+	_, err := c.InvokePatternForSelection("invoke")
+	if err != nil {
+		t.Fatalf("invoke failed: %v", err)
+	}
+	c.mu.Lock()
+	selected := c.selectedNodeID
+	c.mu.Unlock()
+	if selected != "node-1" {
+		t.Fatalf("selected node changed after invoke: %q", selected)
+	}
+	expanded := c.ExpandedNodeIDs()
+	if len(expanded) != 2 {
+		t.Fatalf("expected expanded state preserved, got %v", expanded)
+	}
+}
