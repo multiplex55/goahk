@@ -241,6 +241,16 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	return result, nil
 }
 
+func (c *Controller) IsSelectedWindow(hwnd string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(hwnd))
+	if normalized == "" {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return strings.ToLower(strings.TrimSpace(c.selectedWindowID)) == normalized
+}
+
 func (c *Controller) RefreshTreeForSelectedWindow(hwnd string, activate bool) (WindowSelectionResult, error) {
 	return c.SelectWindow(hwnd, activate)
 }
