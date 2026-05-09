@@ -520,3 +520,27 @@ func TestOnWindowSelectedAutoExpandsLoadedRootChildren(t *testing.T) {
 		t.Fatalf("expected root auto expansion, got %v", view.expanded)
 	}
 }
+
+func TestOnWindowSelectedRecursiveModeShowsBudgetStatus(t *testing.T) {
+	orig := inspect.GetUIAFeatureGates()
+	inspect.SetUIAFeatureGates(inspect.UIAFeatureGates{MaxInitialDepth: 5, MaxInitialNodes: 1})
+	defer inspect.SetUIAFeatureGates(orig)
+
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{
+		childrenByNode: map[string][]inspect.TreeNodeDTO{
+			"root": {{NodeID: "a"}, {NodeID: "b"}},
+			"a":    {{NodeID: "a1"}},
+		},
+	}, root: inspect.TreeNodeDTO{NodeID: "root"}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+	adapter.isRecursiveMode = func() bool { return true }
+	adapter.OnWindowSelected("0x2", false)
+	fn := <-mq.ch
+	fn()
+	if len(view.status) == 0 || !strings.Contains(strings.ToLower(view.status[len(view.status)-1]), "budget reached") {
+		t.Fatalf("expected bounded budget status, got %v", view.status)
+	}
+}

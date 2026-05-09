@@ -22,6 +22,7 @@ type fakeInspectService struct {
 	refreshReqs       []inspect.RefreshWindowsRequest
 	nodeChildrenReqs  []inspect.GetNodeChildrenRequest
 	childrenByNode    map[string][]inspect.TreeNodeDTO
+	childrenErrByNode map[string]error
 	clearCalls        int
 	callOrder         []string
 	nodeDetailsResp   inspect.GetNodeDetailsResponse
@@ -45,6 +46,11 @@ func (f *fakeInspectService) GetNodeChildren(_ context.Context, req inspect.GetN
 	defer f.mu.Unlock()
 	f.nodeChildrenReqs = append(f.nodeChildrenReqs, req)
 	children := f.childrenByNode[req.NodeID]
+	if f.childrenErrByNode != nil {
+		if err := f.childrenErrByNode[req.NodeID]; err != nil {
+			return inspect.GetNodeChildrenResponse{}, err
+		}
+	}
 	return inspect.GetNodeChildrenResponse{Children: children}, nil
 }
 func (f *fakeInspectService) SelectNode(context.Context, inspect.SelectNodeRequest) (inspect.SelectNodeResponse, error) {
@@ -235,6 +241,56 @@ func TestController_ExpandTreeDepthFromChildren_BFSOrderingAcrossLevels(t *testi
 		if got[i] != want[i] {
 			t.Fatalf("expected BFS order %v, got %v", want, got)
 		}
+	}
+}
+
+func TestController_PopulateTreeFromRoot_RecursiveModeReachesDeeperThanDepth2(t *testing.T) {
+	svc := &fakeInspectService{childrenByNode: map[string][]inspect.TreeNodeDTO{
+		"root": {{NodeID: "a"}},
+		"a":    {{NodeID: "b"}},
+		"b":    {{NodeID: "c"}},
+	}}
+	c := NewController(context.Background(), svc)
+	results := c.PopulateTreeFromRoot("root", TreePopulateOptions{MaxDepth: 5, MaxNodes: 20, ContinueOnError: true})
+	if len(results) < 3 {
+		t.Fatalf("expected deeper recursive traversal, got %d results", len(results))
+	}
+}
+
+func TestController_PopulateTreeFromRoot_ContinueOnError(t *testing.T) {
+	svc := &fakeInspectService{
+		childrenByNode: map[string][]inspect.TreeNodeDTO{
+			"root": {{NodeID: "ok"}, {NodeID: "bad"}},
+			"ok":   {{NodeID: "ok-child"}},
+		},
+		childrenErrByNode: map[string]error{"bad": errors.New("branch failed")},
+	}
+	c := NewController(context.Background(), svc)
+	results := c.PopulateTreeFromRoot("root", TreePopulateOptions{MaxDepth: 4, MaxNodes: 20, ContinueOnError: true})
+	if len(results) == 0 {
+		t.Fatal("expected results")
+	}
+	foundOK := false
+	foundBadErr := false
+	for _, r := range results {
+		if r.ParentID == "ok" {
+			foundOK = true
+		}
+		if r.ParentID == "bad" && r.Err != nil {
+			foundBadErr = true
+		}
+	}
+	if !foundOK || !foundBadErr {
+		t.Fatalf("expected sibling traversal to continue, got %+v", results)
+	}
+}
+
+func TestController_PopulateTreeFromRoot_RootFailureFatal(t *testing.T) {
+	svc := &fakeInspectService{childrenErrByNode: map[string]error{"root": errors.New("root failed")}}
+	c := NewController(context.Background(), svc)
+	results := c.PopulateTreeFromRoot("root", TreePopulateOptions{ContinueOnError: true})
+	if len(results) != 1 || results[0].Err == nil || results[0].ParentID != "root" {
+		t.Fatalf("expected fatal root failure, got %+v", results)
 	}
 }
 

@@ -40,6 +40,7 @@ type ViewerEventAdapter struct {
 	view            ViewUpdater
 	ui              UIThreadMarshaller
 	autoExpandDepth func() int
+	isRecursiveMode func() bool
 }
 
 func NewViewerEventAdapter(controller *Controller, view ViewUpdater, ui UIThreadMarshaller) *ViewerEventAdapter {
@@ -48,7 +49,7 @@ func NewViewerEventAdapter(controller *Controller, view ViewUpdater, ui UIThread
 	if gates.DisableAutoExpand {
 		depth = 1
 	}
-	return &ViewerEventAdapter{controller: controller, view: view, ui: ui, autoExpandDepth: func() int { return depth }}
+	return &ViewerEventAdapter{controller: controller, view: view, ui: ui, autoExpandDepth: func() int { return depth }, isRecursiveMode: func() bool { return false }}
 }
 
 func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
@@ -58,7 +59,18 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 		result, err := a.controller.SelectWindow(hwnd, activate)
 		var expandResults []TreeExpandResult
 		if err == nil {
-			expandResults = a.controller.ExpandTreeDepthFromChildren(result.Children, a.autoExpandDepth()-1)
+			if a.isRecursiveMode != nil && a.isRecursiveMode() {
+				g := inspect.GetUIAFeatureGates()
+				expandResults = a.controller.PopulateTreeFromRoot(result.Root.Root.NodeID, TreePopulateOptions{
+					MaxDepth:        g.MaxInitialDepth,
+					MaxNodes:        g.MaxInitialNodes,
+					BranchTimeout:   g.BranchTimeout,
+					TotalTimeout:    g.TotalLoadTimeout,
+					ContinueOnError: true,
+				})
+			} else {
+				expandResults = a.controller.ExpandTreeDepthFromChildren(result.Children, a.autoExpandDepth()-1)
+			}
 		}
 		if err != nil {
 			log.Printf("uia.viewer on_window_selected_err hwnd=%s activate=%t err=%v", hwnd, activate, err)
@@ -160,6 +172,24 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 			}
 			if shallowTreeWarning(result) != "" {
 				status += "; warning: " + shallowTreeWarning(result)
+			}
+			branchFailures := 0
+			for _, expanded := range expandResults {
+				if expanded.Err != nil {
+					branchFailures++
+					errText := strings.ToLower(expanded.Err.Error())
+					switch {
+					case strings.Contains(errText, "budget reached"):
+						status += "; budget reached"
+					case strings.Contains(errText, "max depth reached"):
+						status += "; max depth reached"
+					case strings.Contains(errText, "timeout"):
+						status += "; timeout reached"
+					}
+				}
+			}
+			if branchFailures > 0 {
+				status += fmt.Sprintf("; warnings: %d branch failures", branchFailures)
 			}
 
 			a.view.SetStatus(status)

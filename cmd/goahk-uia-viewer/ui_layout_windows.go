@@ -141,7 +141,7 @@ func (ui *viewerUI) buildLeftPane(parent walk.Container) error {
 	if ui.autoExpandCombo, err = walk.NewComboBox(toolbar); err != nil {
 		return err
 	}
-	ui.autoExpandCombo.SetModel([]string{"Expand: 0", "Expand: 1", "Expand: 2", "Expand: 3"})
+	ui.autoExpandCombo.SetModel([]string{"Expand: 0", "Expand: 1", "Expand: 2", "Expand: 3", "AHK recursive"})
 	ui.autoExpandCombo.SetCurrentIndex(2)
 	if ui.visibleChk, err = walk.NewCheckBox(toolbar); err != nil {
 		return err
