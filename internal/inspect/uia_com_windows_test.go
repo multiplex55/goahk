@@ -527,3 +527,76 @@ func TestNativeUIAComClient_ElementByKey_Lookup(t *testing.T) {
 		t.Fatalf("expected path lookup success, got=%+v err=%v", got, err)
 	}
 }
+
+func TestNativeUIAComClient_ElementByKey_DetailPopulationRunsOnWorker(t *testing.T) {
+	origGetProp := uiaGetCurrentPropertyValueCall
+	origRuntime := uiaElementRuntimeIDCall
+	origProbe := patternProbeCall
+	origObserver := uiaWorkerJobObserver
+	defer func() {
+		uiaGetCurrentPropertyValueCall = origGetProp
+		uiaElementRuntimeIDCall = origRuntime
+		patternProbeCall = origProbe
+		uiaWorkerJobObserver = origObserver
+	}()
+
+	clientAny, err := newNativeUIAComClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := clientAny.(*nativeUIAComClient)
+	t.Cleanup(func() { _ = client.worker.Close() })
+
+	client.cacheBridgeElement(&uiaBridgeElement{Key: "rid:200", NativePtr: 0x20, Element: &uiaElement{Name: "node"}})
+
+	insideElementByKeyJob := false
+	uiaWorkerJobObserver = func(op string) {
+		insideElementByKeyJob = op == "ElementByKey"
+	}
+	uiaElementRuntimeIDCall = func(uintptr) (string, error) { return "rid:200", nil }
+	uiaGetCurrentPropertyValueCall = func(_ uintptr, _ int32) (comVariant, error) {
+		if !insideElementByKeyJob {
+			t.Fatalf("expected property read on worker-dispatched ElementByKey job")
+		}
+		return comVariant{}, errors.New("test property failure")
+	}
+	patternProbeCall = func(uintptr, int32) (bool, error) {
+		if !insideElementByKeyJob {
+			t.Fatalf("expected pattern probe on worker-dispatched ElementByKey job")
+		}
+		return false, errors.New("test probe failure")
+	}
+
+	if _, err := client.ElementByKey("rid:200"); err != nil {
+		t.Fatalf("ElementByKey should still return cached element, err=%v", err)
+	}
+}
+
+func TestNativeUIAComClient_ElementByKey_DisablePatternsSkipsPatternProbe(t *testing.T) {
+	orig := GetUIAFeatureGates()
+	defer SetUIAFeatureGates(orig)
+	SetUIAFeatureGates(UIAFeatureGates{DisablePatterns: true, MaxInitialDepth: orig.MaxInitialDepth, MaxInitialNodes: orig.MaxInitialNodes, BranchTimeout: orig.BranchTimeout, TotalLoadTimeout: orig.TotalLoadTimeout})
+
+	origProbe := patternProbeCall
+	defer func() { patternProbeCall = origProbe }()
+	patternProbeCall = func(uintptr, int32) (bool, error) {
+		t.Fatalf("pattern probing should be disabled")
+		return false, nil
+	}
+
+	clientAny, err := newNativeUIAComClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := clientAny.(*nativeUIAComClient)
+	t.Cleanup(func() { _ = client.worker.Close() })
+
+	client.cacheBridgeElement(&uiaBridgeElement{Key: "rid:201", NativePtr: 0x21, Element: &uiaElement{Name: "node"}})
+	got, err := client.ElementByKey("rid:201")
+	if err != nil {
+		t.Fatalf("ElementByKey failed with DisablePatterns enabled: %v", err)
+	}
+	if len(got.SupportedPatterns) != 0 {
+		t.Fatalf("expected no patterns when DisablePatterns=true, got %+v", got.SupportedPatterns)
+	}
+}

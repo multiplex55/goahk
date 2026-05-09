@@ -55,6 +55,8 @@ type uiaCOMWorker struct {
 	isClosed bool
 }
 
+var uiaWorkerJobObserver func(op string)
+
 func newUIACOMWorker() (*uiaCOMWorker, error) {
 	return newUIACOMWorkerWithInit(workerCOMInit)
 }
@@ -82,6 +84,9 @@ func (w *uiaCOMWorker) loop(ready chan<- error, initFn func(*uiaWorkerState) err
 	log.Printf("inspect.uia.worker_start status=ok backend=native-com")
 	ready <- nil
 	for job := range w.jobs {
+		if uiaWorkerJobObserver != nil {
+			uiaWorkerJobObserver(job.op)
+		}
 		job.dn <- job.fn(state)
 	}
 	releaseWorkerState(state)

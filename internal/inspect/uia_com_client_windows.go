@@ -460,7 +460,12 @@ func (c *nativeUIAComClient) ElementByKey(key string) (*uiaBridgeElement, error)
 		return nil, &UIAElementStaleError{Op: "ElementByKey", Err: fmt.Errorf("key %q is stale or unavailable", id)}
 	}
 	if el.NativePtr != 0 {
-		populateElementDetailsProperties(el, true)
+		if err := c.worker.Do("ElementByKey", func(*uiaWorkerState) error {
+			populateElementDetailsProperties(el, true)
+			return nil
+		}); err != nil {
+			return nil, err
+		}
 	}
 	return cloneBridgeElement(el), nil
 }
