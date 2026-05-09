@@ -8,6 +8,31 @@ import (
 	"github.com/lxn/walk"
 )
 
+var autoExpandModeOptions = []string{
+	"Manual / lazy",
+	"Expand 1 level",
+	"Expand 2 levels",
+	"Expand 3 levels",
+	"AHK snapshot",
+}
+
+const defaultAutoExpandModeIndex = 4
+
+func autoExpandMode(index int) (depth int, recursive bool) {
+	switch index {
+	case 0:
+		return 0, false
+	case 1:
+		return 1, false
+	case 3:
+		return 3, false
+	case 4:
+		return 2, true
+	default:
+		return 2, false
+	}
+}
+
 type viewerUI struct {
 	controller                   *Controller
 	events                       *ViewerEventAdapter
@@ -53,20 +78,16 @@ func (ui *viewerUI) autoExpandDepth() int {
 	if ui == nil || ui.autoExpandCombo == nil {
 		return 2
 	}
-	switch ui.autoExpandCombo.CurrentIndex() {
-	case 0:
-		return 0
-	case 1:
-		return 1
-	case 3:
-		return 3
-	default:
-		return 2
-	}
+	depth, _ := autoExpandMode(ui.autoExpandCombo.CurrentIndex())
+	return depth
 }
 
 func (ui *viewerUI) isRecursiveExpandMode() bool {
-	return ui != nil && ui.autoExpandCombo != nil && ui.autoExpandCombo.CurrentIndex() == 4
+	if ui == nil || ui.autoExpandCombo == nil {
+		return false
+	}
+	_, recursive := autoExpandMode(ui.autoExpandCombo.CurrentIndex())
+	return recursive
 }
 
 func NewViewerWindow(controller *Controller) (viewerWindow, error) {
