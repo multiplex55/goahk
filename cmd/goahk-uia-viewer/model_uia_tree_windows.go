@@ -47,12 +47,21 @@ type uiaTreeModel struct {
 	walk.TreeModelBase
 	root           *uiaTreeNode
 	nodes          map[NodeID]*uiaTreeNode
+	allRoot        *uiaTreeNode
+	allNodes       map[NodeID]*uiaTreeNode
+	allChildren    map[NodeID][]NodeID
 	loadedChildren map[NodeID]bool
 	expanded       map[NodeID]bool
 }
 
 func newUIATreeModel() *uiaTreeModel {
-	return &uiaTreeModel{nodes: map[NodeID]*uiaTreeNode{}, loadedChildren: map[NodeID]bool{}, expanded: map[NodeID]bool{}}
+	return &uiaTreeModel{
+		nodes:          map[NodeID]*uiaTreeNode{},
+		allNodes:       map[NodeID]*uiaTreeNode{},
+		allChildren:    map[NodeID][]NodeID{},
+		loadedChildren: map[NodeID]bool{},
+		expanded:       map[NodeID]bool{},
+	}
 }
 
 func (m *uiaTreeModel) LazyPopulation() bool { return true }
@@ -72,7 +81,7 @@ func (m *uiaTreeModel) RootAt(index int) walk.TreeItem {
 func (m *uiaTreeModel) MarkChildrenLoaded(nodeID string) {
 	id := NodeID(nodeID)
 	m.loadedChildren[id] = true
-	if n, ok := m.nodes[id]; ok {
+	if n, ok := m.allNodes[id]; ok {
 		n.loaded = true
 		n.ChildrenLoaded = true
 		n.Loading = false
@@ -88,7 +97,10 @@ func (m *uiaTreeModel) IsExpanded(nodeID string) bool { return m.expanded[NodeID
 func (m *uiaTreeModel) SetRoot(root inspect.TreeNodeDTO) {
 	n := &uiaTreeNode{TreeNodeDTO: root, id: NodeID(root.NodeID), maybeHasChildren: true}
 	m.root = n
+	m.allRoot = n
 	m.nodes = map[NodeID]*uiaTreeNode{n.id: n}
+	m.allNodes = map[NodeID]*uiaTreeNode{n.id: n}
+	m.allChildren = map[NodeID][]NodeID{}
 	m.loadedChildren = map[NodeID]bool{}
 	m.expanded = map[NodeID]bool{}
 	m.attachPlaceholder(n)
@@ -103,7 +115,10 @@ func (m *uiaTreeModel) RootID() string {
 func (m *uiaTreeModel) NodeCount() int { return len(m.nodes) }
 func (m *uiaTreeModel) Reset() {
 	m.root = nil
+	m.allRoot = nil
 	m.nodes = map[NodeID]*uiaTreeNode{}
+	m.allNodes = map[NodeID]*uiaTreeNode{}
+	m.allChildren = map[NodeID][]NodeID{}
 	m.loadedChildren = map[NodeID]bool{}
 	m.expanded = map[NodeID]bool{}
 	m.PublishItemsReset(nil)
@@ -111,17 +126,19 @@ func (m *uiaTreeModel) Reset() {
 
 func (m *uiaTreeModel) SetChildren(nodeID string, children []inspect.TreeNodeDTO) {
 	pid := NodeID(nodeID)
-	parent, ok := m.nodes[pid]
+	parent, ok := m.allNodes[pid]
 	if !ok {
 		return
 	}
-	parent.children = parent.children[:0]
+
+	nextChildren := make([]*uiaTreeNode, 0, len(children))
+	nextIDs := make([]NodeID, 0, len(children))
 	for _, ch := range children {
 		cid := NodeID(ch.NodeID)
-		child, ok := m.nodes[cid]
+		child, ok := m.allNodes[cid]
 		if !ok {
 			child = &uiaTreeNode{id: cid}
-			m.nodes[cid] = child
+			m.allNodes[cid] = child
 		}
 		child.TreeNodeDTO = ch
 		child.parent = parent
@@ -132,17 +149,19 @@ func (m *uiaTreeModel) SetChildren(nodeID string, children []inspect.TreeNodeDTO
 		} else {
 			child.children = filterOutPlaceholders(child.children)
 		}
-		parent.children = append(parent.children, child)
+		nextChildren = append(nextChildren, child)
+		nextIDs = append(nextIDs, cid)
+		m.nodes[cid] = child
 	}
+	parent.children = nextChildren
+	m.allChildren[pid] = nextIDs
 	m.MarkChildrenLoaded(nodeID)
-	// A parent-local reset ensures Walk re-queries the updated child list
-	// immediately after lazy expansion without resetting the entire tree.
 	m.PublishItemsReset(parent)
 }
 
 func (m *uiaTreeModel) AppendChildren(nodeID string, children []inspect.TreeNodeDTO) {
 	pid := NodeID(nodeID)
-	parent, ok := m.nodes[pid]
+	parent, ok := m.allNodes[pid]
 	if !ok {
 		return
 	}
@@ -158,20 +177,29 @@ func (m *uiaTreeModel) AppendChildren(nodeID string, children []inspect.TreeNode
 		if existing[cid] {
 			continue
 		}
-		child, ok := m.nodes[cid]
+		child, ok := m.allNodes[cid]
 		if !ok {
 			child = &uiaTreeNode{id: cid}
-			m.nodes[cid] = child
+			m.allNodes[cid] = child
 		}
 		child.TreeNodeDTO = dto
 		child.parent = parent
+		child.placeholder = false
+		child.maybeHasChildren = maybeHasChildren(dto)
+		if child.maybeHasChildren && !m.AreChildrenLoaded(dto.NodeID) {
+			m.attachPlaceholder(child)
+		} else {
+			child.children = filterOutPlaceholders(child.children)
+		}
 		parent.children = append(parent.children, child)
+		m.nodes[cid] = child
+		m.allChildren[pid] = append(m.allChildren[pid], cid)
 	}
 	m.MarkChildrenLoaded(nodeID)
 	m.PublishItemsReset(parent)
 }
 
-func filterOutPlaceholders(items []*uiaTreeNode) []*uiaTreeNode {
+func filterOutPlaceholders(items []*uiaTreeNode) []*uiaTreeNode { /* unchanged */
 	out := make([]*uiaTreeNode, 0, len(items))
 	for _, it := range items {
 		if it != nil && !it.placeholder {
@@ -198,7 +226,6 @@ func maybeHasChildren(node inspect.TreeNodeDTO) bool {
 	if node.ChildCount != nil {
 		return *node.ChildCount > 0
 	}
-	// Unknown child count keeps lazy-loading possible for discovered nodes.
 	return true
 }
 
