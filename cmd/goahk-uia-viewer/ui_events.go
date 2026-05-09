@@ -19,6 +19,7 @@ type ViewUpdater interface {
 	UpdateNodeDetails(inspect.GetNodeDetailsResponse)
 	UpdateTreeRoot(inspect.TreeNodeDTO)
 	UpdateNodeChildren(string, []inspect.TreeNodeDTO)
+	UpdateTreeBatch([]TreeExpandResult)
 	ExpandTreeNode(string)
 	ShouldAutoExpand(string) bool
 	SelectTreeNode(string)
@@ -121,19 +122,20 @@ func (a *ViewerEventAdapter) onWindowSelectionRequest(load func() (WindowSelecti
 				a.view.UpdateNodeDetails(result.Details)
 			}
 
+			batch := make([]TreeExpandResult, 0, 1+len(expandResults))
 			if len(result.Children) > 0 {
-				a.view.UpdateNodeChildren(rootID, result.Children)
-				if a.view.ShouldAutoExpand(rootID) {
-					a.view.ExpandTreeNode(rootID)
-				}
+				batch = append(batch, TreeExpandResult{ParentID: rootID, Children: result.Children})
 			}
 			for _, expanded := range expandResults {
-				if expanded.Err == nil {
-					a.view.UpdateNodeChildren(expanded.ParentID, expanded.Children)
-					if a.view.ShouldAutoExpand(expanded.ParentID) {
-						a.view.ExpandTreeNode(expanded.ParentID)
-					}
+				if expanded.Err != nil {
+					continue
 				}
+				batch = append(batch, expanded)
+			}
+			if result.Generation != 0 && result.Generation != a.controller.SelectionGeneration() {
+				log.Printf("uia.viewer skip_stale_tree_update target=%s generation=%d current_generation=%d", target, result.Generation, a.controller.SelectionGeneration())
+			} else {
+				a.view.UpdateTreeBatch(batch)
 			}
 
 			status := fmt.Sprintf("window loaded %s: properties=%d patterns=%d children=%d", formatStageTarget("GetTreeRoot", target), len(result.Details.Properties), len(result.Details.Patterns), len(result.Children))

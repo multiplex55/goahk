@@ -438,6 +438,28 @@ func (ui *viewerUI) UpdateNodeChildren(nodeID string, children []inspect.TreeNod
 		ui.treeModel.SetChildren(nodeID, children)
 	}
 }
+
+func (ui *viewerUI) UpdateTreeBatch(results []TreeExpandResult) {
+	if ui == nil || ui.treeModel == nil || len(results) == 0 {
+		return
+	}
+	withTreeRedrawSuspended(ui, func() {
+		for _, result := range results {
+			if result.Err != nil {
+				continue
+			}
+			ui.treeModel.SetChildren(result.ParentID, result.Children)
+		}
+		for _, result := range results {
+			if result.Err != nil {
+				continue
+			}
+			if ui.ShouldAutoExpand(result.ParentID) {
+				ui.expandTreeNode(result.ParentID, false)
+			}
+		}
+	})
+}
 func (ui *viewerUI) ExpandTreeNode(nodeID string) {
 	ui.expandTreeNode(nodeID, false)
 }
