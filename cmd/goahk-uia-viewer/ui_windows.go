@@ -19,28 +19,31 @@ type viewerUI struct {
 	mw                           *walk.MainWindow
 	root                         *walk.Composite
 
-	windowTable     *walk.TableView
-	windowModel     *windowTableModel
-	refreshBtn      *walk.PushButton
-	refreshTreeBtn  *walk.PushButton
-	modeCombo       *walk.ComboBox
-	autoExpandCombo *walk.ComboBox
-	visibleChk      *walk.CheckBox
-	titleChk        *walk.CheckBox
-	activateChk     *walk.CheckBox
+	windowTable       *walk.TableView
+	windowModel       *windowTableModel
+	refreshBtn        *walk.PushButton
+	refreshTreeBtn    *walk.PushButton
+	modeCombo         *walk.ComboBox
+	autoExpandCombo   *walk.ComboBox
+	preserveExpandChk *walk.CheckBox
+	visibleChk        *walk.CheckBox
+	titleChk          *walk.CheckBox
+	activateChk       *walk.CheckBox
 
 	filterLbl       *walk.Label
 	filterEdit      *walk.LineEdit
 	macroSidebarBtn *walk.PushButton
 
-	infoTable       *walk.TableView
-	infoModel       *infoTableModel
-	propertiesTV    *walk.TableView
-	propertiesModel *propertyTableModel
-	patternsTree    *walk.TreeView
-	patternModel    *patternTreeModel
-	treeView        *walk.TreeView
-	treeModel       *uiaTreeModel
+	infoTable          *walk.TableView
+	infoModel          *infoTableModel
+	propertiesTV       *walk.TableView
+	propertiesModel    *propertyTableModel
+	patternsTree       *walk.TreeView
+	patternModel       *patternTreeModel
+	treeView           *walk.TreeView
+	treeModel          *uiaTreeModel
+	preFilterExpansion *TreeExpansionSnapshot
+	lastFilterText     string
 
 	statusBar  *walk.StatusBar
 	statusText *walk.StatusBarItem

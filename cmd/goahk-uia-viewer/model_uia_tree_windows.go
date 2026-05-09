@@ -10,6 +10,11 @@ import (
 )
 
 type NodeID string
+type TreeExpansionSnapshot struct {
+	ExpandedIDs  []string
+	CollapsedIDs []string
+	SelectedID   string
+}
 
 type uiaTreeNode struct {
 	inspect.TreeNodeDTO
@@ -271,4 +276,37 @@ func (m *uiaTreeModel) ShouldShowLazyPlaceholder(nodeID string) bool {
 		return false
 	}
 	return len(n.children) == 0
+}
+
+func (m *uiaTreeModel) SnapshotExpansion() *TreeExpansionSnapshot {
+	if m == nil {
+		return nil
+	}
+	s := &TreeExpansionSnapshot{}
+	for id, expanded := range m.expanded {
+		if expanded {
+			s.ExpandedIDs = append(s.ExpandedIDs, string(id))
+			continue
+		}
+		s.CollapsedIDs = append(s.CollapsedIDs, string(id))
+	}
+	return s
+}
+
+func (m *uiaTreeModel) RestoreExpansion(snapshot *TreeExpansionSnapshot) {
+	if m == nil || snapshot == nil {
+		return
+	}
+	nextExpanded := map[NodeID]bool{}
+	nextUserCollapsed := map[NodeID]bool{}
+	for _, id := range snapshot.ExpandedIDs {
+		nextExpanded[NodeID(id)] = true
+	}
+	for _, id := range snapshot.CollapsedIDs {
+		nid := NodeID(id)
+		nextExpanded[nid] = false
+		nextUserCollapsed[nid] = true
+	}
+	m.expanded = nextExpanded
+	m.userCollapsed = nextUserCollapsed
 }
