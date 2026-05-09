@@ -176,6 +176,50 @@ func TestNativeUIAComClient_ChildrenReturnsPartialWithDiagnostic(t *testing.T) {
 	}
 }
 
+func TestNativeUIAComClient_TreeWrappingSucceedsWhenPatternProbeFails(t *testing.T) {
+	origNative := uiaNativeAPI
+	origProbe := patternProbeCall
+	defer func() {
+		uiaNativeAPI = origNative
+		patternProbeCall = origProbe
+	}()
+
+	root := &uiaBridgeElement{
+		Key:     "rid:tree-root",
+		Element: &uiaElement{Name: "Root"},
+	}
+	uiaNativeAPI = fakeUiaNativeAPI{
+		elementFromHandle: func(_ *uiaWorkerState, _ window.HWND) (*uiaBridgeElement, error) { return root, nil },
+		findChildren:      func(_ *uiaWorkerState, _ *uiaBridgeElement) ([]*uiaBridgeElement, error) { return nil, nil },
+		focusedElement:    func(_ *uiaWorkerState) (*uiaBridgeElement, error) { return nil, nil },
+		elementFromPoint:  func(_ *uiaWorkerState, _, _ int) (*uiaBridgeElement, error) { return nil, nil },
+		getParent:         func(_ *uiaWorkerState, _ *uiaBridgeElement) (*uiaBridgeElement, error) { return nil, nil },
+	}
+	patternProbeCall = func(uintptr, int32) (bool, error) { return false, errors.New("probe failure") }
+
+	clientAny, err := newNativeUIAComClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := clientAny.(*nativeUIAComClient)
+	t.Cleanup(func() { _ = client.worker.Close() })
+
+	gotRoot, err := client.ElementFromHWND(window.HWND(0x66))
+	if err != nil || gotRoot == nil {
+		t.Fatalf("tree load failed: root=%+v err=%v", gotRoot, err)
+	}
+	if len(gotRoot.SupportedPatterns) != 0 {
+		t.Fatalf("expected tree load to skip pattern probing, got %+v", gotRoot.SupportedPatterns)
+	}
+	detailsEl, err := client.ElementByKey(gotRoot.Key)
+	if err != nil {
+		t.Fatalf("details lookup should tolerate probe failures, err=%v", err)
+	}
+	if len(detailsEl.SupportedPatterns) != 0 {
+		t.Fatalf("expected no discovered patterns when probes fail, got %+v", detailsEl.SupportedPatterns)
+	}
+}
+
 func TestFallbackPathKey_RuntimeIDMissingUsesSiblingIndex(t *testing.T) {
 	key := fallbackPathKey("rid:1", 3, &uiaElement{LocalizedControlType: "button", Name: "OK"})
 	if key != "path:rid:1/3/button/OK" {

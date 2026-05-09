@@ -65,17 +65,34 @@ var (
 	togglePatternCall          = uiaTogglePatternToggle
 	expandPatternCall          = uiaExpandCollapsePatternExpand
 	collapsePatternCall        = uiaExpandCollapsePatternCollapse
+	patternProbeCall           = uiaGetCurrentPattern
 )
 
 func wrapNativeElementBorrowed(ptr uintptr, hwnd window.HWND, parentKey string, siblingIndex int) (*uiaBridgeElement, error) {
 	comAddRef(ptr)
-	return wrapNativeElementOwned(ptr, hwnd, parentKey, siblingIndex)
+	return wrapNativeElementOwned(ptr, hwnd, parentKey, siblingIndex, nil)
 }
 
-func wrapNativeElementOwned(ptr uintptr, hwnd window.HWND, parentKey string, siblingIndex int) (*uiaBridgeElement, error) {
+type uiaWrapOptions struct {
+	PopulateProperties bool
+	PopulatePatterns   bool
+}
+
+func normalizeWrapOptions(opts *uiaWrapOptions) uiaWrapOptions {
+	if opts == nil {
+		return uiaWrapOptions{PopulateProperties: true, PopulatePatterns: true}
+	}
+	return uiaWrapOptions{
+		PopulateProperties: opts.PopulateProperties,
+		PopulatePatterns:   opts.PopulatePatterns,
+	}
+}
+
+func wrapNativeElementOwned(ptr uintptr, hwnd window.HWND, parentKey string, siblingIndex int, opts *uiaWrapOptions) (*uiaBridgeElement, error) {
 	if ptr == 0 {
 		return nil, &UIAComUnavailableError{Op: "WrapElement", Err: errors.New("nil COM element")}
 	}
+	resolvedOpts := normalizeWrapOptions(opts)
 	rid, err := uiaElementRuntimeID(ptr)
 	if err != nil {
 		return nil, err
@@ -83,7 +100,9 @@ func wrapNativeElementOwned(ptr uintptr, hwnd window.HWND, parentKey string, sib
 	key := canonicalUIAKey(rid, true)
 	el := &uiaElement{RuntimeID: strings.TrimPrefix(key, "rid:"), HWND: hwnd.String()}
 	b := &uiaBridgeElement{Key: key, RuntimeID: key, AllowHWNDFallback: hwnd != 0, SupportedPatterns: nil, PropertyState: map[string]string{}, UnsupportedProperty: map[string]bool{}, NativePtr: ptr, Element: el}
-	populateElementProperties(b)
+	if resolvedOpts.PopulateProperties {
+		populateElementProperties(b)
+	}
 	if b.Key == "" {
 		if parentKey != "" && siblingIndex >= 0 {
 			b.Key = fallbackPathKey(parentKey, siblingIndex, b.Element)
@@ -91,7 +110,9 @@ func wrapNativeElementOwned(ptr uintptr, hwnd window.HWND, parentKey string, sib
 			b.Key = fmt.Sprintf("ptr:%x", ptr)
 		}
 	}
-	populateSupportedPatterns(b)
+	if resolvedOpts.PopulatePatterns {
+		populateSupportedPatterns(b)
+	}
 	return b, nil
 }
 
@@ -234,7 +255,7 @@ func populateSupportedPatterns(el *uiaBridgeElement) {
 		id   int32
 	}{{"Invoke", 10000}, {"SelectionItem", 10010}, {"Value", 10002}, {"Toggle", 10015}, {"ExpandCollapse", 10005}, {"Window", 10009}, {"Transform", 10016}, {"Text", 10014}, {"Selection", 10001}, {"Scroll", 10004}, {"RangeValue", 10003}, {"Grid", 10006}, {"Table", 10012}, {"LegacyIAccessible", 10018}}
 	for _, d := range defs {
-		ok, err := uiaGetCurrentPattern(el.NativePtr, d.id)
+		ok, err := patternProbeCall(el.NativePtr, d.id)
 		if err != nil {
 			continue
 		}
@@ -252,7 +273,7 @@ func (nativeUIAAPI) ElementFromHandle(state *uiaWorkerState, hwnd window.HWND) (
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElementBorrowed(ptr, hwnd, "", -1)
+	return wrapNativeElementOwned(ptr, hwnd, "", -1, &uiaWrapOptions{PopulateProperties: true, PopulatePatterns: false})
 }
 
 func (nativeUIAAPI) FocusedElement(state *uiaWorkerState) (*uiaBridgeElement, error) {
@@ -260,7 +281,7 @@ func (nativeUIAAPI) FocusedElement(state *uiaWorkerState) (*uiaBridgeElement, er
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElementBorrowed(ptr, 0, "", -1)
+	return wrapNativeElementOwned(ptr, 0, "", -1, &uiaWrapOptions{PopulateProperties: true, PopulatePatterns: false})
 }
 
 func (nativeUIAAPI) ElementFromPoint(state *uiaWorkerState, x, y int) (*uiaBridgeElement, error) {
@@ -268,7 +289,7 @@ func (nativeUIAAPI) ElementFromPoint(state *uiaWorkerState, x, y int) (*uiaBridg
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElementBorrowed(ptr, 0, "", -1)
+	return wrapNativeElementOwned(ptr, 0, "", -1, &uiaWrapOptions{PopulateProperties: true, PopulatePatterns: false})
 }
 
 func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement) ([]*uiaBridgeElement, error) {
@@ -292,7 +313,7 @@ func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement
 		if getErr != nil {
 			return nil, getErr
 		}
-		child, wrapErr := wrapNativeElementOwned(ptr, 0, parent.Key, int(i))
+		child, wrapErr := wrapNativeElementOwned(ptr, 0, parent.Key, int(i), &uiaWrapOptions{PopulateProperties: true, PopulatePatterns: false})
 		if wrapErr != nil {
 			log.Printf("inspect.uia.native.find_children checkpoint=\"wrap child failed\" index=%d err=%v", i, wrapErr)
 			diag = errors.Join(diag, fmt.Errorf("child[%d]: %w", i, wrapErr))
@@ -313,7 +334,7 @@ func (nativeUIAAPI) GetParent(state *uiaWorkerState, el *uiaBridgeElement) (*uia
 	if err != nil || parent == 0 {
 		return nil, err
 	}
-	return wrapNativeElementBorrowed(parent, 0, "", -1)
+	return wrapNativeElementOwned(parent, 0, "", -1, &uiaWrapOptions{PopulateProperties: true, PopulatePatterns: false})
 }
 
 func fallbackPathKey(parentKey string, siblingIndex int, el *uiaElement) string {
@@ -384,6 +405,9 @@ func (c *nativeUIAComClient) ElementByKey(key string) (*uiaBridgeElement, error)
 			return cloneBridgeElement(fallback), nil
 		}
 		return nil, &UIAElementStaleError{Op: "ElementByKey", Err: fmt.Errorf("key %q is stale or unavailable", id)}
+	}
+	if len(el.SupportedPatterns) == 0 && el.NativePtr != 0 {
+		populateSupportedPatterns(el)
 	}
 	return cloneBridgeElement(el), nil
 }
