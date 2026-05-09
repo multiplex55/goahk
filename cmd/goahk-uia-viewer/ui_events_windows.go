@@ -106,10 +106,6 @@ func (ui *viewerUI) attachEvents() {
 			if !ok {
 				return
 			}
-			if ui.controller != nil && ui.controller.IsSelectedWindow(row.ID) {
-				ui.setStatus("selected window unchanged; tree preserved")
-				return
-			}
 			if ui.events != nil {
 				ui.events.OnWindowSelected(row.ID, ui.activateOnSelect())
 			}
@@ -166,6 +162,13 @@ func (ui *viewerUI) attachEvents() {
 	}
 	if ui.refreshBtn != nil {
 		ui.refreshBtn.Clicked().Attach(func() { ui.queueRefreshWindowListFromCurrentFilters() })
+	}
+	if ui.refreshTreeBtn != nil {
+		ui.refreshTreeBtn.Clicked().Attach(func() {
+			if ui.events != nil {
+				ui.events.OnRefreshTreeRequested(ui.activateOnSelect())
+			}
+		})
 	}
 	if ui.modeCombo != nil {
 		ui.controller.SetMode(inspectModeFromComboIndex(ui.modeCombo.CurrentIndex()))
