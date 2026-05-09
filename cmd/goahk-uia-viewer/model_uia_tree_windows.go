@@ -4,6 +4,7 @@ package main
 
 import (
 	"goahk/internal/inspect"
+	"strings"
 
 	"github.com/lxn/walk"
 )
@@ -47,12 +48,17 @@ type uiaTreeModel struct {
 	walk.TreeModelBase
 	root           *uiaTreeNode
 	nodes          map[NodeID]*uiaTreeNode
+	allRoot        *uiaTreeNode
+	allNodes       map[NodeID]*uiaTreeNode
+	allChildren    map[NodeID][]NodeID
+	filterText     string
+	matchedNodes   map[NodeID]bool
 	loadedChildren map[NodeID]bool
 	expanded       map[NodeID]bool
 }
 
 func newUIATreeModel() *uiaTreeModel {
-	return &uiaTreeModel{nodes: map[NodeID]*uiaTreeNode{}, loadedChildren: map[NodeID]bool{}, expanded: map[NodeID]bool{}}
+	return &uiaTreeModel{nodes: map[NodeID]*uiaTreeNode{}, allNodes: map[NodeID]*uiaTreeNode{}, allChildren: map[NodeID][]NodeID{}, matchedNodes: map[NodeID]bool{}, loadedChildren: map[NodeID]bool{}, expanded: map[NodeID]bool{}}
 }
 
 func (m *uiaTreeModel) LazyPopulation() bool { return true }
@@ -87,12 +93,14 @@ func (m *uiaTreeModel) IsExpanded(nodeID string) bool { return m.expanded[NodeID
 
 func (m *uiaTreeModel) SetRoot(root inspect.TreeNodeDTO) {
 	n := &uiaTreeNode{TreeNodeDTO: root, id: NodeID(root.NodeID), maybeHasChildren: true}
-	m.root = n
-	m.nodes = map[NodeID]*uiaTreeNode{n.id: n}
+	m.allRoot = n
+	m.allNodes = map[NodeID]*uiaTreeNode{n.id: n}
+	m.allChildren = map[NodeID][]NodeID{}
 	m.loadedChildren = map[NodeID]bool{}
 	m.expanded = map[NodeID]bool{}
-	m.attachPlaceholder(n)
-	m.PublishItemsReset(nil)
+	m.filterText = ""
+	m.matchedNodes = map[NodeID]bool{}
+	m.rebuildVisibleGraph()
 }
 func (m *uiaTreeModel) RootID() string {
 	if m.root == nil {
@@ -104,6 +112,11 @@ func (m *uiaTreeModel) NodeCount() int { return len(m.nodes) }
 func (m *uiaTreeModel) Reset() {
 	m.root = nil
 	m.nodes = map[NodeID]*uiaTreeNode{}
+	m.allRoot = nil
+	m.allNodes = map[NodeID]*uiaTreeNode{}
+	m.allChildren = map[NodeID][]NodeID{}
+	m.filterText = ""
+	m.matchedNodes = map[NodeID]bool{}
 	m.loadedChildren = map[NodeID]bool{}
 	m.expanded = map[NodeID]bool{}
 	m.PublishItemsReset(nil)
@@ -113,62 +126,134 @@ func (m *uiaTreeModel) SetChildren(nodeID string, children []inspect.TreeNodeDTO
 	pid := NodeID(nodeID)
 	parent, ok := m.nodes[pid]
 	if !ok {
+		parent, ok = m.allNodes[pid]
+	}
+	if !ok {
 		return
 	}
-	parent.children = parent.children[:0]
+	m.allChildren[pid] = m.allChildren[pid][:0]
 	for _, ch := range children {
 		cid := NodeID(ch.NodeID)
-		child, ok := m.nodes[cid]
+		child, ok := m.allNodes[cid]
 		if !ok {
 			child = &uiaTreeNode{id: cid}
-			m.nodes[cid] = child
+			m.allNodes[cid] = child
 		}
 		child.TreeNodeDTO = ch
 		child.parent = parent
 		child.placeholder = false
 		child.maybeHasChildren = maybeHasChildren(ch)
-		if child.maybeHasChildren && !m.AreChildrenLoaded(ch.NodeID) {
-			m.attachPlaceholder(child)
-		} else {
-			child.children = filterOutPlaceholders(child.children)
-		}
-		parent.children = append(parent.children, child)
+		m.allChildren[pid] = append(m.allChildren[pid], cid)
 	}
 	m.MarkChildrenLoaded(nodeID)
-	// A parent-local reset ensures Walk re-queries the updated child list
-	// immediately after lazy expansion without resetting the entire tree.
-	m.PublishItemsReset(parent)
+	m.rebuildVisibleGraph()
 }
 
 func (m *uiaTreeModel) AppendChildren(nodeID string, children []inspect.TreeNodeDTO) {
 	pid := NodeID(nodeID)
-	parent, ok := m.nodes[pid]
+	parent, ok := m.allNodes[pid]
 	if !ok {
 		return
 	}
 	existing := map[NodeID]bool{}
-	for _, ch := range parent.children {
-		if ch != nil && !ch.placeholder {
-			existing[ch.id] = true
-		}
+	for _, cid := range m.allChildren[pid] {
+		existing[cid] = true
 	}
-	parent.children = filterOutPlaceholders(parent.children)
+	_ = parent
 	for _, dto := range children {
 		cid := NodeID(dto.NodeID)
 		if existing[cid] {
 			continue
 		}
-		child, ok := m.nodes[cid]
+		child, ok := m.allNodes[cid]
 		if !ok {
 			child = &uiaTreeNode{id: cid}
-			m.nodes[cid] = child
+			m.allNodes[cid] = child
 		}
 		child.TreeNodeDTO = dto
-		child.parent = parent
-		parent.children = append(parent.children, child)
+		child.parent = m.allNodes[pid]
+		child.placeholder = false
+		child.maybeHasChildren = maybeHasChildren(dto)
+		m.allChildren[pid] = append(m.allChildren[pid], cid)
 	}
 	m.MarkChildrenLoaded(nodeID)
-	m.PublishItemsReset(parent)
+	m.rebuildVisibleGraph()
+}
+
+func (m *uiaTreeModel) SetFilter(text string) {
+	m.filterText = strings.ToLower(strings.TrimSpace(text))
+	m.rebuildVisibleGraph()
+}
+
+func (m *uiaTreeModel) VisibleMatchCount() int { return len(m.matchedNodes) }
+
+func (m *uiaTreeModel) ExpandedIDsForFilter() []string {
+	if m.filterText == "" {
+		return nil
+	}
+	ids := map[NodeID]bool{}
+	for id := range m.matchedNodes {
+		n := m.nodes[id]
+		for p := n.parent; p != nil; p = p.parent {
+			ids[p.id] = true
+		}
+	}
+	out := make([]string, 0, len(ids))
+	for id := range ids {
+		out = append(out, string(id))
+	}
+	return out
+}
+
+func (m *uiaTreeModel) rebuildVisibleGraph() {
+	m.nodes = map[NodeID]*uiaTreeNode{}
+	m.matchedNodes = map[NodeID]bool{}
+	if m.allRoot == nil {
+		m.root = nil
+		m.PublishItemsReset(nil)
+		return
+	}
+	var clone func(n *uiaTreeNode, parent *uiaTreeNode) *uiaTreeNode
+	clone = func(n *uiaTreeNode, parent *uiaTreeNode) *uiaTreeNode {
+		if n == nil {
+			return nil
+		}
+		current := &uiaTreeNode{TreeNodeDTO: n.TreeNodeDTO, id: n.id, parent: parent, loaded: n.loaded, maybeHasChildren: n.maybeHasChildren, ChildrenLoaded: n.ChildrenLoaded, Loading: n.Loading, LoadErr: n.LoadErr}
+		matchSelf := m.filterText == "" || treeNodeMatchesFilter(current, m.filterText)
+		includedKids := []*uiaTreeNode{}
+		for _, cid := range m.allChildren[n.id] {
+			if child := clone(m.allNodes[cid], current); child != nil {
+				includedKids = append(includedKids, child)
+			}
+		}
+		if !matchSelf && len(includedKids) == 0 {
+			return nil
+		}
+		if matchSelf && m.filterText != "" {
+			m.matchedNodes[current.id] = true
+		}
+		current.children = includedKids
+		if len(current.children) == 0 && current.maybeHasChildren && !m.AreChildrenLoaded(current.NodeID) {
+			m.attachPlaceholder(current)
+		}
+		m.nodes[current.id] = current
+		return current
+	}
+	m.root = clone(m.allRoot, nil)
+	m.PublishItemsReset(nil)
+}
+
+func treeNodeMatchesFilter(node *uiaTreeNode, filter string) bool {
+	if node == nil || filter == "" {
+		return false
+	}
+	fields := []string{node.DisplayLabel, node.Name, node.ControlType, node.LocalizedControlType, node.ClassName, node.DebugMeta.AutomationID, node.RuntimeID, node.NodeID}
+	for _, field := range fields {
+		if strings.Contains(strings.ToLower(strings.TrimSpace(field)), filter) {
+			return true
+		}
+	}
+	return false
 }
 
 func filterOutPlaceholders(items []*uiaTreeNode) []*uiaTreeNode {
