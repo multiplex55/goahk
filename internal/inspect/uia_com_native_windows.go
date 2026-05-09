@@ -113,6 +113,13 @@ type uiaPropRead struct {
 	Rect   *uiaRect
 }
 
+func requireCOMPtr(op string, ptr uintptr) error {
+	if ptr != 0 {
+		return nil
+	}
+	return &UIAElementStaleError{Op: op, Err: errors.New("nil COM pointer")}
+}
+
 func comRelease(ptr uintptr) {
 	if ptr == 0 {
 		return
@@ -220,6 +227,9 @@ func uiaElementFromPoint(automation uintptr, x, y int) (uintptr, error) {
 func uiaFindAllChildren(el, trueCond uintptr) (uintptr, error) {
 	log.Printf("inspect.uia.native.find_children checkpoint=\"FindAll started\" parent_ptr=0x%x true_condition_ptr=0x%x", el, trueCond)
 	var arr uintptr
+	if err := requireCOMPtr("FindAll", el); err != nil {
+		return 0, err
+	}
 	vt := *(*uintptr)(unsafe.Pointer(el))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementFindAll), el, uintptr(uiaTreeScopeChildren), trueCond, uintptr(unsafe.Pointer(&arr)))
 	log.Printf("inspect.uia.native.find_children checkpoint=\"FindAll returned\" array_ptr=0x%x", arr)
@@ -228,6 +238,9 @@ func uiaFindAllChildren(el, trueCond uintptr) (uintptr, error) {
 
 func uiaArrayLength(arr uintptr) (int32, error) {
 	var ln int32
+	if err := requireCOMPtr("IUIAutomationElementArray.Length", arr); err != nil {
+		return 0, err
+	}
 	vt := *(*uintptr)(unsafe.Pointer(arr))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementArrayLength), arr, uintptr(unsafe.Pointer(&ln)))
 	return ln, hresultErr("IUIAutomationElementArray.Length", hr)
@@ -235,6 +248,9 @@ func uiaArrayLength(arr uintptr) (int32, error) {
 
 func uiaArrayGet(arr uintptr, idx int32) (uintptr, error) {
 	var el uintptr
+	if err := requireCOMPtr("IUIAutomationElementArray.GetElement", arr); err != nil {
+		return 0, err
+	}
 	vt := *(*uintptr)(unsafe.Pointer(arr))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementArrayGetElement), arr, uintptr(idx), uintptr(unsafe.Pointer(&el)))
 	// COM contract for IUIAutomationElementArray.GetElement returns an interface
@@ -244,14 +260,20 @@ func uiaArrayGet(arr uintptr, idx int32) (uintptr, error) {
 
 func uiaGetParentElement(walker, el uintptr) (uintptr, error) {
 	var parent uintptr
+	if err := requireCOMPtr("GetParentElement", walker); err != nil {
+		return 0, err
+	}
+	if err := requireCOMPtr("GetParentElement", el); err != nil {
+		return 0, err
+	}
 	vt := *(*uintptr)(unsafe.Pointer(walker))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationTreeWalkerGetParentElement), walker, el, uintptr(unsafe.Pointer(&parent)))
 	return parent, hresultErr("GetParentElement", hr)
 }
 
 func uiaElementRuntimeID(el uintptr) (string, error) {
-	if el == 0 {
-		return "", &UIAComUnavailableError{Op: "GetRuntimeId", Err: errors.New("nil COM element")}
+	if err := requireCOMPtr("GetRuntimeId", el); err != nil {
+		return "", err
 	}
 	var arr uintptr
 	vt := *(*uintptr)(unsafe.Pointer(el))
@@ -315,6 +337,9 @@ func safeArrayRuntimeIDIntsInBounds(lb, ub int32, getValue func(int32) (int32, e
 
 func uiaGetCurrentPropertyValue(el uintptr, propertyID int32) (comVariant, error) {
 	var v comVariant
+	if err := requireCOMPtr("GetCurrentPropertyValue", el); err != nil {
+		return v, err
+	}
 	vt := *(*uintptr)(unsafe.Pointer(el))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementGetCurrentPropertyValue), el, uintptr(propertyID), uintptr(unsafe.Pointer(&v)))
 	return v, hresultErr("GetCurrentPropertyValue", hr)
@@ -379,6 +404,9 @@ func safeArrayFloat64s(arr uintptr) ([]float64, error) {
 
 func uiaGetCurrentPattern(el uintptr, patternID int32) (bool, error) {
 	var p uintptr
+	if err := requireCOMPtr("GetCurrentPattern", el); err != nil {
+		return false, err
+	}
 	vt := *(*uintptr)(unsafe.Pointer(el))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementGetCurrentPattern), el, uintptr(patternID), uintptr(unsafe.Pointer(&p)))
 	if err := hresultErr("GetCurrentPattern", hr); err != nil {

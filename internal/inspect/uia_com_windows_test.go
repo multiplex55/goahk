@@ -264,6 +264,38 @@ func TestWrapNativeElementOwned_TreeLoadSkipsDetailsOnlyProperties(t *testing.T)
 	}
 }
 
+func TestNativeUIAFindChildren_NilArrayReturnsStale(t *testing.T) {
+	clientAny, err := newNativeUIAComClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := clientAny.(*nativeUIAComClient)
+	t.Cleanup(func() { _ = client.worker.Close() })
+
+	origFindAll := uiaFindAllChildrenCall
+	origLen := uiaArrayLengthCall
+	origGet := uiaArrayGetCall
+	defer func() {
+		uiaFindAllChildrenCall = origFindAll
+		uiaArrayLengthCall = origLen
+		uiaArrayGetCall = origGet
+	}()
+
+	uiaFindAllChildrenCall = func(uintptr, uintptr) (uintptr, error) { return 0, nil }
+	lengthCalled := false
+	uiaArrayLengthCall = func(uintptr) (int32, error) { lengthCalled = true; return 0, nil }
+	uiaArrayGetCall = func(uintptr, int32) (uintptr, error) { t.Fatal("should not be called"); return 0, nil }
+
+	_, err = uiaNativeAPI.FindChildren(&uiaWorkerState{trueCond: 1}, &uiaBridgeElement{NativePtr: 1, Key: "rid:p", Element: &uiaElement{RuntimeID: "rid:p"}})
+	var stale *UIAElementStaleError
+	if !errors.As(err, &stale) {
+		t.Fatalf("expected stale error, got %T (%v)", err, err)
+	}
+	if lengthCalled {
+		t.Fatal("uiaArrayLength should not be called for nil array")
+	}
+}
+
 func TestFallbackPathKey_RuntimeIDMissingUsesSiblingIndex(t *testing.T) {
 	key := fallbackPathKey("rid:1", 3, &uiaElement{LocalizedControlType: "button", Name: "OK"})
 	if key != "path:rid:1/3/button/OK" {

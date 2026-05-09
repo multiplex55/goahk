@@ -91,6 +91,9 @@ const (
 
 var uiaGetCurrentPropertyValueCall = uiaGetCurrentPropertyValue
 var uiaElementRuntimeIDCall = uiaElementRuntimeID
+var uiaFindAllChildrenCall = uiaFindAllChildren
+var uiaArrayLengthCall = uiaArrayLength
+var uiaArrayGetCall = uiaArrayGet
 
 func normalizeWrapOptions(opts *uiaWrapOptions) uiaWrapOptions {
 	if opts == nil {
@@ -347,12 +350,15 @@ func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement
 	if parent == nil || parent.NativePtr == 0 {
 		return nil, &UIAElementStaleError{Op: "FindAll", Err: errors.New("parent element is stale")}
 	}
-	arr, err := uiaFindAllChildren(parent.NativePtr, state.trueCond)
+	arr, err := uiaFindAllChildrenCall(parent.NativePtr, state.trueCond)
 	if err != nil {
 		return nil, err
 	}
+	if arr == 0 {
+		return nil, &UIAElementStaleError{Op: "FindAll", Err: errors.New("FindAll returned nil array")}
+	}
 	defer comRelease(arr)
-	n, err := uiaArrayLength(arr)
+	n, err := uiaArrayLengthCall(arr)
 	if err != nil {
 		return nil, err
 	}
@@ -360,7 +366,7 @@ func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement
 	out := make([]*uiaBridgeElement, 0, n)
 	var diag error
 	for i := int32(0); i < n; i++ {
-		ptr, getErr := uiaArrayGet(arr, i)
+		ptr, getErr := uiaArrayGetCall(arr, i)
 		if getErr != nil {
 			log.Printf("inspect.uia.native.find_children checkpoint=\"get child failed\" index=%d err=%v", i, getErr)
 			diag = errors.Join(diag, fmt.Errorf("child[%d] get element: %w", i, getErr))
