@@ -153,6 +153,61 @@ func TestUIATreeAppendChildrenAvoidsDuplicates(t *testing.T) {
 	}
 }
 
+func TestUIATreeUnknownChildCount_ShowsPlaceholderBeforeExpand(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "unknown", ChildCount: nil}})
+
+	unknown, ok := m.ItemByID("unknown")
+	if !ok {
+		t.Fatal("expected unknown node")
+	}
+	if unknown.ChildCount() != 1 {
+		t.Fatalf("expected placeholder for unknown child count, got %d children", unknown.ChildCount())
+	}
+	if !unknown.ChildAt(0).(*uiaTreeNode).placeholder {
+		t.Fatal("expected placeholder child for unknown child count")
+	}
+}
+
+func TestUIATreeZeroChildExpansion_RemovesPlaceholder(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "candidate"}})
+
+	candidate, ok := m.ItemByID("candidate")
+	if !ok || candidate.ChildCount() != 1 || !candidate.ChildAt(0).(*uiaTreeNode).placeholder {
+		t.Fatalf("expected pre-expand placeholder, got ok=%v count=%d", ok, candidate.ChildCount())
+	}
+
+	m.SetChildren("candidate", nil)
+	candidate, _ = m.ItemByID("candidate")
+	if candidate.ChildCount() != 0 {
+		t.Fatalf("expected placeholder removal after zero-child expansion, got %d children", candidate.ChildCount())
+	}
+}
+
+func TestUIATreeRecursivePopulation_UnknownCountsUseSamePlaceholderRules(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "parent"}})
+	m.SetChildren("parent", []inspect.TreeNodeDTO{{NodeID: "child", ChildCount: nil}})
+
+	child, ok := m.ItemByID("child")
+	if !ok {
+		t.Fatal("expected recursive child")
+	}
+	if child.ChildCount() != 1 || !child.ChildAt(0).(*uiaTreeNode).placeholder {
+		t.Fatalf("expected recursive unknown-count placeholder, got %d children", child.ChildCount())
+	}
+
+	m.SetChildren("child", []inspect.TreeNodeDTO{})
+	child, _ = m.ItemByID("child")
+	if child.ChildCount() != 0 {
+		t.Fatalf("expected recursive zero-child expansion to clear placeholder, got %d", child.ChildCount())
+	}
+}
+
 func fakeNotepadTreeNodes() (inspect.TreeNodeDTO, []inspect.TreeNodeDTO, []inspect.TreeNodeDTO) {
 	root := inspect.TreeNodeDTO{NodeID: "root", LocalizedControlType: "window", Name: "Untitled - Notepad"}
 	pane := inspect.TreeNodeDTO{NodeID: "pane-empty", LocalizedControlType: "pane", Name: ""}
