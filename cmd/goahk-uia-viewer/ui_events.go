@@ -20,6 +20,7 @@ type ViewUpdater interface {
 	UpdateTreeRoot(inspect.TreeNodeDTO)
 	UpdateNodeChildren(string, []inspect.TreeNodeDTO)
 	ExpandTreeNode(string)
+	ShouldAutoExpand(string) bool
 	SelectTreeNode(string)
 }
 
@@ -122,12 +123,16 @@ func (a *ViewerEventAdapter) onWindowSelectionRequest(load func() (WindowSelecti
 
 			if len(result.Children) > 0 {
 				a.view.UpdateNodeChildren(rootID, result.Children)
-				a.view.ExpandTreeNode(rootID)
+				if a.view.ShouldAutoExpand(rootID) {
+					a.view.ExpandTreeNode(rootID)
+				}
 			}
 			for _, expanded := range expandResults {
 				if expanded.Err == nil {
 					a.view.UpdateNodeChildren(expanded.ParentID, expanded.Children)
-					a.view.ExpandTreeNode(expanded.ParentID)
+					if a.view.ShouldAutoExpand(expanded.ParentID) {
+						a.view.ExpandTreeNode(expanded.ParentID)
+					}
 				}
 			}
 
