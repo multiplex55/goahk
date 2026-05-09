@@ -208,47 +208,42 @@ func TestUIATreeRecursivePopulation_UnknownCountsUseSamePlaceholderRules(t *test
 	}
 }
 
-func fakeNotepadTreeNodes() (inspect.TreeNodeDTO, []inspect.TreeNodeDTO, []inspect.TreeNodeDTO) {
-	root := inspect.TreeNodeDTO{NodeID: "root", LocalizedControlType: "window", Name: "Untitled - Notepad"}
-	pane := inspect.TreeNodeDTO{NodeID: "pane-empty", LocalizedControlType: "pane", Name: ""}
-	descendants := []inspect.TreeNodeDTO{{NodeID: "doc", LocalizedControlType: "document", Name: "Text Editor"}, {NodeID: "status", LocalizedControlType: "status bar", Name: "Ln 1, Col 1"}}
-	return root, []inspect.TreeNodeDTO{pane}, descendants
-}
-
 func TestUIATreeFakeNotepadTree_AHKStyleLabelsAndEmptyNameRetention(t *testing.T) {
 	m := newUIATreeModel()
-	root, rootChildren, paneChildren := fakeNotepadTreeNodes()
-	m.SetRoot(root)
-	m.SetChildren("root", rootChildren)
-	m.SetChildren("pane-empty", paneChildren)
+	fixture := buildFakeNotepadTreeFixture()
+	m.SetRoot(fixture.Root)
+	m.SetChildren("root", fixture.ChildrenBy["root"])
+	m.SetChildren("pane", fixture.ChildrenBy["pane"])
 
-	pane, ok := m.ItemByID("pane-empty")
+	pane, ok := m.ItemByID("pane")
 	if !ok {
 		t.Fatal("expected pane node")
 	}
 	if got := pane.Text(); got != `pane ""` {
 		t.Fatalf("expected AHK-style empty-name pane label, got %q", got)
 	}
-	doc, ok := m.ItemByID("doc")
-	if !ok || doc.Text() != `document "Text Editor"` {
-		t.Fatalf("expected rich descendant label, got %#v ok=%v", doc, ok)
+	for id, want := range map[string]string{"root": `window ""`, "menu": `menu bar ""`, "text": `text ""`, "dup-a": `button "Save"`, "dup-b": `button "Save"`} {
+		n, ok := m.ItemByID(id)
+		if !ok || n.Text() != want {
+			t.Fatalf("node %s label = %q ok=%v want=%q", id, n.Text(), ok, want)
+		}
 	}
 }
 
 func TestUIATreeFakeNotepadTree_ConfiguredAutoExpandMarksExpandedNodes(t *testing.T) {
 	m := newUIATreeModel()
-	root, rootChildren, paneChildren := fakeNotepadTreeNodes()
-	m.SetRoot(root)
-	m.SetChildren("root", rootChildren)
-	m.SetChildren("pane-empty", paneChildren)
+	fixture := buildFakeNotepadTreeFixture()
+	m.SetRoot(fixture.Root)
+	m.SetChildren("root", fixture.ChildrenBy["root"])
+	m.SetChildren("pane", fixture.ChildrenBy["pane"])
 
-	for _, id := range []string{"root", "pane-empty"} {
+	for _, id := range []string{"root", "pane"} {
 		m.SetExpanded(id, true)
 	}
-	if !m.IsExpanded("root") || !m.IsExpanded("pane-empty") {
+	if !m.IsExpanded("root") || !m.IsExpanded("pane") {
 		t.Fatalf("expected configured auto-expand state for fake tree")
 	}
-	if m.IsExpanded("doc") {
+	if m.IsExpanded("text") {
 		t.Fatalf("leaf nodes should not be auto-expanded by default")
 	}
 }
