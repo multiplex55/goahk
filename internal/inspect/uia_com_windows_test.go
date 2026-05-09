@@ -5,6 +5,7 @@ package inspect
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -217,6 +218,34 @@ func TestNativeUIAComClient_TreeWrappingSucceedsWhenPatternProbeFails(t *testing
 	}
 	if len(detailsEl.SupportedPatterns) != 0 {
 		t.Fatalf("expected no discovered patterns when probes fail, got %+v", detailsEl.SupportedPatterns)
+	}
+}
+
+func TestWrapNativeElementOwned_TreeLoadSkipsDetailsOnlyProperties(t *testing.T) {
+	origGetProp := uiaGetCurrentPropertyValueCall
+	origRuntime := uiaElementRuntimeIDCall
+	defer func() {
+		uiaGetCurrentPropertyValueCall = origGetProp
+		uiaElementRuntimeIDCall = origRuntime
+	}()
+
+	called := map[int32]int{}
+	uiaElementRuntimeIDCall = func(uintptr) (string, error) { return "rid:test", nil }
+	uiaGetCurrentPropertyValueCall = func(_ uintptr, prop int32) (comVariant, error) {
+		called[prop]++
+		return comVariant{}, fmt.Errorf("test")
+	}
+
+	_, _ = wrapNativeElementOwned(0x1, 0, "", -1, &uiaWrapOptions{PropertyLoadLevel: uiaPropertyLoadTree, PopulatePatterns: false})
+
+	if called[uiaPropertyAutomationID] != 0 {
+		t.Fatalf("expected tree load to skip AutomationId property call, got %d", called[uiaPropertyAutomationID])
+	}
+	if called[uiaPropertyHelpText] != 0 {
+		t.Fatalf("expected tree load to skip HelpText property call, got %d", called[uiaPropertyHelpText])
+	}
+	if called[uiaPropertyControlType] == 0 || called[uiaPropertyName] == 0 || called[uiaPropertyClassName] == 0 {
+		t.Fatalf("expected tree load essentials to be called, got controlType=%d name=%d class=%d", called[uiaPropertyControlType], called[uiaPropertyName], called[uiaPropertyClassName])
 	}
 }
 

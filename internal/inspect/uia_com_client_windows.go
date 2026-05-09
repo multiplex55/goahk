@@ -74,17 +74,27 @@ func wrapNativeElementBorrowed(ptr uintptr, hwnd window.HWND, parentKey string, 
 }
 
 type uiaWrapOptions struct {
-	PopulateProperties bool
-	PopulatePatterns   bool
+	PropertyLoadLevel uiaPropertyLoadLevel
+	PopulatePatterns  bool
 }
+
+type uiaPropertyLoadLevel int
+
+const (
+	uiaPropertyLoadTree uiaPropertyLoadLevel = iota
+	uiaPropertyLoadDetails
+)
+
+var uiaGetCurrentPropertyValueCall = uiaGetCurrentPropertyValue
+var uiaElementRuntimeIDCall = uiaElementRuntimeID
 
 func normalizeWrapOptions(opts *uiaWrapOptions) uiaWrapOptions {
 	if opts == nil {
-		return uiaWrapOptions{PopulateProperties: true, PopulatePatterns: true}
+		return uiaWrapOptions{PropertyLoadLevel: uiaPropertyLoadDetails, PopulatePatterns: true}
 	}
 	return uiaWrapOptions{
-		PopulateProperties: opts.PopulateProperties,
-		PopulatePatterns:   opts.PopulatePatterns,
+		PropertyLoadLevel: opts.PropertyLoadLevel,
+		PopulatePatterns:  opts.PopulatePatterns,
 	}
 }
 
@@ -93,7 +103,7 @@ func wrapNativeElementOwned(ptr uintptr, hwnd window.HWND, parentKey string, sib
 		return nil, &UIAComUnavailableError{Op: "WrapElement", Err: errors.New("nil COM element")}
 	}
 	resolvedOpts := normalizeWrapOptions(opts)
-	rid, err := uiaElementRuntimeID(ptr)
+	rid, err := uiaElementRuntimeIDCall(ptr)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +111,11 @@ func wrapNativeElementOwned(ptr uintptr, hwnd window.HWND, parentKey string, sib
 	rawRuntimeID := strings.TrimSpace(rid)
 	el := &uiaElement{RuntimeID: rawRuntimeID, HWND: hwnd.String()}
 	b := &uiaBridgeElement{Key: key, RuntimeID: rawRuntimeID, AllowHWNDFallback: hwnd != 0, SupportedPatterns: nil, PropertyState: map[string]string{}, UnsupportedProperty: map[string]bool{}, NativePtr: ptr, Element: el}
-	if resolvedOpts.PopulateProperties {
-		populateElementProperties(b)
+	switch resolvedOpts.PropertyLoadLevel {
+	case uiaPropertyLoadDetails:
+		populateElementDetailsProperties(b, resolvedOpts.PopulatePatterns)
+	default:
+		populateElementTreeProperties(b)
 	}
 	if b.Key == "" {
 		if parentKey != "" && siblingIndex >= 0 {
@@ -111,18 +124,77 @@ func wrapNativeElementOwned(ptr uintptr, hwnd window.HWND, parentKey string, sib
 			b.Key = fmt.Sprintf("ptr:%x", ptr)
 		}
 	}
-	if resolvedOpts.PopulatePatterns {
+	if resolvedOpts.PopulatePatterns && resolvedOpts.PropertyLoadLevel != uiaPropertyLoadDetails {
 		populateSupportedPatterns(b)
 	}
 	return b, nil
 }
 
-func populateElementProperties(el *uiaBridgeElement) {
+func populateElementTreeProperties(el *uiaBridgeElement) {
 	if el == nil || el.NativePtr == 0 || el.Element == nil {
 		return
 	}
 	setStr := func(name string, prop int32, dst *string) {
-		v, err := uiaGetCurrentPropertyValue(el.NativePtr, prop)
+		v, err := uiaGetCurrentPropertyValueCall(el.NativePtr, prop)
+		if err != nil {
+			markPropertyErr(el, name, err)
+			return
+		}
+		defer clearVariant(&v)
+		r := decodeVariant(v)
+		el.PropertyState[name] = r.Status
+		if r.Status == propertyStatusUnsupported {
+			el.UnsupportedProperty[name] = true
+			return
+		}
+		*dst = strings.TrimSpace(r.S)
+	}
+	setInt := func(name string, prop int32, dst *int) {
+		v, err := uiaGetCurrentPropertyValueCall(el.NativePtr, prop)
+		if err != nil {
+			markPropertyErr(el, name, err)
+			return
+		}
+		defer clearVariant(&v)
+		r := decodeVariant(v)
+		el.PropertyState[name] = r.Status
+		*dst = r.I
+	}
+	setControlType := func() {
+		v, err := uiaGetCurrentPropertyValueCall(el.NativePtr, uiaPropertyControlType)
+		if err != nil {
+			markPropertyErr(el, "ControlType", err)
+			return
+		}
+		defer clearVariant(&v)
+		r := decodeVariant(v)
+		el.PropertyState["ControlType"] = r.Status
+		el.Element.ControlType = controlTypeNameForID(r.I)
+	}
+	setControlType()
+	setStr("LocalizedControlType", uiaPropertyLocalizedCtl, &el.Element.LocalizedControlType)
+	setStr("Name", uiaPropertyName, &el.Element.Name)
+	setStr("ClassName", uiaPropertyClassName, &el.Element.ClassName)
+	setInt("ProcessId", uiaPropertyProcessID, &el.Element.ProcessID)
+	setInt("NativeWindowHandle", uiaPropertyNativeHWND, new(int))
+	v, err := uiaGetCurrentPropertyValueCall(el.NativePtr, uiaPropertyBoundingRect)
+	if err == nil {
+		defer clearVariant(&v)
+		r := decodeVariant(v)
+		el.PropertyState["BoundingRectangle"] = r.Status
+		el.Element.BoundingRect = r.Rect
+	} else {
+		markPropertyErr(el, "BoundingRectangle", err)
+	}
+}
+
+func populateElementDetailsProperties(el *uiaBridgeElement, includePatterns bool) {
+	populateElementTreeProperties(el)
+	if el == nil || el.NativePtr == 0 || el.Element == nil {
+		return
+	}
+	setStr := func(name string, prop int32, dst *string) {
+		v, err := uiaGetCurrentPropertyValueCall(el.NativePtr, prop)
 		if err != nil {
 			markPropertyErr(el, name, err)
 			return
@@ -137,7 +209,7 @@ func populateElementProperties(el *uiaBridgeElement) {
 		*dst = strings.TrimSpace(r.S)
 	}
 	setOptStr := func(name string, prop int32, dst **string) {
-		v, err := uiaGetCurrentPropertyValue(el.NativePtr, prop)
+		v, err := uiaGetCurrentPropertyValueCall(el.NativePtr, prop)
 		if err != nil {
 			markPropertyErr(el, name, err)
 			return
@@ -153,7 +225,7 @@ func populateElementProperties(el *uiaBridgeElement) {
 		*dst = &s
 	}
 	setBool := func(name string, prop int32, dst *bool) {
-		v, err := uiaGetCurrentPropertyValue(el.NativePtr, prop)
+		v, err := uiaGetCurrentPropertyValueCall(el.NativePtr, prop)
 		if err != nil {
 			markPropertyErr(el, name, err)
 			return
@@ -163,59 +235,25 @@ func populateElementProperties(el *uiaBridgeElement) {
 		el.PropertyState[name] = r.Status
 		*dst = r.B
 	}
-	setInt := func(name string, prop int32, dst *int) {
-		v, err := uiaGetCurrentPropertyValue(el.NativePtr, prop)
-		if err != nil {
-			markPropertyErr(el, name, err)
-			return
-		}
-		defer clearVariant(&v)
-		r := decodeVariant(v)
-		el.PropertyState[name] = r.Status
-		*dst = r.I
-	}
-	setControlType := func() {
-		v, err := uiaGetCurrentPropertyValue(el.NativePtr, uiaPropertyControlType)
-		if err != nil {
-			markPropertyErr(el, "ControlType", err)
-			return
-		}
-		defer clearVariant(&v)
-		r := decodeVariant(v)
-		el.PropertyState["ControlType"] = r.Status
-		el.Element.ControlType = controlTypeNameForID(r.I)
-	}
-	setControlType()
-	setStr("LocalizedControlType", uiaPropertyLocalizedCtl, &el.Element.LocalizedControlType)
-	setStr("Name", uiaPropertyName, &el.Element.Name)
 	setOptStr("Value", 30045, &el.Element.Value)
 	setStr("AutomationId", uiaPropertyAutomationID, &el.Element.AutomationID)
-	setStr("ClassName", uiaPropertyClassName, &el.Element.ClassName)
 	setOptStr("HelpText", uiaPropertyHelpText, &el.Element.HelpText)
 	setOptStr("AccessKey", uiaPropertyAccessKey, &el.Element.AccessKey)
 	setOptStr("AcceleratorKey", uiaPropertyAccelerator, &el.Element.AcceleratorKey)
 	setBool("HasKeyboardFocus", uiaPropertyHasFocus, &el.Element.HasKeyboardFocus)
 	setBool("IsKeyboardFocusable", uiaPropertyIsFocusable, &el.Element.IsKeyboardFocusable)
 	setOptStr("ItemType", uiaPropertyItemType, &el.Element.ItemType)
-	setInt("ProcessId", uiaPropertyProcessID, &el.Element.ProcessID)
 	setBool("IsEnabled", uiaPropertyIsEnabled, &el.Element.IsEnabled)
 	setBool("IsPassword", uiaPropertyIsPassword, &el.Element.IsPassword)
 	setBool("IsOffscreen", uiaPropertyIsOffscreen, &el.Element.IsOffscreen)
 	setBool("IsControlElement", uiaPropertyIsCtrlElem, &el.Element.IsControlElement)
 	setBool("IsContentElement", uiaPropertyIsContent, &el.Element.IsContentElement)
-	setInt("NativeWindowHandle", uiaPropertyNativeHWND, new(int))
 	setStr("FrameworkId", uiaPropertyFrameworkID, &el.Element.FrameworkID)
 	setBool("IsRequiredForForm", uiaPropertyIsRequired, &el.Element.IsRequiredForForm)
 	setOptStr("ItemStatus", uiaPropertyItemStatus, &el.Element.ItemStatus)
 	setOptStr("LabeledBy", uiaPropertyLabeledBy, &el.Element.LabeledBy)
-	v, err := uiaGetCurrentPropertyValue(el.NativePtr, uiaPropertyBoundingRect)
-	if err == nil {
-		defer clearVariant(&v)
-		r := decodeVariant(v)
-		el.PropertyState["BoundingRectangle"] = r.Status
-		el.Element.BoundingRect = r.Rect
-	} else {
-		markPropertyErr(el, "BoundingRectangle", err)
+	if includePatterns {
+		populateSupportedPatterns(el)
 	}
 }
 
@@ -274,7 +312,7 @@ func (nativeUIAAPI) ElementFromHandle(state *uiaWorkerState, hwnd window.HWND) (
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElementOwned(ptr, hwnd, "", -1, &uiaWrapOptions{PopulateProperties: true, PopulatePatterns: false})
+	return wrapNativeElementOwned(ptr, hwnd, "", -1, &uiaWrapOptions{PropertyLoadLevel: uiaPropertyLoadTree, PopulatePatterns: false})
 }
 
 func (nativeUIAAPI) FocusedElement(state *uiaWorkerState) (*uiaBridgeElement, error) {
@@ -282,7 +320,7 @@ func (nativeUIAAPI) FocusedElement(state *uiaWorkerState) (*uiaBridgeElement, er
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElementOwned(ptr, 0, "", -1, &uiaWrapOptions{PopulateProperties: true, PopulatePatterns: false})
+	return wrapNativeElementOwned(ptr, 0, "", -1, &uiaWrapOptions{PropertyLoadLevel: uiaPropertyLoadTree, PopulatePatterns: false})
 }
 
 func (nativeUIAAPI) ElementFromPoint(state *uiaWorkerState, x, y int) (*uiaBridgeElement, error) {
@@ -290,7 +328,7 @@ func (nativeUIAAPI) ElementFromPoint(state *uiaWorkerState, x, y int) (*uiaBridg
 	if err != nil {
 		return nil, err
 	}
-	return wrapNativeElementOwned(ptr, 0, "", -1, &uiaWrapOptions{PopulateProperties: true, PopulatePatterns: false})
+	return wrapNativeElementOwned(ptr, 0, "", -1, &uiaWrapOptions{PropertyLoadLevel: uiaPropertyLoadTree, PopulatePatterns: false})
 }
 
 func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement) ([]*uiaBridgeElement, error) {
@@ -314,7 +352,7 @@ func (nativeUIAAPI) FindChildren(state *uiaWorkerState, parent *uiaBridgeElement
 		if getErr != nil {
 			return nil, getErr
 		}
-		child, wrapErr := wrapNativeElementOwned(ptr, 0, parent.Key, int(i), &uiaWrapOptions{PopulateProperties: true, PopulatePatterns: false})
+		child, wrapErr := wrapNativeElementOwned(ptr, 0, parent.Key, int(i), &uiaWrapOptions{PropertyLoadLevel: uiaPropertyLoadTree, PopulatePatterns: false})
 		if wrapErr != nil {
 			log.Printf("inspect.uia.native.find_children checkpoint=\"wrap child failed\" index=%d err=%v", i, wrapErr)
 			diag = errors.Join(diag, fmt.Errorf("child[%d]: %w", i, wrapErr))
@@ -335,7 +373,7 @@ func (nativeUIAAPI) GetParent(state *uiaWorkerState, el *uiaBridgeElement) (*uia
 	if err != nil || parent == 0 {
 		return nil, err
 	}
-	return wrapNativeElementOwned(parent, 0, "", -1, &uiaWrapOptions{PopulateProperties: true, PopulatePatterns: false})
+	return wrapNativeElementOwned(parent, 0, "", -1, &uiaWrapOptions{PropertyLoadLevel: uiaPropertyLoadTree, PopulatePatterns: false})
 }
 
 func fallbackPathKey(parentKey string, siblingIndex int, el *uiaElement) string {
@@ -407,8 +445,8 @@ func (c *nativeUIAComClient) ElementByKey(key string) (*uiaBridgeElement, error)
 		}
 		return nil, &UIAElementStaleError{Op: "ElementByKey", Err: fmt.Errorf("key %q is stale or unavailable", id)}
 	}
-	if len(el.SupportedPatterns) == 0 && el.NativePtr != 0 {
-		populateSupportedPatterns(el)
+	if el.NativePtr != 0 {
+		populateElementDetailsProperties(el, true)
 	}
 	return cloneBridgeElement(el), nil
 }
