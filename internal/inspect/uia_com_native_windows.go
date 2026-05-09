@@ -144,25 +144,51 @@ func hresultErr(op string, hr uintptr) error {
 	}
 }
 
+// Crash-localization instrumentation for native COM failures: log exact call
+// boundaries so the last emitted checkpoint identifies the failing vtable op.
+func logUIAComCallStart(op string, fields string) {
+	log.Printf("inspect.uia.com_call_start op=%s %s", op, fields)
+}
+func logUIAComCallEnd(op string, hr uintptr, fields string) {
+	log.Printf("inspect.uia.com_call_end op=%s hr=0x%x %s", op, uint32(hr), fields)
+}
+func logUIAComCallError(op string, err error, fields string) {
+	if err != nil {
+		log.Printf("inspect.uia.com_call_error op=%s err=%v %s", op, err, fields)
+	}
+}
+
 func uiaCreateTrueCondition(automation uintptr) (uintptr, error) {
 	var cond uintptr
 	vt := *(*uintptr)(unsafe.Pointer(automation))
+	logUIAComCallStart("CreateTrueCondition", fmt.Sprintf("automation_ptr=0x%x", automation))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationCreateTrueCondition), automation, uintptr(unsafe.Pointer(&cond)))
-	return cond, hresultErr("CreateTrueCondition", hr)
+	logUIAComCallEnd("CreateTrueCondition", hr, fmt.Sprintf("automation_ptr=0x%x condition_ptr=0x%x", automation, cond))
+	err := hresultErr("CreateTrueCondition", hr)
+	logUIAComCallError("CreateTrueCondition", err, fmt.Sprintf("automation_ptr=0x%x", automation))
+	return cond, err
 }
 
 func uiaGetRawViewWalker(automation uintptr) (uintptr, error) {
 	var walker uintptr
 	vt := *(*uintptr)(unsafe.Pointer(automation))
+	logUIAComCallStart("get_RawViewWalker", fmt.Sprintf("automation_ptr=0x%x", automation))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationGetRawViewWalker), automation, uintptr(unsafe.Pointer(&walker)))
-	return walker, hresultErr("get_RawViewWalker", hr)
+	logUIAComCallEnd("get_RawViewWalker", hr, fmt.Sprintf("automation_ptr=0x%x walker_ptr=0x%x", automation, walker))
+	err := hresultErr("get_RawViewWalker", hr)
+	logUIAComCallError("get_RawViewWalker", err, fmt.Sprintf("automation_ptr=0x%x", automation))
+	return walker, err
 }
 
 func uiaElementFromHandle(automation uintptr, hwnd window.HWND) (uintptr, error) {
 	var el uintptr
 	vt := *(*uintptr)(unsafe.Pointer(automation))
+	logUIAComCallStart("ElementFromHandle", fmt.Sprintf("automation_ptr=0x%x hwnd=0x%x", automation, uintptr(hwnd)))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementFromHandle), automation, uintptr(hwnd), uintptr(unsafe.Pointer(&el)))
-	return el, hresultErr("ElementFromHandle", hr)
+	logUIAComCallEnd("ElementFromHandle", hr, fmt.Sprintf("automation_ptr=0x%x hwnd=0x%x element_ptr=0x%x", automation, uintptr(hwnd), el))
+	err := hresultErr("ElementFromHandle", hr)
+	logUIAComCallError("ElementFromHandle", err, fmt.Sprintf("hwnd=0x%x", uintptr(hwnd)))
+	return el, err
 }
 
 func uiaGetFocusedElement(automation uintptr) (uintptr, error) {

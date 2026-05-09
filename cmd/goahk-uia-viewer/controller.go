@@ -154,12 +154,12 @@ func (c *Controller) RefreshWindows(filter string, visibleOnly, titleOnly bool) 
 	return c.service.RefreshWindows(c.runtimeContext(), inspect.RefreshWindowsRequest{Filter: filter, VisibleOnly: visibleOnly, TitleOnly: titleOnly})
 }
 func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionResult, error) {
-	log.Printf("uia.viewer select_window_start hwnd=%s activate=%t", hwnd, activate)
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 	c.mu.Lock()
 	mode := c.effectiveModeLocked()
 	c.selectedWindowID = hwnd
 	c.mu.Unlock()
+	log.Printf("uia.viewer select_window_start hwnd=%s activate=%t mode=%s", hwnd, activate, mode)
 	result := WindowSelectionResult{}
 	if activate {
 		if _, err := c.service.ActivateWindow(c.runtimeContext(), inspect.ActivateWindowRequest{HWND: hwnd}); err != nil {

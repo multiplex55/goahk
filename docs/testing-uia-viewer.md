@@ -29,6 +29,17 @@ This document defines a **tooling validation contract** for `goahk-uia-viewer`. 
 
 ## Deterministic validation ladder (Notepad flow)
 
+## Crash-localization COM logging
+
+- Viewer startup initializes file-backed logs at:
+  - `%LOCALAPPDATA%\goahk\uia-viewer\uia-viewer.log`
+- Native UIA COM checkpoints emit structured lines:
+  - `inspect.uia.com_call_start op=<name> ...`
+  - `inspect.uia.com_call_end op=<name> hr=<hex> ...`
+  - `inspect.uia.com_call_error op=<name> err=...`
+- Expected progression is `start -> end` (and `error` only on failed HRESULT translation).  
+- Interpretation guidance: when diagnosing hard native crashes, the **last line before crash is likely the failing COM call site**.
+
 Use a deterministic target window (Notepad) so teams can reproduce behavior quickly.
 
 ### Setup

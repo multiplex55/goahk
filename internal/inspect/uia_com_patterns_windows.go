@@ -4,6 +4,7 @@
 package inspect
 
 import (
+	"fmt"
 	"syscall"
 	"unsafe"
 )
@@ -34,8 +35,12 @@ func uiaInvokePatternInvoke(el uintptr) error {
 	}
 	defer comRelease(pattern)
 	vt := *(*uintptr)(unsafe.Pointer(pattern))
+	logUIAComCallStart("Invoke", fmt.Sprintf("pattern_ptr=0x%x element_ptr=0x%x", pattern, el))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationInvokePatternInvoke), pattern)
-	return hresultErr("Invoke", hr)
+	logUIAComCallEnd("Invoke", hr, fmt.Sprintf("pattern_ptr=0x%x", pattern))
+	err = hresultErr("Invoke", hr)
+	logUIAComCallError("Invoke", err, fmt.Sprintf("element_ptr=0x%x", el))
+	return err
 }
 
 func uiaSelectionItemPatternSelect(el uintptr) error {
@@ -111,8 +116,11 @@ func uiaExpandCollapsePatternCollapse(el uintptr) error {
 func uiaGetCurrentPatternPtr(el uintptr, patternID int32, op string) (uintptr, error) {
 	var p uintptr
 	vt := *(*uintptr)(unsafe.Pointer(el))
+	logUIAComCallStart(op, fmt.Sprintf("element_ptr=0x%x pattern_id=%d", el, patternID))
 	hr, _, _ := syscall.SyscallN(comVTableMethod(vt, uiaVTableIUIAutomationElementGetCurrentPattern), el, uintptr(patternID), uintptr(unsafe.Pointer(&p)))
+	logUIAComCallEnd(op, hr, fmt.Sprintf("element_ptr=0x%x pattern_id=%d pattern_ptr=0x%x", el, patternID, p))
 	if err := hresultErr(op, hr); err != nil {
+		logUIAComCallError(op, err, fmt.Sprintf("element_ptr=0x%x pattern_id=%d", el, patternID))
 		return 0, err
 	}
 	if p == 0 {
