@@ -79,6 +79,25 @@ This sample tree is the regression target for UIA Raw View parity.
 
 ## Deterministic validation ladder (Notepad flow)
 
+## Side-by-side dump vs viewer validation workflow
+
+Use this when parity debugging needs a precise first-difference location.
+
+1. Run a tree dump against the target window handle:
+   - Text mode:
+     - `go run ./cmd/goahk-inspect uia dump --hwnd 0x<HWND> --mode UIA_TREE --depth 6`
+   - JSON mode (scripted comparison):
+     - `go run ./cmd/goahk-inspect uia dump --hwnd 0x<HWND> --mode UIA_TREE --depth 6 --json`
+2. Run `goahk-uia-viewer` and inspect the same window in the same mode (`UIA_TREE`, `UIA_ONLY`, etc.).
+3. Confirm status metadata parity first:
+   - provider/backend/mode/fallback should match dump metadata.
+4. Compare tree output top-down and stop at the first mismatch:
+   - Compare node label (`controlType/localizedControlType + name`), then child index path.
+   - Record mismatch location as a path like `root/0/2/1` plus expected vs actual labels.
+5. If JSON comparison is used, diff `root.children[...]` recursively and report the first divergent node path.
+
+This establishes an exact mismatch coordinate for triage rather than broad “tree differs” reports.
+
 ## Crash-localization COM logging
 
 - Viewer startup initializes file-backed logs at:

@@ -175,11 +175,11 @@ func runUIA(ctx context.Context, action, format string, out io.Writer, args []st
 			return mapOpError("uia tree", err)
 		}
 		return emit(out, format, node, func() string { return uia.FormatTreeText(node) })
-	case "dump":
+	case "dump", "uia-dump":
 		if d.inspect == nil {
 			return errors.New("inspect service is not configured")
 		}
-		req, err := parseDumpFlags(args)
+		req, jsonOutput, err := parseDumpFlags(args)
 		if err != nil {
 			return err
 		}
@@ -187,31 +187,33 @@ func runUIA(ctx context.Context, action, format string, out io.Writer, args []st
 		if err != nil {
 			return mapOpError("uia dump", err)
 		}
-		return emit(out, format, resp, func() string {
-			return formatDumpText(resp.Text, req.Mode, req.HWND)
-		})
+		if jsonOutput {
+			format = "json"
+		}
+		return emit(out, format, resp, func() string { return formatDumpText(resp) })
 	default:
 		return fmt.Errorf("unknown uia subcommand %q", action)
 	}
 }
 
-func parseDumpFlags(args []string) (inspect.DumpTreeRequest, error) {
+func parseDumpFlags(args []string) (inspect.DumpTreeRequest, bool, error) {
 	fs := flag.NewFlagSet("uia dump", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	hwnd := fs.String("hwnd", "", "window handle in hex, e.g. 0x12345")
 	mode := fs.String("mode", string(inspect.InspectModeAuto), "inspect mode")
 	depth := fs.Int("depth", 3, "maximum depth")
+	jsonOutput := fs.Bool("json", false, "emit json output")
 	if err := fs.Parse(args); err != nil {
-		return inspect.DumpTreeRequest{}, err
+		return inspect.DumpTreeRequest{}, false, err
 	}
 	if strings.TrimSpace(*hwnd) == "" {
-		return inspect.DumpTreeRequest{}, errors.New("uia dump requires --hwnd")
+		return inspect.DumpTreeRequest{}, false, errors.New("uia dump requires --hwnd")
 	}
 	parsedMode := normalizeDumpMode(*mode)
 	if parsedMode == "" {
-		return inspect.DumpTreeRequest{}, fmt.Errorf("unsupported mode %q", *mode)
+		return inspect.DumpTreeRequest{}, false, fmt.Errorf("unsupported mode %q", *mode)
 	}
-	return inspect.DumpTreeRequest{HWND: *hwnd, Mode: parsedMode, Depth: *depth}, nil
+	return inspect.DumpTreeRequest{HWND: *hwnd, Mode: parsedMode, Depth: *depth}, *jsonOutput, nil
 }
 
 func normalizeDumpMode(value string) inspect.InspectMode {
@@ -231,8 +233,18 @@ func normalizeDumpMode(value string) inspect.InspectMode {
 	}
 }
 
-func formatDumpText(text string, mode inspect.InspectMode, hwnd string) string {
-	return fmt.Sprintf("HWND=%s MODE=%s\n%s", hwnd, mode, strings.TrimSpace(text))
+func formatDumpText(resp inspect.DumpTreeResponse) string {
+	return fmt.Sprintf(
+		"provider=%s backend=%s mode=%s fallback=%s depth=%d nodes=%d warnings=%d\n%s",
+		emptyOrMissing(resp.Metadata.Provider),
+		emptyOrMissing(resp.Metadata.Backend),
+		emptyOrMissing(string(resp.Metadata.Mode)),
+		emptyOrMissing(resp.Metadata.Fallback),
+		resp.Depth,
+		resp.NodeCount,
+		resp.WarningCount,
+		strings.TrimSpace(resp.Text),
+	)
 }
 
 func mapOpError(operation string, err error) error {
@@ -268,7 +280,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  uia focused")
 	fmt.Fprintln(w, "  uia under-cursor")
 	fmt.Fprintln(w, "  uia tree --active-window [--depth N]")
-	fmt.Fprintln(w, "  uia dump --hwnd 0x12345 [--mode AUTO|UIA_ONLY|WINDOW_TREE|HWND_TREE|UIA_TREE] [--depth N]")
+	fmt.Fprintln(w, "  uia dump --hwnd 0x12345 [--mode AUTO|UIA_ONLY|WINDOW_TREE|HWND_TREE|UIA_TREE] [--depth N] [--json]")
+	fmt.Fprintln(w, "  uia uia-dump --hwnd 0x12345 [--mode AUTO|UIA_ONLY|WINDOW_TREE|HWND_TREE|UIA_TREE] [--depth N] [--json]")
 	fmt.Fprintln(w, "  uia <focused|under-cursor> [--copy-best-selector]")
 }
 
