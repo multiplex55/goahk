@@ -24,3 +24,14 @@ func TestInspectModeFromComboIndex(t *testing.T) {
 		}
 	}
 }
+
+func TestTreeFilterStatus(t *testing.T) {
+	ui := &viewerUI{treeModel: newUIATreeModel()}
+	ui.treeModel.matchedNodes = map[NodeID]bool{"a": true, "b": true}
+	if got := ui.treeFilterStatus(" button "); got != `tree filter "button": 2 matches` {
+		t.Fatalf("unexpected status: %q", got)
+	}
+	if got := ui.treeFilterStatus(" "); got != "tree filter cleared" {
+		t.Fatalf("unexpected clear status: %q", got)
+	}
+}

@@ -92,8 +92,12 @@ func (ui *viewerUI) queueRefreshWindowListFromCurrentFilters() {
 	ui.initialRefresh()
 }
 
-func (ui *viewerUI) filterNotImplementedStatus() string {
-	return "Tree filtering not implemented yet"
+func (ui *viewerUI) treeFilterStatus(text string) string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return "tree filter cleared"
+	}
+	return fmt.Sprintf("tree filter %q: %d matches", trimmed, ui.treeModel.VisibleMatchCount())
 }
 
 func (ui *viewerUI) attachEvents() {
@@ -188,7 +192,16 @@ func (ui *viewerUI) attachEvents() {
 	}
 	if ui.filterEdit != nil {
 		ui.filterEdit.TextChanged().Attach(func() {
-			ui.setStatus(ui.filterNotImplementedStatus())
+			text := ui.filterEdit.Text()
+			ui.treeModel.SetFilter(text)
+			for _, id := range ui.treeModel.ExpandedIDsForFilter() {
+				if node, ok := ui.treeModel.ItemByID(id); ok && node != nil {
+					ui.suppressTreeExpandEvent = true
+					ui.treeView.SetExpanded(node, true)
+					ui.suppressTreeExpandEvent = false
+				}
+			}
+			ui.setStatus(ui.treeFilterStatus(text))
 		})
 	}
 	if ui.macroSidebarBtn != nil {

@@ -347,3 +347,44 @@ func TestUIATreeBulkExpansionKeepsModelAndVisualBookkeepingConsistent(t *testing
 		t.Fatalf("expected visual expansion bookkeeping to keep children visible: a=%d b=%d", a.ChildCount(), b.ChildCount())
 	}
 }
+
+func TestUIATreeFilter_FakeNotepadQueries(t *testing.T) {
+	m := newUIATreeModel()
+	fixture := buildFakeNotepadTreeFixture()
+	m.SetRoot(fixture.Root)
+	m.SetChildren("root", fixture.ChildrenBy["root"])
+	m.SetChildren("menu", []inspect.TreeNodeDTO{{NodeID: "file", Name: "File", ControlType: "MenuItem", LocalizedControlType: "menu item"}})
+	m.SetChildren("pane", append(fixture.ChildrenBy["pane"], inspect.TreeNodeDTO{
+		NodeID:               "enc",
+		Name:                 "UTF-8",
+		ControlType:          "Button",
+		LocalizedControlType: "button",
+	}))
+
+	for _, query := range []string{"File", "button", "UTF-8", "menu item"} {
+		m.SetFilter(query)
+		if m.VisibleMatchCount() == 0 {
+			t.Fatalf("expected matches for query %q", query)
+		}
+		if m.RootCount() != 1 || m.RootAt(0) == nil {
+			t.Fatalf("expected root visible for query %q", query)
+		}
+	}
+
+	m.SetFilter("does-not-exist")
+	if m.VisibleMatchCount() != 0 {
+		t.Fatalf("expected no matches for missing query")
+	}
+	if m.RootCount() != 0 {
+		t.Fatalf("expected empty projection when no matches")
+	}
+
+	m.SetFilter("")
+	if m.RootCount() != 1 {
+		t.Fatalf("expected full tree to be restored after clearing filter")
+	}
+	root := m.RootAt(0).(*uiaTreeNode)
+	if root.ChildCount() != 3 {
+		t.Fatalf("expected unrelated siblings restored, got %d", root.ChildCount())
+	}
+}
