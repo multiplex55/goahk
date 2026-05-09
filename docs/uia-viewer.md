@@ -66,6 +66,41 @@ Use the refresh action, then re-select the target window to force a new root/det
 
 
 
+## Known stale-target behavior
+
+This viewer currently favors stability and non-fatal recovery when a selected window/element disappears mid-flow (for example, closing Notepad after loading the tree). Treat this as viewer stability polish, not a provider rewrite.
+
+### Close/No reproduction (stale target)
+
+Reproduction:
+
+1. Open Notepad and load it in `goahk-uia-viewer`.
+2. Select a node so details/highlight are active.
+3. Close Notepad.
+4. Trigger follow-up viewer actions (re-select, refresh details, expand branch, or highlight).
+
+Expected non-crash behavior:
+
+- Viewer stays alive (no panic/crash).
+- Status reports stale/closed outcomes with stage context when available (for example `Failed GetNodeDetails: ...`, `Failed to select node`, or `Failed to load window`).
+- Stale selection/highlight clears or becomes inert after refresh/window-switch flows.
+- User can recover by refreshing windows and selecting a live target.
+
+### Filter scope is loaded-tree only
+
+Filter operations run only on the currently loaded in-memory tree. Filtering does not trigger backend discovery and does not search nodes that have not been loaded yet.
+
+Implications:
+
+- Filter can only match nodes already loaded/expanded in the current tree state.
+- If expected nodes are missing, load/expand more of the tree (or reload) and then apply filter again.
+
+### Highlight behavior
+
+- When selected node details include a valid bounding rectangle, highlight draws a blue border around that rectangle.
+- Offscreen elements or zero-size rectangles may not render a visible highlight.
+- Missing/invalid bounds degrade highlight feedback only; selection/details paths remain non-fatal.
+
 ### Status shows `backend=synthetic`
 
 `backend=synthetic` means the viewer is presenting a synthesized compatibility tree instead of a native UIA provider tree. This is useful for diagnostics, but it is not a UIA parity pass.

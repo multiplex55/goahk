@@ -172,6 +172,44 @@ Use a deterministic target window (Notepad) so teams can reproduce behavior quic
 - **Pass:** status clearly distinguishes UIA parity from degraded fallback.
 - **Fail:** UIA-unavailable scenarios surface without fallback labeling, causing ambiguous triage.
 
+## Manual verification checklist (viewer stability polish)
+
+Use this checklist during Windows desktop verification. This confirms stale-target handling, highlight behavior, and filter visibility boundaries without reframing the viewer as a provider rewrite.
+
+### 1) Stale target flow (close/no)
+
+- Load Notepad, select a node, then close Notepad.
+- Attempt a follow-up operation in viewer (select/expand/details/highlight/refresh).
+- Expected:
+  - Viewer remains running (non-fatal, no crash).
+  - Status contains stale/closed-target outcomes with stage context when available.
+
+Expected status-message patterns include:
+
+- `Failed GetNodeDetails: ...`
+- `Failed to select node`
+- `Failed to load window`
+- `Failed GetTreeRoot: ...` (when root reload is attempted after close)
+
+### 2) Highlight rendering behavior
+
+- Select an on-screen node with a valid bounding rectangle.
+- Expected: blue border highlight appears around the element bounds.
+- Then select an offscreen or zero-size element (if available).
+- Expected: highlight may not be visible, but no crash or fatal selection failure occurs.
+
+### 3) Filter ancestor visibility and scope
+
+- Expand a multi-level branch and apply filter text matching a deep descendant.
+- Expected: matching nodes are discoverable only within the already-loaded tree.
+- Confirm ancestor visibility behavior in current UI (matching descendants remain reachable via visible ancestry in loaded branches).
+- Load additional branches, then re-apply filter and verify newly loaded matches become eligible.
+
+Notes:
+
+- Filtering does not discover unloaded nodes; this is a loaded-tree-only operation.
+- Missing matches before expansion/loading is expected behavior, not a backend failure.
+
 ## 6-rung ladder (service/controller expectations)
 
 ### 1) Window list
