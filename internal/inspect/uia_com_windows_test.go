@@ -304,15 +304,18 @@ func TestUIAVTableIndexConstants(t *testing.T) {
 		got  uintptr
 		want uintptr
 	}{
+		{"IUnknown.QueryInterface", comVTableQueryInterface, 0},
+		{"IUnknown.AddRef", comVTableAddRef, 1},
+		{"IUnknown.Release", comVTableRelease, 2},
 		{"IUIAutomation.CreateTrueCondition", uiaVTableIUIAutomationCreateTrueCondition, 21},
 		{"IUIAutomation.get_RawViewWalker", uiaVTableIUIAutomationGetRawViewWalker, 16},
 		{"IUIAutomation.ElementFromHandle", uiaVTableIUIAutomationElementFromHandle, 6},
 		{"IUIAutomation.ElementFromPoint", uiaVTableIUIAutomationElementFromPoint, 7},
 		{"IUIAutomation.GetFocusedElement", uiaVTableIUIAutomationGetFocusedElement, 8},
 		{"IUIAutomationElement.FindAll", uiaVTableIUIAutomationElementFindAll, 6},
-		{"IUIAutomationElement.GetCurrentRuntimeId", uiaVTableIUIAutomationElementGetCurrentRuntimeID, 9},
+		{"IUIAutomationElement.GetRuntimeID", uiaVTableIUIAutomationElementGetRuntimeID, 4},
 		{"IUIAutomationElement.GetCurrentPropertyValue", uiaVTableIUIAutomationElementGetCurrentPropertyValue, 10},
-		{"IUIAutomationElement.GetCurrentPattern", uiaVTableIUIAutomationElementGetCurrentPattern, 11},
+		{"IUIAutomationElement.GetCurrentPattern", uiaVTableIUIAutomationElementGetCurrentPattern, 16},
 		{"IUIAutomationElementArray.Length", uiaVTableIUIAutomationElementArrayLength, 3},
 		{"IUIAutomationElementArray.GetElement", uiaVTableIUIAutomationElementArrayGetElement, 4},
 		{"IUIAutomationTreeWalker.GetParentElement", uiaVTableIUIAutomationTreeWalkerGetParentElement, 3},
