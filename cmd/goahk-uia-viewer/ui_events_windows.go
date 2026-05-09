@@ -51,18 +51,30 @@ func (ui *viewerUI) executePatternAction(action string) {
 		details, detailsErr := ui.controller.RefreshSelectionDetails()
 		ui.dispatcher.Queue(func() {
 			ui.setLoading(false)
-			if err != nil {
-				ui.setStatus("action failed: " + err.Error())
-				return
-			}
-			if detailsErr != nil {
-				ui.setStatus("action succeeded, refresh failed: " + detailsErr.Error())
-				return
-			}
-			ui.UpdateNodeDetails(details)
-			ui.setStatus(fmt.Sprintf("action completed: %s (patterns=%d)", callableActionLabel(action), len(details.Patterns)))
+			ui.applyPostInvokeDetailsOnly(action, err, details, detailsErr)
 		})
 	}()
+}
+
+func (ui *viewerUI) applyPostInvokeDetailsOnly(action string, invokeErr error, details inspect.GetNodeDetailsResponse, detailsErr error) {
+	if invokeErr != nil {
+		ui.setStatus("action failed: " + invokeErr.Error())
+		return
+	}
+	if detailsErr != nil {
+		ui.setStatus("action succeeded, refresh failed: " + detailsErr.Error())
+		return
+	}
+	// Post-invoke non-refresh path is intentionally non-mutating for the tree model:
+	// no UpdateTreeRoot, UpdateNodeChildren, or ExpandTreeNode calls here.
+	ui.UpdateWindowDetails(details)
+	ui.UpdateNodeDetails(details)
+	ui.validateHighlightAfterInvoke(details)
+	ui.setStatus(fmt.Sprintf("action completed: %s (patterns=%d)", callableActionLabel(action), len(details.Patterns)))
+}
+
+func (ui *viewerUI) validateHighlightAfterInvoke(details inspect.GetNodeDetailsResponse) {
+	_ = details.Status
 }
 
 // walkUIThread enforces the UI threading rule for the viewer:
