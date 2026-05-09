@@ -60,6 +60,10 @@ func (ui *viewerUI) autoExpandDepth() int {
 	}
 }
 
+func (ui *viewerUI) isRecursiveExpandMode() bool {
+	return ui != nil && ui.autoExpandCombo != nil && ui.autoExpandCombo.CurrentIndex() == 4
+}
+
 func NewViewerWindow(controller *Controller) (viewerWindow, error) {
 	logStartup("ui_window_new begin")
 	if controller == nil {
@@ -73,6 +77,7 @@ func NewViewerWindow(controller *Controller) (viewerWindow, error) {
 	ui.attachEvents()
 	ui.events = NewViewerEventAdapter(controller, ui, ui.dispatcher)
 	ui.events.autoExpandDepth = ui.autoExpandDepth
+	ui.events.isRecursiveMode = ui.isRecursiveExpandMode
 	logStartup("ui_window_new ready")
 	return ui, nil
 }

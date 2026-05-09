@@ -73,7 +73,16 @@ type StatusUpdate struct {
 type TreeExpandResult struct {
 	ParentID string
 	Children []inspect.TreeNodeDTO
+	Depth    int
 	Err      error
+}
+
+type TreePopulateOptions struct {
+	MaxDepth        int
+	MaxNodes        int
+	BranchTimeout   time.Duration
+	TotalTimeout    time.Duration
+	ContinueOnError bool
 }
 
 func NewController(ctx context.Context, svc inspect.Service) *Controller {
@@ -346,9 +355,9 @@ func (c *Controller) ExpandTreeDepth(rootID string, maxDepth int) []TreeExpandRe
 	}
 	resp, err := c.ExpandNode(rootID)
 	if err != nil {
-		return []TreeExpandResult{{ParentID: rootID, Err: err}}
+		return []TreeExpandResult{{ParentID: rootID, Depth: 0, Err: err}}
 	}
-	results := []TreeExpandResult{{ParentID: rootID, Children: resp.Children}}
+	results := []TreeExpandResult{{ParentID: rootID, Depth: 0, Children: resp.Children}}
 	results = append(results, c.ExpandTreeDepthFromChildren(resp.Children, maxDepth-1)...)
 	return results
 }
@@ -379,16 +388,103 @@ func (c *Controller) ExpandTreeDepthFromChildren(children []inspect.TreeNodeDTO,
 		seen[current.id] = true
 		resp, err := c.ExpandNode(current.id)
 		if err != nil {
-			results = append(results, TreeExpandResult{ParentID: current.id, Err: err})
+			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth + 1, Err: err})
 			continue
 		}
-		results = append(results, TreeExpandResult{ParentID: current.id, Children: resp.Children})
+		results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth + 1, Children: resp.Children})
 		nextDepth := current.depth + 1
 		for _, grandchild := range resp.Children {
 			if strings.TrimSpace(grandchild.NodeID) == "" {
 				continue
 			}
 			queue = append(queue, depthNode{id: grandchild.NodeID, depth: nextDepth})
+		}
+	}
+	return results
+}
+
+// PopulateTreeFromRoot performs breadth-first traversal from rootID.
+func (c *Controller) PopulateTreeFromRoot(rootID string, opts TreePopulateOptions) []TreeExpandResult {
+	if strings.TrimSpace(rootID) == "" {
+		return nil
+	}
+	if opts.MaxDepth <= 0 {
+		opts.MaxDepth = 2
+	}
+	if opts.MaxNodes <= 0 {
+		opts.MaxNodes = 300
+	}
+	ctx := c.runtimeContext()
+	if opts.TotalTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, opts.TotalTimeout)
+		defer cancel()
+	}
+	type qn struct {
+		id, parent string
+		depth      int
+	}
+	queue := []qn{{id: rootID, depth: 0}}
+	seen := map[string]bool{}
+	results := make([]TreeExpandResult, 0, 32)
+	expanded := 0
+	for len(queue) > 0 {
+		if ctx.Err() != nil {
+			results = append(results, TreeExpandResult{ParentID: rootID, Depth: 0, Err: fmt.Errorf("timeout reached: %w", ctx.Err())})
+			break
+		}
+		current := queue[0]
+		queue = queue[1:]
+		if seen[current.id] {
+			continue
+		}
+		seen[current.id] = true
+		if expanded >= opts.MaxNodes {
+			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Err: fmt.Errorf("budget reached: max nodes=%d", opts.MaxNodes)})
+			break
+		}
+		if current.depth >= opts.MaxDepth {
+			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Err: fmt.Errorf("max depth reached: %d", opts.MaxDepth)})
+			continue
+		}
+		callCtx := ctx
+		if opts.BranchTimeout > 0 {
+			var cancel context.CancelFunc
+			callCtx, cancel = context.WithTimeout(ctx, opts.BranchTimeout)
+			resp, err := c.service.GetNodeChildren(callCtx, inspect.GetNodeChildrenRequest{NodeID: current.id})
+			cancel()
+			if err != nil {
+				results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Err: err})
+				if current.id == rootID || !opts.ContinueOnError {
+					break
+				}
+				continue
+			}
+			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Children: resp.Children})
+			expanded++
+			for _, ch := range resp.Children {
+				if strings.TrimSpace(ch.NodeID) == "" {
+					continue
+				}
+				queue = append(queue, qn{id: ch.NodeID, parent: current.id, depth: current.depth + 1})
+			}
+			continue
+		}
+		resp, err := c.service.GetNodeChildren(callCtx, inspect.GetNodeChildrenRequest{NodeID: current.id})
+		if err != nil {
+			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Err: err})
+			if current.id == rootID || !opts.ContinueOnError {
+				break
+			}
+			continue
+		}
+		results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth, Children: resp.Children})
+		expanded++
+		for _, ch := range resp.Children {
+			if strings.TrimSpace(ch.NodeID) == "" {
+				continue
+			}
+			queue = append(queue, qn{id: ch.NodeID, parent: current.id, depth: current.depth + 1})
 		}
 	}
 	return results
