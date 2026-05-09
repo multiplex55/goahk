@@ -56,7 +56,7 @@ func (a *ViewerEventAdapter) OnWindowSelected(hwnd string, activate bool) {
 	a.view.SetBusy(true)
 	a.view.SetStatus("retrying transient root resolution...")
 	go func() {
-		result, err := a.controller.SelectWindow(hwnd, activate)
+		result, err := a.controller.RefreshTreeForSelectedWindow(hwnd, activate)
 		var expandResults []TreeExpandResult
 		if err == nil {
 			if a.isRecursiveMode != nil && a.isRecursiveMode() {
@@ -235,17 +235,17 @@ func (a *ViewerEventAdapter) OnTreeExpanded(nodeID string, loaded bool) {
 	}
 	a.view.SetBusy(true)
 	go func() {
-		resp, err := a.controller.ExpandNode(nodeID)
+		resp, err := a.controller.RefreshNodeChildren(nodeID)
 		a.ui.Queue(func() {
 			a.view.SetBusy(false)
 			if err != nil {
-				msg := formatFatal("GetTreeRoot", nodeID, err)
+				msg := formatFatal("GetNodeChildren", nodeID, err)
 				a.view.SetStatus(msg)
 				return
 			}
 			a.view.UpdateNodeChildren(nodeID, resp.Children)
 			a.view.SelectTreeNode(nodeID)
-			a.view.SetStatus("node expanded " + formatStageTarget("GetTreeRoot", nodeID))
+			a.view.SetStatus("node expanded " + formatStageTarget("GetNodeChildren", nodeID))
 		})
 	}()
 }
@@ -253,12 +253,12 @@ func (a *ViewerEventAdapter) OnTreeExpanded(nodeID string, loaded bool) {
 func (a *ViewerEventAdapter) OnTreeSelected(nodeID string) {
 	a.view.SetBusy(true)
 	go func() {
-		err := a.controller.SelectNode(nodeID)
-		details, detailsErr := a.controller.RefreshSelectedNodeDetails()
+		err := a.controller.RefreshSelection(nodeID)
+		details, detailsErr := a.controller.RefreshSelectionDetails()
 		a.ui.Queue(func() {
 			a.view.SetBusy(false)
 			if err != nil {
-				msg := formatFatal("InspectWindow", nodeID, err)
+				msg := formatFatal("SelectNode", nodeID, err)
 				a.view.SetStatus(msg)
 				return
 			}

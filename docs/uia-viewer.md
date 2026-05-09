@@ -34,6 +34,38 @@ Controller/state behavior contracts:
 - Window refresh/switch paths clear stale highlight and stale selection safely.
 - Status messages should preserve actionable stage context (`RefreshWindows`, `GetTreeRoot`, `GetNodeDetails`, etc.).
 
+## UI event state machine
+
+The viewer event model is intentionally split into operation boundaries so one gesture mutates only one model layer at a time.
+
+### Operation boundaries
+
+- **List refresh** (`RefreshWindows`): updates the window table only.
+- **Tree refresh** (`GetTreeRoot`): rebuilds the tree snapshot for the selected HWND.
+- **Selection refresh** (`SelectNode` + `GetNodeDetails` + `HighlightNode`): updates details/highlight for the selected node.
+
+### Gesture transitions
+
+1. **Refresh list** → runs `RefreshWindows` only, replacing the window table model.
+2. **Select window** → runs `GetTreeRoot` for that HWND, then hydrates root details and initial children for the new snapshot.
+3. **Select node** → runs selection refresh only; no list or root-tree rebuild.
+4. **Expand node** → runs `GetNodeChildren` only when children are not loaded.
+5. **Invoke pattern** → runs `InvokePattern`, then `GetNodeDetails` refresh for current node only.
+6. **Refresh tree** → explicit selected-HWND rebuild (`GetTreeRoot`), preserving list filters and table rows.
+
+### Event-to-side-effect matrix
+
+| UI gesture | Allowed model mutations | Disallowed mutations |
+|---|---|---|
+| Refresh list | Window table rows, list status text | Tree snapshot rebuild, node details refresh |
+| Select window | Selected HWND, tree snapshot, root selection/details/highlight | Full list refresh |
+| Select node | Selected node, details pane, pattern pane, highlight | Window list refresh, root rebuild |
+| Expand node | Child rows for that node, expansion-state flags | Window list refresh, unrelated node details reload |
+| Invoke pattern | Action result status, selected-node details refresh | Window list refresh, root rebuild |
+| Refresh tree | Tree snapshot for selected HWND, root selection/details | Window list refresh |
+
+Status text should always include stage + target, for example `GetTreeRoot [0x12345]`, `GetNodeChildren [node-17]`, or `GetNodeDetails [node-17]`.
+
 ## Pane responsibilities
 
 Each pane has one primary responsibility:

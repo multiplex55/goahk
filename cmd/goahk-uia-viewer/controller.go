@@ -154,13 +154,16 @@ func (c *Controller) OnFollowCursorError(cb func(error)) {
 	defer c.mu.Unlock()
 	c.onFollowError = append(c.onFollowError, cb)
 }
-func (c *Controller) RefreshWindows(filter string, visibleOnly, titleOnly bool) (inspect.RefreshWindowsResponse, error) {
+func (c *Controller) RefreshWindowList(filter string, visibleOnly, titleOnly bool) (inspect.RefreshWindowsResponse, error) {
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
 	c.mu.Lock()
 	c.visibleOnly = visibleOnly
 	c.titleOnly = titleOnly
 	c.mu.Unlock()
 	return c.service.RefreshWindows(c.runtimeContext(), inspect.RefreshWindowsRequest{Filter: filter, VisibleOnly: visibleOnly, TitleOnly: titleOnly})
+}
+func (c *Controller) RefreshWindows(filter string, visibleOnly, titleOnly bool) (inspect.RefreshWindowsResponse, error) {
+	return c.RefreshWindowList(filter, visibleOnly, titleOnly)
 }
 func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionResult, error) {
 	_, _ = c.service.ClearHighlight(c.runtimeContext(), inspect.ClearHighlightRequest{})
@@ -236,6 +239,10 @@ func (c *Controller) SelectWindow(hwnd string, activate bool) (WindowSelectionRe
 	}
 	log.Printf("uia.viewer select_window_end hwnd=%s mode=%s provider=%s active_mode=%s fallback=%t err=nil", hwnd, mode, result.Root.Source.Provider, result.Root.State.ActiveMode, result.Root.State.FallbackUsed)
 	return result, nil
+}
+
+func (c *Controller) RefreshTreeForSelectedWindow(hwnd string, activate bool) (WindowSelectionResult, error) {
+	return c.SelectWindow(hwnd, activate)
 }
 
 func synthesizeRootDetails(root inspect.GetTreeRootResponse, detailsErr error) inspect.GetNodeDetailsResponse {
@@ -330,7 +337,7 @@ func (c *Controller) effectiveModeLocked() inspect.InspectMode {
 	}
 	return c.mode
 }
-func (c *Controller) ExpandNode(nodeID string) (inspect.GetNodeChildrenResponse, error) {
+func (c *Controller) RefreshNodeChildren(nodeID string) (inspect.GetNodeChildrenResponse, error) {
 	resp, err := c.service.GetNodeChildren(c.runtimeContext(), inspect.GetNodeChildrenRequest{NodeID: nodeID})
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -348,12 +355,15 @@ func (c *Controller) ExpandNode(nodeID string) (inspect.GetNodeChildrenResponse,
 	delete(c.nodeLoadFailed, nodeID)
 	return resp, nil
 }
+func (c *Controller) ExpandNode(nodeID string) (inspect.GetNodeChildrenResponse, error) {
+	return c.RefreshNodeChildren(nodeID)
+}
 
 func (c *Controller) ExpandTreeDepth(rootID string, maxDepth int) []TreeExpandResult {
 	if strings.TrimSpace(rootID) == "" || maxDepth <= 0 {
 		return nil
 	}
-	resp, err := c.ExpandNode(rootID)
+	resp, err := c.RefreshNodeChildren(rootID)
 	if err != nil {
 		return []TreeExpandResult{{ParentID: rootID, Depth: 0, Err: err}}
 	}
@@ -386,7 +396,7 @@ func (c *Controller) ExpandTreeDepthFromChildren(children []inspect.TreeNodeDTO,
 			continue
 		}
 		seen[current.id] = true
-		resp, err := c.ExpandNode(current.id)
+		resp, err := c.RefreshNodeChildren(current.id)
 		if err != nil {
 			results = append(results, TreeExpandResult{ParentID: current.id, Depth: current.depth + 1, Err: err})
 			continue
@@ -501,7 +511,7 @@ func (c *Controller) ExpandedNodeIDs() []string {
 	}
 	return ids
 }
-func (c *Controller) SelectNode(nodeID string) error {
+func (c *Controller) RefreshSelection(nodeID string) error {
 	if _, err := c.service.SelectNode(c.runtimeContext(), inspect.SelectNodeRequest{NodeID: nodeID}); err != nil {
 		return err
 	}
@@ -521,11 +531,15 @@ func (c *Controller) SelectNode(nodeID string) error {
 	}
 	return err
 }
-func (c *Controller) RefreshSelectedNodeDetails() (inspect.GetNodeDetailsResponse, error) {
+func (c *Controller) SelectNode(nodeID string) error { return c.RefreshSelection(nodeID) }
+func (c *Controller) RefreshSelectionDetails() (inspect.GetNodeDetailsResponse, error) {
 	c.mu.Lock()
 	nodeID := c.selectedNodeID
 	c.mu.Unlock()
 	return c.service.GetNodeDetails(c.runtimeContext(), inspect.GetNodeDetailsRequest{NodeID: nodeID})
+}
+func (c *Controller) RefreshSelectedNodeDetails() (inspect.GetNodeDetailsResponse, error) {
+	return c.RefreshSelectionDetails()
 }
 func (c *Controller) InvokePattern(nodeID, action string, payload map[string]any) (inspect.InvokePatternResponse, error) {
 	return c.service.InvokePattern(c.runtimeContext(), inspect.InvokePatternRequest{NodeID: nodeID, Action: action, Payload: payload})

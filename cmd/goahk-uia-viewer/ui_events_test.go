@@ -325,7 +325,7 @@ func TestViewerEventAdapter_TreeExpandStatusSet(t *testing.T) {
 	view.enterQueue()
 	fn()
 	view.exitQueue()
-	if len(view.status) == 0 || view.status[len(view.status)-1] != "node expanded GetTreeRoot [n1]" {
+	if len(view.status) == 0 || view.status[len(view.status)-1] != "node expanded GetNodeChildren [n1]" {
 		t.Fatalf("expected expand status, got %v", view.status)
 	}
 }
