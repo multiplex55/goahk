@@ -252,3 +252,21 @@ func TestUIATreeSetChildren_GrandchildrenRemainVisibleAfterParentExpansion(t *te
 		t.Fatalf("expected expanded node to show deeper child, got count=%d", c.ChildCount())
 	}
 }
+
+func TestUIATreeAutoExpandLevelOrder_RootThenChildLevels(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "child-1"}})
+	m.SetExpanded("root", true)
+	m.SetChildren("child-1", []inspect.TreeNodeDTO{{NodeID: "grandchild-1"}})
+	m.SetExpanded("child-1", true)
+
+	root, _ := m.ItemByID("root")
+	if root.ChildCount() != 1 {
+		t.Fatalf("expected root child level to render first, got %d", root.ChildCount())
+	}
+	child, _ := m.ItemByID("child-1")
+	if child.ChildCount() != 1 || child.ChildAt(0).(*uiaTreeNode).NodeID != "grandchild-1" {
+		t.Fatalf("expected child expansion to render next level, got count=%d", child.ChildCount())
+	}
+}

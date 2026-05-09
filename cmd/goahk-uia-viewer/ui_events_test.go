@@ -445,7 +445,7 @@ func TestOnWindowSelectedUpdatesChildrenForEveryAutoExpandLevel(t *testing.T) {
 	fn := <-mq.ch
 	fn()
 
-	want := []string{"root", "root", "child-1"}
+	want := []string{"root", "child-1"}
 	if len(view.childrenUpdated) != len(want) {
 		t.Fatalf("expected UpdateNodeChildren calls for every expanded level %v, got %v", want, view.childrenUpdated)
 	}
