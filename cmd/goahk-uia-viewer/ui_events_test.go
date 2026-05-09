@@ -141,6 +141,31 @@ func TestViewerEventAdapter_TreeSelectPipeline(t *testing.T) {
 	}
 }
 
+func TestViewerEventAdapter_TreeSelect_HighlightFailureIsWarningOnly(t *testing.T) {
+	svc := &fakeControllerService{
+		fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{StatusText: "ok"}},
+		highlightErr:       context.DeadlineExceeded,
+	}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnTreeSelected("node-1")
+	fn := <-mq.ch
+	fn()
+
+	if view.updates < 1 {
+		t.Fatalf("expected details to remain visible when highlight fails; updates=%d", view.updates)
+	}
+	if len(view.selected) != 0 {
+		t.Fatalf("expected no forced reselection changes in view, got %v", view.selected)
+	}
+	if len(view.status) == 0 || !strings.Contains(view.status[len(view.status)-1], "WARNING HighlightNode [node-1]") {
+		t.Fatalf("expected highlight warning status, got %v", view.status)
+	}
+}
+
 func TestViewerEventAdapter_WindowSelectionStatusSet(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
 	c := NewController(context.Background(), svc)

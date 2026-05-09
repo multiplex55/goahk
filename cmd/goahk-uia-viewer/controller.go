@@ -81,6 +81,13 @@ type TreeExpandResult struct {
 	Err        error
 }
 
+type TreeSelectionResult struct {
+	SelectErr    error
+	Details      inspect.GetNodeDetailsResponse
+	DetailsErr   error
+	HighlightErr error
+}
+
 type TreePopulateOptions struct {
 	MaxDepth        int
 	MaxNodes        int
@@ -559,14 +566,30 @@ func (c *Controller) ExpandedNodeIDs() []string {
 	return ids
 }
 func (c *Controller) SelectNode(nodeID string) error {
+	result := c.SelectTreeNode(nodeID)
+	if result.SelectErr != nil {
+		return result.SelectErr
+	}
+	if result.DetailsErr != nil {
+		return result.DetailsErr
+	}
+	return result.HighlightErr
+}
+
+func (c *Controller) SelectTreeNode(nodeID string) TreeSelectionResult {
+	result := TreeSelectionResult{}
 	if _, err := c.service.SelectNode(c.runtimeContext(), inspect.SelectNodeRequest{NodeID: nodeID}); err != nil {
-		return err
+		result.SelectErr = err
+		return result
 	}
 	details, err := c.service.GetNodeDetails(c.runtimeContext(), inspect.GetNodeDetailsRequest{NodeID: nodeID})
 	if err != nil {
-		return err
+		result.DetailsErr = err
+		return result
 	}
+	result.Details = details
 	_, err = c.service.HighlightNode(c.runtimeContext(), inspect.HighlightNodeRequest{NodeID: nodeID})
+	result.HighlightErr = err
 	if err == nil {
 		c.mu.Lock()
 		c.selectedNodeID = nodeID
@@ -576,7 +599,7 @@ func (c *Controller) SelectNode(nodeID string) error {
 		}
 		c.mu.Unlock()
 	}
-	return err
+	return result
 }
 func (c *Controller) RefreshSelectedNodeDetails() (inspect.GetNodeDetailsResponse, error) {
 	c.mu.Lock()
