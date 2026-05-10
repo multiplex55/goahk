@@ -468,6 +468,20 @@ func (ui *viewerUI) setLoading(loading bool) {
 	}
 }
 
+func (ui *viewerUI) RestoreTreeFocusIfAppropriate() {
+	ui.restoreTreeFocusIfAppropriate()
+}
+
+func (ui *viewerUI) restoreTreeFocusIfAppropriate() {
+	if ui == nil || ui.treeView == nil {
+		return
+	}
+	if ui.treeView.CurrentItem() == nil {
+		return
+	}
+	ui.treeView.SetFocus()
+}
+
 func (ui *viewerUI) SetBusy(b bool)     { ui.setLoading(b) }
 func (ui *viewerUI) SetStatus(s string) { ui.setStatus(s) }
 func (ui *viewerUI) UpdateWindowDetails(details inspect.GetNodeDetailsResponse) {
