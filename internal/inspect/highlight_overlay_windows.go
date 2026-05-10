@@ -38,7 +38,7 @@ const (
 	hollowBrush = 5
 )
 
-type winRect struct {
+type overlayWinRect struct {
 	Left   int32
 	Top    int32
 	Right  int32
@@ -48,7 +48,7 @@ type winRect struct {
 type paintStruct struct {
 	hdc         uintptr
 	fErase      int32
-	rcPaint     winRect
+	rcPaint     overlayWinRect
 	fRestore    int32
 	fIncUpdate  int32
 	rgbReserved [32]byte
