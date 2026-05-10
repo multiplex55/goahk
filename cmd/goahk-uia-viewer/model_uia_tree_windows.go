@@ -365,6 +365,72 @@ func (m *uiaTreeModel) FilteredVisibleCount() int {
 	return len(m.visibleFilterIDs)
 }
 
+func (m *uiaTreeModel) MatchedNodeIDs() []string {
+	ids := make([]string, 0, len(m.matchedFilterIDs))
+	for id := range m.matchedFilterIDs {
+		ids = append(ids, string(id))
+	}
+	return ids
+}
+
+func (m *uiaTreeModel) AncestorIDsForVisibleMatches() []string {
+	if m == nil {
+		return nil
+	}
+	seen := map[NodeID]bool{}
+	ids := make([]string, 0, len(m.visibleFilterIDs))
+	for id := range m.matchedFilterIDs {
+		n, ok := m.nodes[id]
+		if !ok || n == nil {
+			continue
+		}
+		for p := n.parent; p != nil; p = p.parent {
+			if seen[p.id] {
+				continue
+			}
+			seen[p.id] = true
+			ids = append(ids, p.NodeID)
+		}
+	}
+	return ids
+}
+
+func (m *uiaTreeModel) FirstMatchID() string {
+	if m == nil || m.root == nil {
+		return ""
+	}
+	var first string
+	var visit func(*uiaTreeNode)
+	visit = func(n *uiaTreeNode) {
+		if n == nil || first != "" {
+			return
+		}
+		if m.matchedFilterIDs[n.id] {
+			first = n.NodeID
+			return
+		}
+		for _, ch := range n.children {
+			visit(ch)
+			if first != "" {
+				return
+			}
+		}
+	}
+	visit(m.root)
+	return first
+}
+
+func (m *uiaTreeModel) IsVisibleNodeID(nodeID string) bool {
+	if m == nil {
+		return false
+	}
+	if !m.filterActive {
+		_, ok := m.nodes[NodeID(nodeID)]
+		return ok
+	}
+	return m.visibleFilterIDs[NodeID(nodeID)]
+}
+
 func normalizeTreeFilter(filterText string) []string {
 	fields := strings.Fields(strings.ToLower(strings.TrimSpace(filterText)))
 	return fields

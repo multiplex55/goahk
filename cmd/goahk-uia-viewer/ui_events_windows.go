@@ -90,10 +90,6 @@ func (ui *viewerUI) queueRefreshWindowListFromCurrentFilters() {
 	ui.initialRefresh()
 }
 
-func (ui *viewerUI) filterNotImplementedStatus() string {
-	return "Tree filtering not implemented yet"
-}
-
 func (ui *viewerUI) preserveExpansionEnabled() bool {
 	if ui == nil || ui.preserveExpandChk == nil {
 		return true
@@ -101,28 +97,55 @@ func (ui *viewerUI) preserveExpansionEnabled() bool {
 	return ui.preserveExpandChk.Checked()
 }
 
-func (ui *viewerUI) applyFilterTransition(filterText string) {
+func (ui *viewerUI) applyTreeFilterFromEdit() {
 	if ui == nil || ui.treeModel == nil {
 		return
+	}
+	filterText := ""
+	if ui.filterEdit != nil {
+		filterText = ui.filterEdit.Text()
 	}
 	next := strings.TrimSpace(filterText)
 	prev := strings.TrimSpace(ui.lastFilterText)
 	wasFiltered := prev != ""
 	isFiltered := next != ""
+
 	if !wasFiltered && isFiltered {
 		ui.preFilterExpansion = ui.treeModel.SnapshotExpansion()
 		ui.preFilterExpansion.SelectedID = ui.currentSelectedTreeNodeID()
-		return
-	}
-	if wasFiltered && isFiltered {
-		ui.preFilterExpansion = ui.treeModel.SnapshotExpansion()
-		ui.expandFilterMatchAncestors()
-		return
-	}
-	if wasFiltered && !isFiltered {
+		result := ui.treeModel.ApplyFilter(next)
+		withTreeRedrawSuspended(ui, func() {
+			ui.treeModel.PublishItemsReset(nil)
+			ui.expandFilterMatchAncestors()
+			if ui.treeView != nil {
+				ui.treeView.Invalidate()
+			}
+		})
+		ui.setStatus(fmt.Sprintf("filter applied: %q matched %d nodes, showing %d nodes", next, result.MatchCount, result.VisibleCount))
+	} else if wasFiltered && isFiltered {
+		result := ui.treeModel.ApplyFilter(next)
+		withTreeRedrawSuspended(ui, func() {
+			ui.treeModel.PublishItemsReset(nil)
+			ui.expandFilterMatchAncestors()
+			if ui.treeView != nil {
+				ui.treeView.Invalidate()
+			}
+		})
+		ui.setStatus(fmt.Sprintf("filter applied: %q matched %d nodes, showing %d nodes", next, result.MatchCount, result.VisibleCount))
+	} else if wasFiltered && !isFiltered {
+		ui.treeModel.ClearFilter()
+		withTreeRedrawSuspended(ui, func() {
+			ui.treeModel.PublishItemsReset(nil)
+			if ui.preFilterExpansion != nil {
+				ui.treeModel.RestoreExpansion(ui.preFilterExpansion)
+				ui.restoreVisualExpansion(ui.preFilterExpansion)
+			}
+			if ui.treeView != nil {
+				ui.treeView.Invalidate()
+			}
+		})
 		if ui.preFilterExpansion != nil {
-			ui.treeModel.RestoreExpansion(ui.preFilterExpansion)
-			ui.restoreVisualExpansion(ui.preFilterExpansion)
+			ui.setStatus("filter cleared; restored previous expansion")
 		}
 		ui.preFilterExpansion = nil
 	}
@@ -243,10 +266,7 @@ func (ui *viewerUI) attachEvents() {
 		ui.titleChk.CheckedChanged().Attach(func() { ui.queueRefreshWindowListFromCurrentFilters() })
 	}
 	if ui.filterEdit != nil {
-		ui.filterEdit.TextChanged().Attach(func() {
-			ui.applyFilterTransition(ui.filterEdit.Text())
-			ui.setStatus(ui.filterNotImplementedStatus())
-		})
+		ui.filterEdit.TextChanged().Attach(func() { ui.applyTreeFilterFromEdit() })
 	}
 	if ui.macroSidebarBtn != nil {
 		ui.macroSidebarBtn.Clicked().Attach(func() {
@@ -599,8 +619,30 @@ func (ui *viewerUI) restoreVisualExpansion(snapshot *TreeExpansionSnapshot) {
 }
 
 func (ui *viewerUI) expandFilterMatchAncestors() {
-	// Placeholder for full filtered projection behavior; keep user-visible expansion continuity.
-	if ui.preFilterExpansion != nil {
-		ui.restoreVisualExpansion(ui.preFilterExpansion)
+	if ui == nil || ui.treeModel == nil || ui.treeView == nil {
+		return
 	}
+	ids := ui.treeModel.AncestorIDsForVisibleMatches()
+	ui.expandNodeIDs(ids)
+	if ui.treeModel.FilteredMatchCount() > 0 {
+		ui.expandTreeNode(ui.treeModel.RootID(), false)
+	}
+	selectedID := ui.currentSelectedTreeNodeID()
+	if selectedID != "" && ui.treeModel.IsVisibleNodeID(selectedID) {
+		return
+	}
+	if first := ui.treeModel.FirstMatchID(); first != "" {
+		ui.SelectTreeNode(first)
+	}
+}
+
+func (ui *viewerUI) expandNodeIDs(ids []string) {
+	if ui == nil {
+		return
+	}
+	withTreeRedrawSuspended(ui, func() {
+		for _, id := range ids {
+			ui.expandTreeNode(id, false)
+		}
+	})
 }
