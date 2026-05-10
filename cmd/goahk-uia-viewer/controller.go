@@ -80,6 +80,11 @@ type StatusUpdate struct {
 	LastACCPathCopied bool
 }
 
+type NodeSelectionResult struct {
+	NodeID      string
+	Highlighted bool
+}
+
 type TreeExpandResult struct {
 	ParentID string
 	Children []inspect.TreeNodeDTO
@@ -589,28 +594,35 @@ func (c *Controller) ExpandedNodeIDs() []string {
 	}
 	return ids
 }
-func (c *Controller) RefreshSelection(nodeID string) error {
+func (c *Controller) RefreshSelection(nodeID string) (NodeSelectionResult, error) {
+	result := NodeSelectionResult{NodeID: nodeID}
 	if _, err := c.service.SelectNode(c.runtimeContext(), inspect.SelectNodeRequest{NodeID: nodeID}); err != nil {
-		return err
+		return result, err
 	}
 	details, err := c.service.GetNodeDetails(c.runtimeContext(), inspect.GetNodeDetailsRequest{NodeID: nodeID})
 	if err != nil {
-		return err
+		return result, err
 	}
-	_, err = c.service.HighlightNode(c.runtimeContext(), inspect.HighlightNodeRequest{NodeID: nodeID})
-	if err == nil {
-		c.mu.Lock()
-		c.selectedNodeID = nodeID
-		c.selectedNodeGeneration++
-		if c.accPathCaptureEnabled && strings.TrimSpace(details.ACCPath) != "" {
-			c.lastACCPath = details.ACCPath
-			c.statusText = "Path: " + details.ACCPath
-		}
-		c.mu.Unlock()
+	highlightResp, err := c.service.HighlightNode(c.runtimeContext(), inspect.HighlightNodeRequest{NodeID: nodeID})
+	c.mu.Lock()
+	c.selectedNodeID = nodeID
+	c.selectedNodeGeneration++
+	if c.accPathCaptureEnabled && strings.TrimSpace(details.ACCPath) != "" {
+		c.lastACCPath = details.ACCPath
+		c.statusText = "Path: " + details.ACCPath
 	}
-	return err
+	c.mu.Unlock()
+	if err != nil {
+		return result, err
+	}
+	if details.Element.Bounds != nil && highlightResp.Highlighted {
+		result.Highlighted = true
+	}
+	return result, nil
 }
-func (c *Controller) SelectNode(nodeID string) error { return c.RefreshSelection(nodeID) }
+func (c *Controller) SelectNode(nodeID string) (NodeSelectionResult, error) {
+	return c.RefreshSelection(nodeID)
+}
 func (c *Controller) RefreshSelectionDetails() (inspect.GetNodeDetailsResponse, error) {
 	c.mu.Lock()
 	nodeID := c.selectedNodeID

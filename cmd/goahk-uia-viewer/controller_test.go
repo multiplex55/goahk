@@ -422,7 +422,7 @@ func TestController_SelectNode_Pipeline(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{nodeDetailsResp: inspect.GetNodeDetailsResponse{ACCPath: "root/child"}}}
 	c := NewController(context.Background(), svc)
 	c.ToggleAccPathCapture()
-	if err := c.SelectNode("n1"); err != nil {
+	if _, err := c.SelectNode("n1"); err != nil {
 		t.Fatal(err)
 	}
 	if svc.highlightCalls != 1 {
