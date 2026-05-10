@@ -446,7 +446,7 @@ func nodeMatchesFilter(n *uiaTreeNode, tokens []string) bool {
 		n.Name,
 		n.LocalizedControlType,
 		n.ControlType,
-		n.AutomationID,
+		n.DebugMeta.AutomationID,
 		n.ClassName,
 		n.HWND,
 	}, "\n"))
