@@ -51,24 +51,37 @@ func (n *uiaTreeNode) ChildAt(index int) walk.TreeItem {
 
 type uiaTreeModel struct {
 	walk.TreeModelBase
-	root           *uiaTreeNode
-	nodes          map[NodeID]*uiaTreeNode
-	allRoot        *uiaTreeNode
-	allNodes       map[NodeID]*uiaTreeNode
-	allChildren    map[NodeID][]NodeID
-	loadedChildren map[NodeID]bool
-	expanded       map[NodeID]bool
-	userCollapsed  map[NodeID]bool
+	root             *uiaTreeNode
+	nodes            map[NodeID]*uiaTreeNode
+	allRoot          *uiaTreeNode
+	allNodes         map[NodeID]*uiaTreeNode
+	allChildren      map[NodeID][]NodeID
+	loadedChildren   map[NodeID]bool
+	expanded         map[NodeID]bool
+	userCollapsed    map[NodeID]bool
+	filterText       string
+	filterActive     bool
+	matchedFilterIDs map[NodeID]bool
+	visibleFilterIDs map[NodeID]bool
+}
+
+type TreeFilterResult struct {
+	FilterText   string
+	Active       bool
+	MatchCount   int
+	VisibleCount int
 }
 
 func newUIATreeModel() *uiaTreeModel {
 	return &uiaTreeModel{
-		nodes:          map[NodeID]*uiaTreeNode{},
-		allNodes:       map[NodeID]*uiaTreeNode{},
-		allChildren:    map[NodeID][]NodeID{},
-		loadedChildren: map[NodeID]bool{},
-		expanded:       map[NodeID]bool{},
-		userCollapsed:  map[NodeID]bool{},
+		nodes:            map[NodeID]*uiaTreeNode{},
+		allNodes:         map[NodeID]*uiaTreeNode{},
+		allChildren:      map[NodeID][]NodeID{},
+		loadedChildren:   map[NodeID]bool{},
+		expanded:         map[NodeID]bool{},
+		userCollapsed:    map[NodeID]bool{},
+		matchedFilterIDs: map[NodeID]bool{},
+		visibleFilterIDs: map[NodeID]bool{},
 	}
 }
 
@@ -121,15 +134,18 @@ func (m *uiaTreeModel) ShouldAutoExpand(nodeID string) bool {
 
 func (m *uiaTreeModel) SetRoot(root inspect.TreeNodeDTO) {
 	n := &uiaTreeNode{TreeNodeDTO: root, id: NodeID(root.NodeID), maybeHasChildren: true}
-	m.root = n
 	m.allRoot = n
-	m.nodes = map[NodeID]*uiaTreeNode{n.id: n}
 	m.allNodes = map[NodeID]*uiaTreeNode{n.id: n}
 	m.allChildren = map[NodeID][]NodeID{}
 	m.loadedChildren = map[NodeID]bool{}
 	m.expanded = map[NodeID]bool{}
 	m.userCollapsed = map[NodeID]bool{}
+	m.filterText = ""
+	m.filterActive = false
+	m.matchedFilterIDs = map[NodeID]bool{}
+	m.visibleFilterIDs = map[NodeID]bool{}
 	m.attachPlaceholder(n)
+	m.rebuildVisibleProjection()
 	m.PublishItemsReset(nil)
 }
 func (m *uiaTreeModel) RootID() string {
@@ -148,6 +164,10 @@ func (m *uiaTreeModel) Reset() {
 	m.loadedChildren = map[NodeID]bool{}
 	m.expanded = map[NodeID]bool{}
 	m.userCollapsed = map[NodeID]bool{}
+	m.filterText = ""
+	m.filterActive = false
+	m.matchedFilterIDs = map[NodeID]bool{}
+	m.visibleFilterIDs = map[NodeID]bool{}
 	m.PublishItemsReset(nil)
 }
 
@@ -178,11 +198,11 @@ func (m *uiaTreeModel) SetChildren(nodeID string, children []inspect.TreeNodeDTO
 		}
 		nextChildren = append(nextChildren, child)
 		nextIDs = append(nextIDs, cid)
-		m.nodes[cid] = child
 	}
 	parent.children = nextChildren
 	m.allChildren[pid] = nextIDs
 	m.MarkChildrenLoaded(nodeID)
+	m.rebuildVisibleProjection()
 	m.PublishItemsReset(parent)
 }
 
@@ -219,10 +239,10 @@ func (m *uiaTreeModel) AppendChildren(nodeID string, children []inspect.TreeNode
 			child.children = filterOutPlaceholders(child.children)
 		}
 		parent.children = append(parent.children, child)
-		m.nodes[cid] = child
 		m.allChildren[pid] = append(m.allChildren[pid], cid)
 	}
 	m.MarkChildrenLoaded(nodeID)
+	m.rebuildVisibleProjection()
 	m.PublishItemsReset(parent)
 }
 
@@ -309,4 +329,148 @@ func (m *uiaTreeModel) RestoreExpansion(snapshot *TreeExpansionSnapshot) {
 	}
 	m.expanded = nextExpanded
 	m.userCollapsed = nextUserCollapsed
+}
+
+func (m *uiaTreeModel) ApplyFilter(filterText string) TreeFilterResult {
+	m.filterText = filterText
+	tokens := normalizeTreeFilter(filterText)
+	m.filterActive = len(tokens) > 0
+	if !m.filterActive {
+		m.matchedFilterIDs = map[NodeID]bool{}
+		m.visibleFilterIDs = map[NodeID]bool{}
+		m.rebuildUnfilteredProjection()
+		return TreeFilterResult{FilterText: m.filterText}
+	}
+	visible, matched := m.visibleIDsForFilter(tokens)
+	m.visibleFilterIDs = visible
+	m.matchedFilterIDs = matched
+	m.rebuildVisibleProjection()
+	return TreeFilterResult{
+		FilterText:   m.filterText,
+		Active:       true,
+		MatchCount:   len(m.matchedFilterIDs),
+		VisibleCount: len(m.visibleFilterIDs),
+	}
+}
+
+func (m *uiaTreeModel) ClearFilter() TreeFilterResult {
+	return m.ApplyFilter("")
+}
+func (m *uiaTreeModel) IsFiltered() bool   { return m.filterActive }
+func (m *uiaTreeModel) FilterText() string { return m.filterText }
+func (m *uiaTreeModel) FilteredMatchCount() int {
+	return len(m.matchedFilterIDs)
+}
+func (m *uiaTreeModel) FilteredVisibleCount() int {
+	return len(m.visibleFilterIDs)
+}
+
+func normalizeTreeFilter(filterText string) []string {
+	fields := strings.Fields(strings.ToLower(strings.TrimSpace(filterText)))
+	return fields
+}
+
+func nodeMatchesFilter(n *uiaTreeNode, tokens []string) bool {
+	if n == nil || len(tokens) == 0 || n.placeholder {
+		return false
+	}
+	haystack := strings.ToLower(strings.Join([]string{
+		n.Text(),
+		n.DisplayLabel,
+		n.Name,
+		n.LocalizedControlType,
+		n.ControlType,
+		n.AutomationID,
+		n.ClassName,
+		n.HWND,
+	}, "\n"))
+	for _, tok := range tokens {
+		if !strings.Contains(haystack, tok) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *uiaTreeModel) visibleIDsForFilter(tokens []string) (visible map[NodeID]bool, matched map[NodeID]bool) {
+	visible = map[NodeID]bool{}
+	matched = map[NodeID]bool{}
+	if m == nil || m.allRoot == nil || len(tokens) == 0 {
+		return visible, matched
+	}
+	for id, n := range m.allNodes {
+		if nodeMatchesFilter(n, tokens) {
+			matched[id] = true
+			visible[id] = true
+			for p := n.parent; p != nil; p = p.parent {
+				visible[p.id] = true
+			}
+		}
+	}
+	return visible, matched
+}
+
+func (m *uiaTreeModel) rebuildVisibleProjection() {
+	if m == nil {
+		return
+	}
+	if !m.filterActive {
+		m.rebuildUnfilteredProjection()
+		return
+	}
+	if m.allRoot == nil || !m.visibleFilterIDs[m.allRoot.id] {
+		m.root = nil
+		m.nodes = map[NodeID]*uiaTreeNode{}
+		return
+	}
+	root := m.cloneFilteredNode(m.allRoot.id, nil, m.visibleFilterIDs)
+	m.root = root
+	m.nodes = map[NodeID]*uiaTreeNode{}
+	var visit func(*uiaTreeNode)
+	visit = func(n *uiaTreeNode) {
+		if n == nil {
+			return
+		}
+		m.nodes[n.id] = n
+		for _, ch := range n.children {
+			visit(ch)
+		}
+	}
+	visit(root)
+}
+
+func (m *uiaTreeModel) rebuildUnfilteredProjection() {
+	m.root = m.allRoot
+	m.nodes = map[NodeID]*uiaTreeNode{}
+	for id, n := range m.allNodes {
+		m.nodes[id] = n
+	}
+}
+
+func (m *uiaTreeModel) cloneFilteredNode(id NodeID, parent *uiaTreeNode, visible map[NodeID]bool) *uiaTreeNode {
+	src, ok := m.allNodes[id]
+	if !ok || src == nil || !visible[id] {
+		return nil
+	}
+	dst := &uiaTreeNode{
+		TreeNodeDTO:      src.TreeNodeDTO,
+		id:               src.id,
+		parent:           parent,
+		loaded:           src.loaded,
+		maybeHasChildren: src.maybeHasChildren,
+		placeholder:      src.placeholder,
+		ChildrenLoaded:   src.ChildrenLoaded,
+		Loading:          src.Loading,
+		LoadErr:          src.LoadErr,
+	}
+	for _, childID := range m.allChildren[id] {
+		if !visible[childID] {
+			continue
+		}
+		clonedChild := m.cloneFilteredNode(childID, dst, visible)
+		if clonedChild != nil {
+			dst.children = append(dst.children, clonedChild)
+		}
+	}
+	return dst
 }
