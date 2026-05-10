@@ -285,7 +285,7 @@ func (a *ViewerEventAdapter) OnTreeSelected(nodeID string) {
 	startGeneration := a.controller.SelectedNodeGeneration()
 	a.view.SetStatus("loading node details ...")
 	go func() {
-		err := a.controller.RefreshSelection(requestedNodeID)
+		selectionResult, err := a.controller.RefreshSelection(requestedNodeID)
 		details, detailsErr := a.controller.RefreshSelectionDetails()
 		a.ui.Queue(func() {
 			currentNodeID := a.controller.SelectedNodeID()
@@ -301,11 +301,6 @@ func (a *ViewerEventAdapter) OnTreeSelected(nodeID string) {
 				)
 				return
 			}
-			if err != nil {
-				msg := formatFatal("SelectNode", requestedNodeID, err)
-				a.view.SetStatus(msg)
-				return
-			}
 			if detailsErr != nil {
 				msg := formatFatal("GetNodeDetails", requestedNodeID, detailsErr)
 				a.view.SetStatus(msg)
@@ -313,7 +308,15 @@ func (a *ViewerEventAdapter) OnTreeSelected(nodeID string) {
 			}
 			a.view.UpdateNodeDetails(details)
 			a.view.RestoreTreeFocusIfAppropriate()
-			a.view.SetStatus("node selected " + formatStageTarget("GetNodeDetails", requestedNodeID))
+			if err != nil {
+				a.view.SetStatus("node selected, highlight failed: " + err.Error())
+				return
+			}
+			if selectionResult.Highlighted {
+				a.view.SetStatus("node selected " + formatStageTarget("GetNodeDetails", requestedNodeID) + "; highlighted")
+				return
+			}
+			a.view.SetStatus("node selected " + formatStageTarget("GetNodeDetails", requestedNodeID) + "; no highlightable bounds")
 		})
 	}()
 }
