@@ -28,3 +28,16 @@ func TestOverlayPaintBorderOnly(t *testing.T) {
 		t.Fatalf("expected border-only overlay paint path")
 	}
 }
+
+func TestOverlayWindowStyles_IncludeRequiredContractFlags(t *testing.T) {
+	style := overlayWindowStyle()
+	if style&wsPopup == 0 {
+		t.Fatalf("missing popup style bit: 0x%x", style)
+	}
+	exStyle := overlayWindowExStyle()
+	for _, bit := range []uintptr{wsExTopMost, wsExLayered, wsExTransparent} {
+		if exStyle&bit == 0 {
+			t.Fatalf("missing ex-style bit 0x%x from 0x%x", bit, exStyle)
+		}
+	}
+}

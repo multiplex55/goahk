@@ -409,3 +409,86 @@ func TestUIATreeNonFilteredMode_SharesAllNodePointers(t *testing.T) {
 		t.Fatal("expected visible and all node maps to share child pointers")
 	}
 }
+
+func TestUIATreeFilter_ButtonShowsMatchesAndAncestors(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root", LocalizedControlType: "window"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "pane", LocalizedControlType: "pane"}})
+	m.SetChildren("pane", []inspect.TreeNodeDTO{{NodeID: "button", LocalizedControlType: "button", Name: "Save"}, {NodeID: "text", LocalizedControlType: "text", Name: "Label"}})
+
+	res := m.ApplyFilter("button")
+	if !res.Active || res.MatchCount != 1 {
+		t.Fatalf("expected one active button match, got %+v", res)
+	}
+	for _, id := range []string{"root", "pane", "button"} {
+		if !m.IsVisibleNodeID(id) {
+			t.Fatalf("expected %s to remain visible", id)
+		}
+	}
+	if m.IsVisibleNodeID("text") {
+		t.Fatal("non-matching sibling should be hidden")
+	}
+}
+
+func TestUIATreeFilter_ClearRestoresFullTree(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "button", LocalizedControlType: "button"}, {NodeID: "text", LocalizedControlType: "text"}})
+
+	m.ApplyFilter("button")
+	if m.NodeCount() != 2 {
+		t.Fatalf("expected filtered projection to contain root+match, got %d", m.NodeCount())
+	}
+	res := m.ClearFilter()
+	if res.Active || m.IsFiltered() || m.FilterText() != "" {
+		t.Fatalf("expected cleared filter state, got %+v active=%v", res, m.IsFiltered())
+	}
+	if m.NodeCount() != 3 {
+		t.Fatalf("expected full projection restored, got %d", m.NodeCount())
+	}
+}
+
+func TestUIATreeFilter_MultipleTokensRequireSameNodeMatch(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{
+		{NodeID: "save", LocalizedControlType: "button", Name: "Save"},
+		{NodeID: "open", LocalizedControlType: "menu item", Name: "Open"},
+	})
+
+	res := m.ApplyFilter("button open")
+	if res.MatchCount != 0 || m.NodeCount() != 0 {
+		t.Fatalf("expected no cross-node token matches, got result=%+v nodeCount=%d", res, m.NodeCount())
+	}
+}
+
+func TestUIATreeFilter_ActiveFilterUpdatesAfterLazyChildrenLoad(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "pane", LocalizedControlType: "pane"}})
+	m.ApplyFilter("button")
+	if m.NodeCount() != 0 {
+		t.Fatalf("expected no visible nodes before lazy children load, got %d", m.NodeCount())
+	}
+
+	m.SetChildren("pane", []inspect.TreeNodeDTO{{NodeID: "button", LocalizedControlType: "button", Name: "Save"}})
+	if !m.IsVisibleNodeID("root") || !m.IsVisibleNodeID("pane") || !m.IsVisibleNodeID("button") {
+		t.Fatalf("expected active filter projection to update after load")
+	}
+	if m.FilteredMatchCount() != 1 {
+		t.Fatalf("expected one match after lazy load, got %d", m.FilteredMatchCount())
+	}
+}
+
+func TestUIATreeFilter_DoesNotMutateCanonicalChildren(t *testing.T) {
+	m := newUIATreeModel()
+	m.SetRoot(inspect.TreeNodeDTO{NodeID: "root"})
+	m.SetChildren("root", []inspect.TreeNodeDTO{{NodeID: "button", LocalizedControlType: "button"}, {NodeID: "text", LocalizedControlType: "text"}})
+
+	before := len(m.allNodes[NodeID("root")].children)
+	m.ApplyFilter("button")
+	after := len(m.allNodes[NodeID("root")].children)
+	if before != 2 || after != 2 {
+		t.Fatalf("canonical children mutated by filter: before=%d after=%d", before, after)
+	}
+}

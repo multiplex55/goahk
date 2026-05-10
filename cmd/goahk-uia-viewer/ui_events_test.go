@@ -103,7 +103,8 @@ func (v *guardedView) ShouldAutoExpand(nodeID string) bool {
 	}
 	return allow
 }
-func (v *guardedView) SelectTreeNode(nodeID string) { v.selected = append(v.selected, nodeID) }
+func (v *guardedView) SelectTreeNode(nodeID string)   { v.selected = append(v.selected, nodeID) }
+func (v *guardedView) RestoreTreeFocusIfAppropriate() {}
 
 func TestViewerEventAdapter_WindowSelectionPipeline(t *testing.T) {
 	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}, root: inspect.TreeNodeDTO{NodeID: "root"}}
@@ -686,5 +687,37 @@ func TestOnWindowSelectedRecursiveModeShowsBudgetStatus(t *testing.T) {
 	fn()
 	if len(view.status) == 0 || !strings.Contains(strings.ToLower(view.status[len(view.status)-1]), "budget reached") {
 		t.Fatalf("expected bounded budget status, got %v", view.status)
+	}
+}
+
+func TestOnTreeSelectedDoesNotSetGlobalBusy(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnTreeSelected("node-1")
+	(<-mq.ch)()
+
+	if len(view.busy) != 0 {
+		t.Fatalf("expected no global busy toggles for tree selection, got %v", view.busy)
+	}
+}
+
+func TestOnTreeSelectedSkipsStaleDetailsUpdate(t *testing.T) {
+	svc := &fakeControllerService{fakeInspectService: fakeInspectService{}}
+	c := NewController(context.Background(), svc)
+	mq := &queueMarshaller{ch: make(chan func(), 2)}
+	view := &guardedView{}
+	adapter := NewViewerEventAdapter(c, view, mq)
+
+	adapter.OnTreeSelected("node-1")
+	fn := <-mq.ch
+	_, _ = c.RefreshSelection("node-2")
+	fn()
+
+	if view.updates != 0 {
+		t.Fatalf("expected stale node detail update to be skipped, got %d updates", view.updates)
 	}
 }

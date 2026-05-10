@@ -220,3 +220,37 @@ func TestHighlightController_SyncSelectedNode_ValidInvalidTransitions(t *testing
 		t.Fatalf("expected clear call after invalid rect transition")
 	}
 }
+
+func TestHighlightController_ShowNodePassesNormalizedRects(t *testing.T) {
+	overlay := &mockOverlay{screen: &Rect{Left: 0, Top: 0, Width: 80, Height: 80}}
+	controller := newHighlightController(overlay)
+
+	highlighted, err := controller.ShowNode(context.Background(), "node", InspectElement{BoundingRect: &Rect{Left: 70, Top: 70, Width: 20, Height: 20}}, "0x1")
+	if err != nil || !highlighted {
+		t.Fatalf("expected highlight success with normalization, highlighted=%v err=%v", highlighted, err)
+	}
+	if len(overlay.showCalls) != 1 {
+		t.Fatalf("expected one show call, got %d", len(overlay.showCalls))
+	}
+	if got := overlay.showCalls[0]; got != (Rect{Left: 70, Top: 70, Width: 10, Height: 10}) {
+		t.Fatalf("expected clipped normalized rect, got %+v", got)
+	}
+}
+
+func TestHighlightController_ShowNodeInvalidOrOffscreenInvokesClearPath(t *testing.T) {
+	overlay := &mockOverlay{screen: &Rect{Left: 0, Top: 0, Width: 50, Height: 50}}
+	controller := newHighlightController(overlay)
+	_, _ = controller.ShowNode(context.Background(), "node", InspectElement{BoundingRect: &Rect{Left: 5, Top: 5, Width: 10, Height: 10}}, "0x1")
+	priorClears := overlay.clearCalls
+
+	highlighted, err := controller.ShowNode(context.Background(), "node", InspectElement{BoundingRect: &Rect{Left: 200, Top: 200, Width: 10, Height: 10}}, "0x1")
+	if err != nil {
+		t.Fatalf("unexpected error for invalid/offscreen clear path: %v", err)
+	}
+	if highlighted {
+		t.Fatal("expected invalid/offscreen rect to avoid highlighting")
+	}
+	if overlay.clearCalls <= priorClears {
+		t.Fatalf("expected clear path to run, clears before=%d after=%d", priorClears, overlay.clearCalls)
+	}
+}
