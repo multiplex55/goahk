@@ -23,6 +23,7 @@ type ViewUpdater interface {
 	ExpandTreeNode(string)
 	ShouldAutoExpand(string) bool
 	SelectTreeNode(string)
+	RestoreTreeFocusIfAppropriate()
 }
 
 func formatStageTarget(stage, target string) string {
@@ -280,12 +281,11 @@ func (a *ViewerEventAdapter) OnTreeExpanded(nodeID string, loaded bool) {
 }
 
 func (a *ViewerEventAdapter) OnTreeSelected(nodeID string) {
-	a.view.SetBusy(true)
+	a.view.SetStatus("loading node details ...")
 	go func() {
 		err := a.controller.RefreshSelection(nodeID)
 		details, detailsErr := a.controller.RefreshSelectionDetails()
 		a.ui.Queue(func() {
-			a.view.SetBusy(false)
 			if err != nil {
 				msg := formatFatal("SelectNode", nodeID, err)
 				a.view.SetStatus(msg)
@@ -297,6 +297,7 @@ func (a *ViewerEventAdapter) OnTreeSelected(nodeID string) {
 				return
 			}
 			a.view.UpdateNodeDetails(details)
+			a.view.RestoreTreeFocusIfAppropriate()
 			a.view.SetStatus("node selected " + formatStageTarget("GetNodeDetails", nodeID))
 		})
 	}()
