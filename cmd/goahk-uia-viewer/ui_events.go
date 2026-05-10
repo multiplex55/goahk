@@ -281,24 +281,39 @@ func (a *ViewerEventAdapter) OnTreeExpanded(nodeID string, loaded bool) {
 }
 
 func (a *ViewerEventAdapter) OnTreeSelected(nodeID string) {
+	requestedNodeID := nodeID
+	startGeneration := a.controller.SelectedNodeGeneration()
 	a.view.SetStatus("loading node details ...")
 	go func() {
-		err := a.controller.RefreshSelection(nodeID)
+		err := a.controller.RefreshSelection(requestedNodeID)
 		details, detailsErr := a.controller.RefreshSelectionDetails()
 		a.ui.Queue(func() {
+			currentNodeID := a.controller.SelectedNodeID()
+			currentGeneration := a.controller.SelectedNodeGeneration()
+			isStale := currentNodeID != requestedNodeID || currentGeneration == startGeneration
+			if isStale {
+				log.Printf(
+					"uia.viewer skip_stale_node_detail_update requested_node=%s start_generation=%d current_node=%s current_generation=%d",
+					requestedNodeID,
+					startGeneration,
+					currentNodeID,
+					currentGeneration,
+				)
+				return
+			}
 			if err != nil {
-				msg := formatFatal("SelectNode", nodeID, err)
+				msg := formatFatal("SelectNode", requestedNodeID, err)
 				a.view.SetStatus(msg)
 				return
 			}
 			if detailsErr != nil {
-				msg := formatFatal("GetNodeDetails", nodeID, detailsErr)
+				msg := formatFatal("GetNodeDetails", requestedNodeID, detailsErr)
 				a.view.SetStatus(msg)
 				return
 			}
 			a.view.UpdateNodeDetails(details)
 			a.view.RestoreTreeFocusIfAppropriate()
-			a.view.SetStatus("node selected " + formatStageTarget("GetNodeDetails", nodeID))
+			a.view.SetStatus("node selected " + formatStageTarget("GetNodeDetails", requestedNodeID))
 		})
 	}()
 }

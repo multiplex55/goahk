@@ -23,34 +23,35 @@ type Controller struct {
 	clipboard Clipboard
 	dialogs   Dialogs
 
-	mu                    sync.Mutex
-	selectedWindowID      string
-	selectedNodeID        string
-	visibleOnly           bool
-	titleOnly             bool
-	mode                  inspect.InspectMode
-	allowFallback         bool
-	nodesByID             map[string]inspect.TreeNodeDTO
-	nodeChildren          map[string][]string
-	nodeExpanded          map[string]bool
-	nodeLoadFailed        map[string]error
-	followEnabled         bool
-	followPaused          bool
-	followLocked          bool
-	lastFollowNode        string
-	followCtx             context.Context
-	followCancel          context.CancelFunc
-	followDone            chan struct{}
-	followTicker          func() <-chan time.Time
-	followInterval        time.Duration
-	accPathCaptureEnabled bool
-	lastACCPath           string
-	statusText            string
-	lastError             string
-	diagnostics           *inspect.InspectDiagnostics
-	onFollowElement       []func(inspect.TreeNodeDTO)
-	onFollowError         []func(error)
-	selectionGeneration   uint64
+	mu                     sync.Mutex
+	selectedWindowID       string
+	selectedNodeID         string
+	visibleOnly            bool
+	titleOnly              bool
+	mode                   inspect.InspectMode
+	allowFallback          bool
+	nodesByID              map[string]inspect.TreeNodeDTO
+	nodeChildren           map[string][]string
+	nodeExpanded           map[string]bool
+	nodeLoadFailed         map[string]error
+	followEnabled          bool
+	followPaused           bool
+	followLocked           bool
+	lastFollowNode         string
+	followCtx              context.Context
+	followCancel           context.CancelFunc
+	followDone             chan struct{}
+	followTicker           func() <-chan time.Time
+	followInterval         time.Duration
+	accPathCaptureEnabled  bool
+	lastACCPath            string
+	statusText             string
+	lastError              string
+	diagnostics            *inspect.InspectDiagnostics
+	onFollowElement        []func(inspect.TreeNodeDTO)
+	onFollowError          []func(error)
+	selectionGeneration    uint64
+	selectedNodeGeneration uint64
 }
 
 type WindowSelectionResult struct {
@@ -142,6 +143,18 @@ func (c *Controller) SelectionGeneration() uint64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.selectionGeneration
+}
+
+func (c *Controller) SelectedNodeID() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.selectedNodeID
+}
+
+func (c *Controller) SelectedNodeGeneration() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.selectedNodeGeneration
 }
 func (c *Controller) SetAllowFallback(allow bool) {
 	c.mu.Lock()
@@ -270,6 +283,7 @@ func (c *Controller) SelectWindowWithOptions(hwnd string, opts SelectWindowOptio
 		c.mu.Lock()
 		c.selectedNodeID = rootNodeID
 		c.selectionGeneration++
+		c.selectedNodeGeneration++
 		result.Generation = c.selectionGeneration
 		c.mu.Unlock()
 	}
@@ -587,6 +601,7 @@ func (c *Controller) RefreshSelection(nodeID string) error {
 	if err == nil {
 		c.mu.Lock()
 		c.selectedNodeID = nodeID
+		c.selectedNodeGeneration++
 		if c.accPathCaptureEnabled && strings.TrimSpace(details.ACCPath) != "" {
 			c.lastACCPath = details.ACCPath
 			c.statusText = "Path: " + details.ACCPath
