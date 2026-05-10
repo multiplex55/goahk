@@ -208,6 +208,7 @@ func (ui *viewerUI) attachEvents() {
 	}
 	if ui.treeView != nil {
 		ui.treeView.SetModel(ui.treeModel)
+		ui.attachTreeNavigationKeys()
 		ui.treeView.ExpandedChanged().Attach(func(item walk.TreeItem) {
 			if ui.suppressTreeExpandEvent {
 				return
